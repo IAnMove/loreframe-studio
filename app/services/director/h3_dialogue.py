@@ -50,6 +50,21 @@ _H3_SPEECHLIKE_AMBIENCE_REPLACEMENTS = (
         ),
         "nonverbal room tone",
     ),
+    (
+        re.compile(
+            r"clear foreground voices with precise lip sync and "
+            r"natural delivery(?:[.;]|$)",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    (
+        re.compile(
+            r"vocal delivery\s*:[^.;]*(?:[.;]|$)",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
 )
 
 _H3_BASE_FIELDS = (
@@ -181,10 +196,12 @@ def _dialogue_payload(value: Any) -> tuple[str, str]:
     return language, text
 
 
-def h3_dialogue_tag(spoken_text: Any) -> str:
+def h3_dialogue_tag(spoken_text: Any, forced_language: str = "") -> str:
     """Build exactly one canonical H3 dialogue block."""
 
     language, words = _dialogue_payload(spoken_text)
+    if forced_language:
+        language = forced_language
     return f"<d>[{language}] {words}</d>"
 
 
@@ -234,12 +251,13 @@ def _sanitize_scripted_ambience(prompt: str) -> str:
     def sanitize(segment: str) -> str:
         for pattern, replacement in _H3_SPEECHLIKE_AMBIENCE_REPLACEMENTS:
             segment = pattern.sub(replacement, segment)
-        return re.sub(
+        segment = re.sub(
             r"\bnonverbal room tone(?:\s*(?:,|and)\s*nonverbal room tone)+\b",
             "nonverbal room tone",
             segment,
             flags=re.IGNORECASE,
         )
+        return re.sub(r"\s*;\s*(?=;|$)", "", segment).strip(" ;")
 
     return _rewrite_outside_dialogue(prompt, sanitize)
 
@@ -792,6 +810,7 @@ def _compile_official_dialogue(
     existing_blocks: Sequence[str],
     *,
     has_driving_audio: bool = False,
+    forced_language: str = "",
 ) -> tuple[str, str]:
     """Place exact tagged lines and stable speaker IDs in the visual field."""
 
@@ -800,7 +819,8 @@ def _compile_official_dialogue(
         spoken = normalize_h3_text(_field(beat, "spoken_text", ""))
         if not _normalized_space(spoken):
             continue
-        _, words = _dialogue_payload(spoken)
+        authored_language, words = _dialogue_payload(spoken)
+        carries_language = bool(re.search(r"(?:<d>\s*)?\[[^\]]+\]", spoken, re.I))
         speaker_key = _normalized_space(_field(beat, "speaker_id", ""))
         entry = _speaker_registry_entry(registry, speaker_key)
         if entry:
@@ -810,7 +830,8 @@ def _compile_official_dialogue(
             stable_id = f"(S{len(valid_beats) + 1})"
         valid_beats.append({
             "words": normalize_h3_text(words),
-            "tag": h3_dialogue_tag(spoken),
+            "tag": "",
+            "authored_language": authored_language if carries_language else "",
             "stable_id": stable_id,
             "speaker_name": speaker_name,
             "delivery": _normalized_space(_field(beat, "delivery", "")),
@@ -822,6 +843,26 @@ def _compile_official_dialogue(
     if malformed and not spans:
         raise H3DialogueContractError(
             "MiniMax H3 dialogue tags are unbalanced and cannot be repaired safely."
+        )
+
+    # An explicit language in the reviewed/source prompt is authoritative.
+    # Previously, rebuilding from plain dialogue_beats silently reverted such
+    # lines to English when no project-wide spoken-language contract existed.
+    from .spoken_language import infer_h3_spoken_language
+
+    source_languages = [
+        _dialogue_payload(body[start:end])[0]
+        for start, end in spans
+    ]
+    for index, beat in enumerate(valid_beats):
+        language = (
+            forced_language
+            or (source_languages[index] if index < len(source_languages) else "")
+            or beat["authored_language"]
+            or infer_h3_spoken_language(beat["words"])
+        )
+        beat["tag"] = h3_dialogue_tag(
+            f"[{language}] {beat['words']}",
         )
 
     if valid_beats:
@@ -869,9 +910,9 @@ def _compile_official_dialogue(
             for beat in valid_beats
         )
     else:
-        canonical_blocks = [h3_dialogue_tag(block) for block in existing_blocks]
+        canonical_blocks = [h3_dialogue_tag(block, forced_language) for block in existing_blocks]
         if spans:
-            canonical_blocks = [h3_dialogue_tag(body[start:end]) for start, end in spans]
+            canonical_blocks = [h3_dialogue_tag(body[start:end], forced_language) for start, end in spans]
             body = _replace_spans(body, spans, canonical_blocks)
         elif canonical_blocks:
             additions = " ".join(
@@ -1239,6 +1280,11 @@ def compile_h3_official_prompt(
         closing_blocking=closing_blocking,
         audio_plan=audio_plan,
     )
+    from .spoken_language import h3_language_tag
+    forced_language = h3_language_tag(
+        audio_plan.get("spoken_language")
+        if isinstance(audio_plan, Mapping) else ""
+    )
     body, vocal_contract = _compile_official_dialogue(
         body,
         subjects or [],
@@ -1246,7 +1292,18 @@ def compile_h3_official_prompt(
         registry,
         existing_blocks,
         has_driving_audio=has_driving_audio,
+        forced_language=forced_language,
     )
+    # H3 has a native minimum duration, so a short authored line may leave
+    # several seconds that the audiovisual model otherwise fills with invented
+    # speech. Bind every tagged line to a concrete interval and assign the
+    # remaining time to closed-mouth action and production sound. The job
+    # boundary reapplies this after frame-lattice rounding with the exact
+    # physical duration.
+    if duration_seconds:
+        from ..minimax_h3_duration import inject_h3_vocal_timeline
+
+        body, _ = inject_h3_vocal_timeline(body, duration_seconds)
     body = re.sub(r"^\s*\[Shot\s+1\]\s*", "", body, flags=re.IGNORECASE)
     body = f"[Shot 1] {body}".strip()
 

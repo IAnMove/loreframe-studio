@@ -22,9 +22,16 @@ import {
   WandSparkles,
   X,
 } from 'lucide-react'
-import { Fragment, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../../api/client'
 import { useStore } from '../../stores/useStore'
+import {
+  clearVideoEditorReplacementResult,
+  clearVideoEditorReplacementTarget,
+  outputNameFromEditorClip,
+  readVideoEditorReplacementResult,
+  writeVideoEditorReplacementTarget,
+} from './replacementHandoff'
 
 type ClipFit = 'fit' | 'fill'
 type Transition =
@@ -106,6 +113,17 @@ const RESOLUTIONS: ResolutionOption[] = [
 const VIDEO_ACCEPT = '.mp4,.webm,.mov,.mkv,.avi,.m4v'
 const VIDEO_EDITOR_DRAFT_KEY = 'maestro-video-editor-draft-v1'
 const MAESTRO_PICKER_PAGE_SIZE = 24
+const VIDEO_EDITOR_ACTIVE_STATUSES = new Set<api.VideoEditorExportJob['status']>([
+  'queued',
+  'waiting_resource',
+  'running',
+  'cancelling',
+])
+
+const isVideoEditorJobActive = (job: api.VideoEditorExportJob | null): boolean => (
+  Boolean(job && VIDEO_EDITOR_ACTIVE_STATUSES.has(job.status))
+)
+
 const TRANSITIONS: Array<{ value: Transition; label: string; description: string }> = [
   { value: 'none', label: 'Hard cut', description: 'Immediate cut with no overlap.' },
   { value: 'crossfade', label: 'Crossfade', description: 'One shot dissolves smoothly into the next.' },
@@ -328,6 +346,132 @@ function formatTime(value: number): string {
   return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`
 }
 
+const MIN_TRIM_DURATION = 0.05
+
+function ClipTrimBar({
+  duration,
+  start,
+  end,
+  onChange,
+}: {
+  duration: number
+  start: number
+  end: number
+  onChange: (next: { trimStart?: number; trimEnd?: number }) => void
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef<'start' | 'end' | null>(null)
+  const [dragging, setDragging] = useState<'start' | 'end' | null>(null)
+  const safeDuration = Math.max(MIN_TRIM_DURATION, duration)
+  const startPercent = Math.max(0, Math.min(100, (start / safeDuration) * 100))
+  const endPercent = Math.max(startPercent, Math.min(100, (end / safeDuration) * 100))
+
+  const applyValue = (handle: 'start' | 'end', rawValue: number) => {
+    const value = Math.round(Math.max(0, Math.min(safeDuration, rawValue)) * 100) / 100
+    if (handle === 'start') {
+      onChange({ trimStart: Math.min(value, end - MIN_TRIM_DURATION) })
+    } else {
+      onChange({ trimEnd: Math.max(value, start + MIN_TRIM_DURATION) })
+    }
+  }
+
+  const valueAt = (clientX: number) => {
+    const bounds = trackRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return start
+    return Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)) * safeDuration
+  }
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const requested = (event.target as HTMLElement).closest<HTMLElement>('[data-trim-handle]')
+      ?.dataset.trimHandle
+    const value = valueAt(event.clientX)
+    const handle = requested === 'start' || requested === 'end'
+      ? requested
+      : Math.abs(value - start) <= Math.abs(value - end) ? 'start' : 'end'
+    event.currentTarget.setPointerCapture(event.pointerId)
+    draggingRef.current = handle
+    setDragging(handle)
+    applyValue(handle, value)
+  }
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (draggingRef.current) applyValue(draggingRef.current, valueAt(event.clientX))
+  }
+
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    draggingRef.current = null
+    setDragging(null)
+  }
+
+  const keyboardStep = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    handle: 'start' | 'end',
+    current: number,
+  ) => {
+    const direction = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0
+    if (!direction) return
+    event.preventDefault()
+    applyValue(handle, current + direction * (event.shiftKey ? 0.5 : 0.05))
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-tertiary/70 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3 text-[10px] tabular-nums">
+        <span className="text-text-muted">Recorte no destructivo</span>
+        <span className="text-text-secondary">
+          Conserva {formatTime(Math.max(0, end - start))} · quita {formatTime(start + Math.max(0, duration - end))}
+        </span>
+      </div>
+      <div
+        ref={trackRef}
+        className="relative h-12 touch-none cursor-pointer select-none"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+      >
+        <div
+          className="absolute inset-x-0 top-4 h-4 overflow-hidden rounded border border-white/10 bg-black/55"
+          style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,.08) 7.2% 7.8%)' }}
+        />
+        <div
+          className="absolute top-4 h-4 border-y border-accent-blue/70 bg-accent-blue/35"
+          style={{ left: `${startPercent}%`, width: `${endPercent - startPercent}%` }}
+        />
+        {(['start', 'end'] as const).map(handle => {
+          const value = handle === 'start' ? start : end
+          const percent = handle === 'start' ? startPercent : endPercent
+          return (
+            <button
+              key={handle}
+              type="button"
+              role="slider"
+              data-trim-handle={handle}
+              aria-label={handle === 'start' ? 'Punto de entrada' : 'Punto de salida'}
+              aria-valuemin={handle === 'start' ? 0 : start + MIN_TRIM_DURATION}
+              aria-valuemax={handle === 'start' ? end - MIN_TRIM_DURATION : safeDuration}
+              aria-valuenow={Number(value.toFixed(2))}
+              aria-valuetext={formatTime(value)}
+              onKeyDown={event => keyboardStep(event, handle, value)}
+              className={`absolute top-1 z-10 h-10 w-4 -translate-x-1/2 cursor-ew-resize rounded border shadow-lg focus:outline-none focus:ring-2 focus:ring-accent-blue ${dragging === handle ? 'border-white bg-accent-blue' : 'border-accent-blue bg-bg-secondary'}`}
+              style={{ left: `${percent}%` }}
+            >
+              <span className="mx-auto block h-5 w-px bg-white/70" />
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex justify-between text-[9px] text-text-muted tabular-nums">
+        <span>Entrada {formatTime(start)}</span>
+        <span>Salida {formatTime(end)}</span>
+      </div>
+    </div>
+  )
+}
+
 function greatestCommonDivisor(left: number, right: number): number {
   let a = Math.abs(Math.round(left))
   let b = Math.abs(Math.round(right))
@@ -486,6 +630,21 @@ function loadEditorDraft(): {
   }
 }
 
+function persistEditorDraft(
+  clips: EditorClip[],
+  projectName: string,
+  resolution: ResolutionOption,
+  fps: number,
+): void {
+  try {
+    window.localStorage.setItem(VIDEO_EDITOR_DRAFT_KEY, JSON.stringify({
+      clips, projectName, resolution, fps, savedAt: new Date().toISOString(),
+    }))
+  } catch {
+    // A full browser quota must not interrupt editing.
+  }
+}
+
 export function VideoEditorPanel() {
   const [draft] = useState(loadEditorDraft)
   const refreshOutputs = useStore(s => s.refreshOutputs)
@@ -535,6 +694,7 @@ export function VideoEditorPanel() {
   const [exportJob, setExportJob] = useState<api.VideoEditorExportJob | null>(null)
   const [capturingFrame, setCapturingFrame] = useState(false)
   const [capturedFrame, setCapturedFrame] = useState<api.VideoEditorScreenshot | null>(null)
+  const [preparingReplacement, setPreparingReplacement] = useState(false)
 
   const selected = clips.find(clip => clip.id === selectedId) || clips[0] || null
   const selectedIndex = selected ? clips.findIndex(clip => clip.id === selected.id) : -1
@@ -560,13 +720,7 @@ export function VideoEditorPanel() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      try {
-        window.localStorage.setItem(VIDEO_EDITOR_DRAFT_KEY, JSON.stringify({
-          clips, projectName, resolution, fps, savedAt: new Date().toISOString(),
-        }))
-      } catch {
-        // A full browser quota must not interrupt editing.
-      }
+      persistEditorDraft(clips, projectName, resolution, fps)
     }, 600)
     return () => window.clearTimeout(timer)
   }, [clips, projectName, resolution, fps])
@@ -672,6 +826,87 @@ export function VideoEditorPanel() {
       })
     // The hand-off is intentionally consumed once when the editor mounts.
   }, [])
+
+  useEffect(() => {
+    const replacement = readVideoEditorReplacementResult()
+    if (!replacement) return
+    const target = clips.find(clip => clip.id === replacement.clipId)
+    if (!target) {
+      clearVideoEditorReplacementResult()
+      clearVideoEditorReplacementTarget()
+      setError(`La posición original ${replacement.clipIndex + 1} ya no está disponible en el montaje.`)
+      return
+    }
+
+    setAdding(true)
+    setAddProgress(`Reemplazando clip ${replacement.clipIndex + 1}: ${target.name}`)
+    void api.probeVideoEditorClip(replacement.source)
+      .then(media => {
+        setClips(current => {
+          const next = current.map(clip => clip.id === replacement.clipId
+            ? {
+                ...clip,
+                ...media,
+                name: replacement.outputName,
+                source: replacement.source,
+                previewUrl: replacement.source,
+                thumbnailUrl: api.getVideoEditorThumbnailUrl(replacement.source),
+                trimStart: 0,
+                trimEnd: media.duration,
+              }
+            : clip)
+          persistEditorDraft(next, projectName, resolution, fps)
+          return next
+        })
+        clearVideoEditorReplacementResult()
+        clearVideoEditorReplacementTarget()
+        setSelectedId(replacement.clipId)
+        setError(null)
+      })
+      .catch(reason => setError(`No se pudo reemplazar el clip ${replacement.clipIndex + 1}: ${(reason as Error).message}`))
+      .finally(() => {
+        setAdding(false)
+        setAddProgress('')
+      })
+    // Keep a failed result available for another mount; clear it only after
+    // the replacement is safely persisted into the editor draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const openSelectedInVideoCreation = async () => {
+    if (!selected || selectedIndex < 0 || preparingReplacement) return
+    setPreparingReplacement(true)
+    setError(null)
+    setSequencePlaying(false)
+    videoRef.current?.pause()
+
+    const outputName = outputNameFromEditorClip(selected.source, selected.name)
+    try {
+      const metadata = await api.fetchOutputMetadata(outputName)
+      if (!metadata.params) throw new Error('Este clip no conserva ajustes de generación reutilizables.')
+
+      const store = useStore.getState()
+      store.setSidebarMode('studio')
+      store.setGenerationMode('video')
+      useStore.setState({ selectedOutputMeta: metadata, metadataLoading: false })
+      await useStore.getState().loadSettingsFromOutput()
+      useStore.getState().setGenerationMode('video')
+      useStore.getState().setSidebarMode('studio')
+
+      persistEditorDraft(clips, projectName, resolution, fps)
+      writeVideoEditorReplacementTarget({
+        clipId: selected.id,
+        clipIndex: selectedIndex,
+        originalName: selected.name,
+        outputName,
+        requestedAt: Date.now(),
+      })
+      useStore.getState().setMediaFilter('videos')
+    } catch (reason) {
+      setError(`No se pudo abrir el clip en Creación de vídeo: ${(reason as Error).message}`)
+      setPreparingReplacement(false)
+    }
+  }
 
   const addFiles = async (files: File[]) => {
     const videos = files.filter(file => file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|m4v)$/i.test(file.name))
@@ -1254,7 +1489,7 @@ export function VideoEditorPanel() {
   }, [clips, sequenceMode, totalDuration])
 
   const startExport = async () => {
-    if (!clips.length || exportJob?.status === 'queued' || exportJob?.status === 'running') return
+    if (!clips.length || isVideoEditorJobActive(exportJob)) return
     setError(null)
     setExportJob({
       job_id: '',
@@ -1271,6 +1506,7 @@ export function VideoEditorPanel() {
         width: resolution.width,
         height: resolution.height,
         fps,
+        workspace: activeWorkspace,
         clips: clips.map(clip => ({
           name: clip.name,
           source: clip.source,
@@ -1292,13 +1528,29 @@ export function VideoEditorPanel() {
           await refreshOutputs()
           break
         }
-        if (status.status === 'failed') break
+        if (status.status === 'failed' || status.status === 'cancelled') break
         await wait(1000)
       }
     } catch (reason) {
       const message = (reason as Error).message
       setError(message)
       setExportJob(current => current ? { ...current, status: 'failed', error: message, message } : null)
+    }
+  }
+
+  const cancelExport = async () => {
+    if (!exportJob?.job_id || !isVideoEditorJobActive(exportJob) || exportJob.status === 'cancelling') return
+    setExportJob(current => current ? {
+      ...current,
+      status: 'cancelling',
+      phase: 'cancelling',
+      message: 'Cancelling at the next FFmpeg safe boundary…',
+    } : current)
+    try {
+      setExportJob(await api.cancelVideoEditorExport(exportJob.job_id))
+    } catch (reason) {
+      const message = (reason as Error).message
+      setError(message)
     }
   }
 
@@ -1380,14 +1632,26 @@ export function VideoEditorPanel() {
         </button>
         <button
           onClick={startExport}
-          disabled={!clips.length || exportJob?.status === 'queued' || exportJob?.status === 'running'}
+          disabled={!clips.length || isVideoEditorJobActive(exportJob)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-accent-blue text-white hover:bg-accent-blue/80 disabled:opacity-40"
         >
-          {exportJob?.status === 'queued' || exportJob?.status === 'running'
+          {isVideoEditorJobActive(exportJob)
             ? <Loader2 size={13} className="animate-spin" />
             : <Download size={13} />}
           Export MP4
         </button>
+        {isVideoEditorJobActive(exportJob) && (
+          <button
+            onClick={() => void cancelExport()}
+            disabled={exportJob?.status === 'cancelling'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+          >
+            {exportJob?.status === 'cancelling'
+              ? <Loader2 size={13} className="animate-spin" />
+              : <X size={13} />}
+            {exportJob?.status === 'cancelling' ? 'Cancelling…' : 'Cancel'}
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -1760,9 +2024,32 @@ export function VideoEditorPanel() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void openSelectedInVideoCreation()}
+                disabled={preparingReplacement}
+                className="mb-3 flex w-full items-center justify-center gap-1.5 rounded border border-accent-blue/40 bg-accent-blue/10 px-2 py-2 text-[10px] font-medium text-accent-blue transition-colors hover:bg-accent-blue/20 disabled:opacity-50"
+                title="Carga el prompt, modelo, duración y formato de este clip en Creación de vídeo para elegir después su reemplazo"
+              >
+                {preparingReplacement
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Film size={12} />}
+                {preparingReplacement ? 'Cargando ajustes de generación…' : 'Rehacer en Creación de vídeo'}
+              </button>
+
+              <ClipTrimBar
+                duration={selected.duration}
+                start={selected.trimStart}
+                end={selected.trimEnd}
+                onChange={patch => patchClip(selected.id, patch)}
+              />
+              <p className="mt-2 text-[9px] leading-relaxed text-text-muted">
+                Arrastra los tiradores para fijar la entrada y la salida. El vídeo original no se modifica; estos cortes solo se aplican a la previsualización y al MP4 exportado.
+              </p>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <label className="text-[10px] text-text-muted">
-                  Trim start
+                  Entrada exacta
                   <input
                     type="number"
                     min={0}
@@ -1776,7 +2063,7 @@ export function VideoEditorPanel() {
                   />
                 </label>
                 <label className="text-[10px] text-text-muted">
-                  Trim end
+                  Salida exacta
                   <input
                     type="number"
                     min={selected.trimStart + 0.05}
@@ -1790,6 +2077,15 @@ export function VideoEditorPanel() {
                   />
                 </label>
               </div>
+              {(selected.trimStart > 0.001 || selected.trimEnd < selected.duration - 0.001) && (
+                <button
+                  type="button"
+                  onClick={() => patchClip(selected.id, { trimStart: 0, trimEnd: selected.duration })}
+                  className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-border px-2 py-1.5 text-[10px] text-text-muted hover:bg-bg-hover hover:text-text-secondary"
+                >
+                  <RotateCcw size={11} /> Restaurar clip completo
+                </button>
+              )}
 
               <div className="flex items-center gap-2 mt-3">
                 <button
@@ -1879,17 +2175,19 @@ export function VideoEditorPanel() {
                     ? 'border-red-500/30 bg-red-500/5'
                     : exportJob.status === 'completed'
                       ? 'border-green-500/30 bg-green-500/5'
+                      : exportJob.status === 'cancelled'
+                        ? 'border-border bg-bg-secondary'
                       : 'border-accent-blue/30 bg-accent-blue/5'
                 }`}>
                   <div className="flex items-center gap-1.5 text-[10px]">
                     {exportJob.status === 'completed'
                       ? <Check size={12} className="text-green-400" />
-                      : exportJob.status === 'failed'
+                      : exportJob.status === 'failed' || exportJob.status === 'cancelled'
                         ? <X size={12} className="text-red-400" />
                         : <Loader2 size={12} className="animate-spin text-accent-blue" />}
                     <span className="truncate">{exportJob.message}</span>
                   </div>
-                  {(exportJob.status === 'queued' || exportJob.status === 'running') && (
+                  {isVideoEditorJobActive(exportJob) && (
                     <div className="h-1 bg-bg-active rounded mt-2 overflow-hidden">
                       <div className="h-full bg-accent-blue" style={{ width: `${exportJob.progress}%` }} />
                     </div>

@@ -1,11 +1,19 @@
 import { lazy, Suspense, useRef, useCallback, useState, useEffect, useMemo, type JSX } from 'react'
-import { Film, Play, Square, FolderOpen, Plus, Check, Loader2, X, BookMarked, Upload, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Film, Play, Square, FolderOpen, Plus, Check, Loader2, X, BookMarked, Upload, Trash2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { TabFilter } from './TabFilter'
 import { ThumbnailGallery } from './ThumbnailGallery'
 import { MediaFeedItem } from './MediaFeedItem'
 import { useStore } from '../../stores/useStore'
 import type { GenerationJob } from '../../types'
 import { stageSceneForEditor } from '../../lib/sceneOutput'
+import {
+  clearVideoEditorReplacementTarget,
+  readVideoEditorReplacementTarget,
+} from '../../features/video-editor/replacementHandoff'
+import {
+  clearDirectorClipReplacementTarget,
+  readDirectorClipReplacementTarget,
+} from '../../features/stories/directorClipHandoff'
 
 const SceneAnimatorPanel = lazy(() => import('../Sidebar/SceneAnimatorPanel')
   .then(module => ({ default: module.SceneAnimatorPanel })))
@@ -19,6 +27,8 @@ const StoryLabPanel = lazy(() => import('../../features/stories/StoryLabPanel')
   .then(module => ({ default: module.StoryLabPanel })))
 const SeriesLabPanel = lazy(() => import('../../features/series/SeriesLabPanel')
   .then(module => ({ default: module.SeriesLabPanel })))
+const StyleSheetPanel = lazy(() => import('../../features/styles/StyleSheetPanel')
+  .then(module => ({ default: module.StyleSheetPanel })))
 
 function PanelLoadingFallback() {
   return (
@@ -655,6 +665,13 @@ export function MainContent() {
     return items
   }, [startIndex, endIndex, outputs, activeIndex, handleItemVisible, handleItemMeasured, itemOffsets])
   const mediaFilter = useStore(s => s.mediaFilter)
+  const [replacementTarget, setReplacementTarget] = useState(readVideoEditorReplacementTarget)
+  const [directorReplacementTarget, setDirectorReplacementTarget] = useState(readDirectorClipReplacementTarget)
+
+  useEffect(() => {
+    setReplacementTarget(mediaFilter !== 'videoeditor' ? readVideoEditorReplacementTarget() : null)
+    setDirectorReplacementTarget(mediaFilter !== 'stories' ? readDirectorClipReplacementTarget() : null)
+  }, [mediaFilter])
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden">
@@ -668,12 +685,13 @@ export function MainContent() {
               : mediaFilter === 'comics' ? 'Comic Studio'
               : mediaFilter === 'stories' ? 'Story Lab'
               : mediaFilter === 'series' ? 'Series Lab'
+              : mediaFilter === 'styles' ? 'Hoja de estilos'
               : mediaFilter === 'videoeditor' ? 'Video Editor'
               : outputsTotal > outputs.length
               ? `${outputs.length} / ${outputsTotal} items`
               : `${outputs.length} ${outputs.length === 1 ? 'item' : 'items'}`}
           </div>
-          <WorkspaceSelector />
+          {mediaFilter !== 'styles' && <WorkspaceSelector />}
         </div>
       </div>
 
@@ -704,6 +722,12 @@ export function MainContent() {
               <SeriesLabPanel />
             </div>
           </div>
+        ) : mediaFilter === 'styles' ? (
+          <div className="flex-1 overflow-hidden p-2 md:p-4">
+            <div className="max-w-[1900px] mx-auto h-full">
+              <StyleSheetPanel />
+            </div>
+          </div>
         ) : mediaFilter === 'comics' ? (
           <div className="flex-1 overflow-hidden p-2 md:p-4">
             <div className="max-w-[1900px] mx-auto h-full">
@@ -725,6 +749,44 @@ export function MainContent() {
         >
           {/* Pipeline + Job placeholders at top (not virtualized — small count) */}
           <div className="space-y-3 mb-3">
+            {replacementTarget && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                <Film size={14} className="shrink-0" />
+                <span className="min-w-0 flex-1">
+                  Rehaciendo la posición {replacementTarget.clipIndex + 1} del montaje: <strong>{replacementTarget.originalName}</strong>.
+                  Genera un vídeo nuevo y después pulsa “Usar en posición {replacementTarget.clipIndex + 1}”.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearVideoEditorReplacementTarget()
+                    setReplacementTarget(null)
+                  }}
+                  className="rounded border border-emerald-400/30 px-2 py-1 text-[10px] text-emerald-200 hover:bg-emerald-500/20"
+                >
+                  Cancelar reemplazo
+                </button>
+              </div>
+            )}
+            {directorReplacementTarget && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-xs text-violet-100">
+                <RefreshCw size={14} className="shrink-0" />
+                <span className="min-w-0 flex-1">
+                  Rehaciendo el clip {directorReplacementTarget.clipIndex + 1} de Montaje.
+                  Ajusta sus datos, genera una o varias versiones y pulsa “Usar en Montaje · clip {directorReplacementTarget.clipIndex + 1}” en la que quieras conservar.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDirectorClipReplacementTarget()
+                    setDirectorReplacementTarget(null)
+                  }}
+                  className="rounded border border-violet-400/30 px-2 py-1 text-[10px] text-violet-100 hover:bg-violet-500/20"
+                >
+                  Cancelar reemplazo
+                </button>
+              </div>
+            )}
             <PipelinePlaceholder />
             {jobs.map((j, i) => (
               <JobPlaceholder

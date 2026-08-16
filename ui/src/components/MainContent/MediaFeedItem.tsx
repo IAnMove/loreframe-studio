@@ -1,15 +1,23 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
-import { Play, Pencil, RefreshCw, Copy, Trash2, Check, Combine, Loader2, Heart, ArrowLeftToLine, Download, FolderInput, Scissors, FastForward, BookMarked, BookOpen, Box, Film, BadgeInfo } from 'lucide-react'
+import { Play, Pencil, RefreshCw, Copy, Trash2, Check, Combine, Loader2, Heart, ArrowLeftToLine, Download, FolderInput, Scissors, FastForward, BookMarked, BookOpen, Box, Film, BadgeInfo, Clock3 } from 'lucide-react'
 import { SaveRecipeDialog } from '../Recipes/SaveRecipeDialog'
 import { VideoExtraInfoDialog } from './VideoExtraInfoDialog'
 import { useStore } from '../../stores/useStore'
-import { getStoredAssetUrl, fetchOutputMetadata, getFileUrl, moveOutput, uploadImage, loadComicProject } from '../../api/client'
+import { getStoredAssetUrl, fetchOutputMetadata, getFileUrl, moveOutput, uploadImage, loadComicProject, selectPipelineClipVideo } from '../../api/client'
 import type { OutputFile, OutputMetadata } from '../../types'
 import { modelDisplayName } from '../../lib/modelDisplay'
 import { getOutputReference } from '../../lib/outputReference'
 import { stageSceneForEditor } from '../../lib/sceneOutput'
 import { formatGenerationBreakdown, formatGenerationDuration } from '../../lib/generationTiming'
 import { useComicStore } from '../../features/comics/store'
+import {
+  readVideoEditorReplacementTarget,
+  writeVideoEditorReplacementResult,
+} from '../../features/video-editor/replacementHandoff'
+import {
+  readDirectorClipReplacementTarget,
+  writeDirectorClipReplacementResult,
+} from '../../features/stories/directorClipHandoff'
 
 interface Props {
   file: OutputFile
@@ -72,6 +80,23 @@ function RetryImage({ url, alt }: { url: string; alt: string }) {
   )
 }
 
+function formatCompletionTime(value: number | undefined): string | null {
+  if (!Number.isFinite(value) || !value || value <= 0) return null
+  // Backend timestamps are Unix seconds. Accept milliseconds too so imported
+  // metadata from browser/JS producers cannot accidentally render in 1970.
+  const milliseconds = value < 1_000_000_000_000 ? value * 1000 : value
+  const date = new Date(milliseconds)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
+}
+
 export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, style }: Props) {
   const setSelectedOutput = useStore(s => s.setSelectedOutput)
   const setMediaFilter = useStore(s => s.setMediaFilter)
@@ -116,9 +141,13 @@ export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, st
   const [sentToInput, setSentToInput] = useState(false)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const [moving, setMoving] = useState(false)
+  const [selectingForMontage, setSelectingForMontage] = useState(false)
+  const [montageSelectionError, setMontageSelectionError] = useState('')
   const moveRef = useRef<HTMLDivElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const editorReplacementTarget = readVideoEditorReplacementTarget()
+  const directorReplacementTarget = readDirectorClipReplacementTarget()
 
   const releaseVideo = useCallback(() => {
     const video = videoRef.current
@@ -220,6 +249,9 @@ export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, st
   const generationTime = meta?.generation_timings?.total_time_sec ?? meta?.generation_time
   const generationBreakdown = formatGenerationBreakdown(meta?.generation_timings)
   const outputReference = getOutputReference(file)
+  const metadataCompletedAt = meta?.completed_at ?? meta?.finished_at ?? meta?.created_at
+  const completionTime = formatCompletionTime(metadataCompletedAt ?? file.completed_at ?? file.created_at)
+  const completionTimeIsExact = metadataCompletedAt != null || file.completion_time_source === 'metadata'
 
   const multiClipInfo = params?.multi_clip_info as { group_id: string; index: number; total: number } | undefined
   const groupId = multiClipInfo?.group_id
@@ -259,6 +291,39 @@ export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, st
     setSelectedOutput(index)
     setTimeout(() => rerollGeneration(), 50)
   }, [index, setSelectedOutput, rerollGeneration])
+
+  const handleUseAsEditorReplacement = useCallback(() => {
+    const target = readVideoEditorReplacementTarget()
+    if (!target || file.type !== 'video') return
+    writeVideoEditorReplacementResult({
+      clipId: target.clipId,
+      clipIndex: target.clipIndex,
+      outputName: file.name,
+      source: getFileUrl(file.name),
+      selectedAt: Date.now(),
+    })
+    setMediaFilter('videoeditor')
+  }, [file.name, file.type, setMediaFilter])
+
+  const handleUseAsDirectorReplacement = useCallback(async () => {
+    const target = readDirectorClipReplacementTarget()
+    if (!target || file.type !== 'video' || selectingForMontage) return
+    setSelectingForMontage(true)
+    setMontageSelectionError('')
+    try {
+      await selectPipelineClipVideo(target.pipelineId, target.clipIndex, file.name)
+      writeDirectorClipReplacementResult({
+        pipelineId: target.pipelineId,
+        clipIndex: target.clipIndex,
+        filename: file.name,
+        selectedAt: Date.now(),
+      })
+      setMediaFilter('stories')
+    } catch (reason) {
+      setMontageSelectionError((reason as Error).message)
+      setSelectingForMontage(false)
+    }
+  }, [file.name, file.type, selectingForMontage, setMediaFilter])
 
   const handleCopyPrompt = () => {
     if (!prompt) return
@@ -618,6 +683,18 @@ export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, st
         )}
 
         <div className="flex-1 min-w-0">
+          {completionTime && (
+            <div
+              className="mb-0.5 flex items-center gap-1 text-[10px] text-text-muted"
+              title={`${browsingUploads ? 'Added' : 'Generation finished'}: ${completionTime}${!browsingUploads && !completionTimeIsExact ? ' (file timestamp, approximate)' : ''}`}
+            >
+              <Clock3 size={10} className="shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {browsingUploads ? 'Añadido' : 'Finalizado'} · {completionTime}
+                {!browsingUploads && !completionTimeIsExact ? ' · aprox.' : ''}
+              </span>
+            </div>
+          )}
           {params ? (
             <>
               <div className="text-xs text-text-secondary truncate">
@@ -651,6 +728,28 @@ export function MediaFeedItem({ file, index, isActive, onVisible, onMeasured, st
 
         {/* Action buttons */}
         <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+          {file.type === 'video' && directorReplacementTarget && (
+            <button
+              onClick={() => void handleUseAsDirectorReplacement()}
+              disabled={selectingForMontage}
+              className="flex items-center gap-1 rounded-lg border border-violet-500/40 bg-violet-500/10 px-2 py-1.5 text-[10px] font-medium text-violet-200 transition-colors hover:bg-violet-500/20 disabled:opacity-50"
+              title={`Elegir este vídeo como versión activa del clip ${directorReplacementTarget.clipIndex + 1}; las demás versiones se conservarán en su historial`}
+            >
+              {selectingForMontage ? <Loader2 size={13} className="animate-spin" /> : <FolderInput size={13} />}
+              Usar en Montaje · clip {directorReplacementTarget.clipIndex + 1}
+            </button>
+          )}
+          {file.type === 'video' && editorReplacementTarget && (
+            <button
+              onClick={handleUseAsEditorReplacement}
+              className="flex items-center gap-1 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 hover:text-emerald-200"
+              title={`Usar este vídeo en la posición ${editorReplacementTarget.clipIndex + 1} del montaje`}
+            >
+              <FolderInput size={13} />
+              Usar en posición {editorReplacementTarget.clipIndex + 1}
+            </button>
+          )}
+          {montageSelectionError && <span className="max-w-40 truncate text-[9px] text-red-400" title={montageSelectionError}>{montageSelectionError}</span>}
           {params && (
             <>
               <button

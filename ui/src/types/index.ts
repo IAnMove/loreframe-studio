@@ -270,11 +270,20 @@ export interface GenerationDetails {
   guidance?: number
   frames?: number
   duration_seconds?: number
+  dialogue_words?: number
+  dialogue_syllables?: number
+  dialogue_seconds_per_syllable?: number
+  dialogue_duration_calculated?: number
+  dialogue_duration_minimum_limited?: boolean
   repeat?: number
   profile?: string
   flow_shift?: number
   audio_shift?: number
   turbo?: boolean
+  cache?: boolean
+  cache_type?: string
+  lora_count?: number
+  loras?: string[]
   clip_count?: number
   text_provider?: string
   text_model?: string
@@ -290,7 +299,7 @@ export interface GenerationDetails {
 
 export interface GenerationJob {
   id: string
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
   progress: number
   step: number
   totalSteps: number
@@ -334,6 +343,10 @@ export interface OutputFile {
   favorite: boolean
   size: number
   created_at: number
+  /** Unix timestamp for when generation and output publication finished. */
+  completed_at?: number
+  /** Metadata is exact; file is a best-effort fallback for legacy/imports. */
+  completion_time_source?: 'metadata' | 'file'
   /** Static preview for 3D output cards; never a live model viewer. */
   thumbnail_url?: string | null
 }
@@ -526,7 +539,7 @@ export interface Scene {
   }
 }
 
-export type MediaFilter = 'all' | 'images' | 'videos' | 'audio' | 'model3d' | 'scenes' | 'stories' | 'series' | 'comics' | 'videoeditor' | 'scene3d' | 'animate3d' | 'avatars' | 'multiclip' | 'favorites'
+export type MediaFilter = 'all' | 'images' | 'videos' | 'audio' | 'model3d' | 'scenes' | 'stories' | 'series' | 'styles' | 'comics' | 'videoeditor' | 'scene3d' | 'animate3d' | 'avatars' | 'multiclip' | 'favorites'
 export type AspectRatio = 'auto' | '21:9' | '16:9' | '9:16' | '1:1' | '4:3' | '3:4'
 export type ResolutionPreset = 'auto' | '480p' | '540p' | '720p' | '768p' | '1080p'
 export type ScailResolutionProfile = '480p' | '512p' | '704p'
@@ -755,10 +768,14 @@ export interface OutputMetadata {
   params: Record<string, unknown> | null
   upload_filenames?: Record<string, string>
   job_id?: string
+  task_id?: string | null
+  root_task_id?: string | null
   generation_time?: number
   generation_timings?: OutputGenerationTimings
   director_pipeline_id?: string
   created_at?: number
+  completed_at?: number
+  finished_at?: number
 }
 
 export interface VideoExtraInfo {
@@ -1387,8 +1404,23 @@ export interface DirectorV2PlanResponse {
 
 // ── Director Pipeline Dashboard ──────────────────────────────────────────
 
+export interface PipelineVideoAttempt {
+  id: string
+  filename: string
+  created_at: number
+  seed?: number | null
+  prompt?: string
+  model_type?: string
+  resolution?: string
+  video_length?: number | null
+  source?: 'original' | 'regenerated' | 'studio' | 'recovered' | string
+}
+
 export interface PipelineClipState {
   index: number
+  shot_id?: string
+  seed?: number
+  duration_seconds?: number
   planned_clip: PlannedClip | null
   image_prompt: string
   video_prompt: string
@@ -1402,6 +1434,9 @@ export interface PipelineClipState {
   start_image_filename: string | null
   keyframe_filenames: string[]
   video_filename: string | null
+  video_attempts?: PipelineVideoAttempt[]
+  /** Explicit user choice. Legacy checkpoints use video_filename implicitly. */
+  selected_video_filename?: string | null
   video_stale?: boolean
   tag: 'good' | 'needs_work' | null
   image_gen_time_sec: number | null
@@ -1501,6 +1536,7 @@ export interface SavedPipelineState {
   seamless: boolean
   image_model: string
   video_model: string
+  video_params?: Record<string, unknown>
   h3_reference_manifest?: H3ShotReferenceManifest[]
   h3_prompt_validation?: {
     status: 'optimized' | 'deterministic_fallback' | 'direct_video_contract'

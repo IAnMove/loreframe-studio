@@ -1,4 +1,6 @@
 import { rememberPrompt } from '../lib/promptHistory'
+import { openCanonicalTaskEventStream } from '../lib/canonicalTaskEvents'
+import type { CanonicalTaskEvent, CanonicalTaskStreamState } from '../lib/canonicalTaskEvents'
 import type { DirectorModelCompatibility, GenerationDetails, H3WindowPlan, ProductionPlan, ScailResolutionProfile } from '../types'
 
 const BASE = ''  // same origin in production; Vite proxy handles /api in dev
@@ -54,6 +56,10 @@ export interface ApiOutput {
   favorite?: boolean
   size: number
   created_at: number
+  /** Time the generated asset was fully published. Older/imported assets
+   *  fall back to the media file's modification time. */
+  completed_at?: number
+  completion_time_source?: 'metadata' | 'file'
   url: string
   /** Small static preview for image/video cards and saved 3D/scene assets. */
   thumbnail_url?: string | null
@@ -67,7 +73,9 @@ export interface ApiOutput {
 
 export interface ApiJobStatus {
   job_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  task_id?: string | null
+  root_task_id?: string | null
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
   progress: number
   step: number
   total_steps: number
@@ -85,6 +93,7 @@ export interface ApiJobStatus {
    *  See `OomInfo` in types/index.ts. */
   oom_info?: import('../types').OomInfo | null
   generation_details?: GenerationDetails
+  h3_window_plan?: H3WindowPlan | null
 }
 
 export interface ApiTaskTiming {
@@ -94,6 +103,101 @@ export interface ApiTaskTiming {
   status: 'running' | 'completed' | 'failed' | 'skipped'
   total_seconds?: number
   phase_timings: Array<{ phase: string; seconds: number }>
+}
+
+export type CanonicalTaskStatus =
+  | 'created' | 'queued' | 'waiting_resource' | 'running'
+  | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+
+export interface CanonicalTask {
+  id: string
+  root_id: string
+  parent_id?: string | null
+  kind: string
+  title: string
+  workflow: string
+  status: CanonicalTaskStatus
+  phase: string
+  message: string
+  detail?: string
+  current: number
+  total: number
+  progress: number
+  detail_current: number
+  detail_total: number
+  created_at: number
+  queued_at?: number | null
+  started_at?: number | null
+  updated_at: number
+  completed_at?: number | null
+  provider?: string
+  model?: string
+  server_origin?: string
+  resource_requirements?: string[]
+  acquired_resources?: string[]
+  attempt: number
+  max_attempts: number
+  token_usage?: { prompt?: number; completion?: number; total?: number; calls?: number }
+  backend_job_id?: string
+  pipeline_id?: string
+  cancelable: boolean
+  resumable: boolean
+  recoverable: boolean
+  error?: { message?: string; retryable?: boolean } | null
+  result_refs?: string[]
+  metadata?: Record<string, unknown>
+}
+
+export async function fetchCanonicalTasks(
+  workspace: string,
+  status: 'active' | 'all' = 'all',
+): Promise<{ workspace: string; tasks: CanonicalTask[] }> {
+  const query = new URLSearchParams({ workspace, status, limit: '300' })
+  const res = await fetch(`${BASE}/api/v1/tasks?${query}`)
+  if (!res.ok) throw new Error('Failed to fetch Maestro tasks')
+  return res.json()
+}
+
+export function subscribeCanonicalTaskEvents(
+  workspace: string,
+  onEvent: (event: CanonicalTaskEvent) => void,
+  onError?: () => void,
+  onStateChange?: (state: CanonicalTaskStreamState) => void,
+): () => void {
+  return openCanonicalTaskEventStream(BASE, workspace, onEvent, onError, onStateChange)
+}
+
+export async function upsertCanonicalClientTask(task: Record<string, unknown>): Promise<CanonicalTask> {
+  const res = await fetch(`${BASE}/api/v1/tasks/upsert`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }),
+  })
+  if (!res.ok) throw new Error('Failed to publish Maestro activity')
+  return res.json()
+}
+
+export async function cancelCanonicalTask(taskId: string, workspace: string): Promise<CanonicalTask> {
+  const res = await fetch(`${BASE}/api/v1/tasks/${encodeURIComponent(taskId)}/cancel?workspace=${encodeURIComponent(workspace)}`, { method: 'POST' })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Task cancellation failed' }))
+    throw new Error(error.detail || 'Task cancellation failed')
+  }
+  const payload = await res.json()
+  return payload.task
+}
+
+export async function resumeCanonicalTask(taskId: string, workspace: string): Promise<CanonicalTask> {
+  const res = await fetch(`${BASE}/api/v1/tasks/${encodeURIComponent(taskId)}/resume?workspace=${encodeURIComponent(workspace)}`, { method: 'POST' })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Task resume failed' }))
+    throw new Error(error.detail || 'Task resume failed')
+  }
+  const payload = await res.json()
+  return payload.task
+}
+
+export async function dismissCanonicalTask(taskId: string, workspace: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/v1/tasks/${encodeURIComponent(taskId)}?workspace=${encodeURIComponent(workspace)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to dismiss Maestro task')
 }
 
 // --- Models & Families ---
@@ -228,7 +332,13 @@ export async function fetchDefaults(modelType: string): Promise<Record<string, u
 
 // --- Generation ---
 
-export async function submitGeneration(params: Record<string, unknown>): Promise<{ job_id: string; h3_window_plan?: H3WindowPlan }> {
+export async function submitGeneration(params: Record<string, unknown>): Promise<{
+  job_id: string
+  task_id?: string | null
+  root_task_id?: string | null
+  status: string
+  h3_window_plan?: H3WindowPlan
+}> {
   const res = await fetch(`${BASE}/api/v1/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -321,9 +431,31 @@ export interface MiniMaxMusicCandidate {
   duration_seconds: number
   provider: 'minimax'
   model: string
+  task_id?: string
+  root_task_id?: string
+  taskId?: string
+  rootTaskId?: string
 }
 
-export async function generateStoryMusicCandidates(params: {
+export interface MiniMaxMusicJob {
+  jobId: string
+  taskId: string
+  rootTaskId: string
+  workspace: string
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+  phase: string
+  message: string
+  current: number
+  total: number
+  progress: number
+  provider: 'minimax'
+  model: string
+  candidates: MiniMaxMusicCandidate[]
+  error?: string | null
+  statusCode?: number
+}
+
+export interface StoryMusicCandidateRequest {
   prompt: string
   lyrics: string
   count: 1 | 2 | 3
@@ -331,8 +463,12 @@ export async function generateStoryMusicCandidates(params: {
   reference_audio_filename?: string
   instrumental?: boolean
   workspace?: string
-}): Promise<{ candidates: MiniMaxMusicCandidate[] }> {
-  const res = await fetch(`${BASE}/api/v1/stories/music-candidates`, {
+}
+
+export async function startStoryMusicCandidatesJob(
+  params: StoryMusicCandidateRequest,
+): Promise<MiniMaxMusicJob> {
+  const res = await fetch(`${BASE}/api/v1/stories/music-candidates/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -342,6 +478,75 @@ export async function generateStoryMusicCandidates(params: {
     throw new Error(error.detail || 'MiniMax Music generation failed')
   }
   return res.json()
+}
+
+export async function fetchStoryMusicCandidatesJob(jobId: string): Promise<MiniMaxMusicJob> {
+  const res = await fetch(
+    `${BASE}/api/v1/stories/music-candidates/jobs/${encodeURIComponent(jobId)}`,
+  )
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'MiniMax Music job not found' }))
+    throw new Error(error.detail || 'MiniMax Music job not found')
+  }
+  return res.json()
+}
+
+export async function cancelStoryMusicCandidatesJob(jobId: string): Promise<MiniMaxMusicJob> {
+  const res = await fetch(
+    `${BASE}/api/v1/stories/music-candidates/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { method: 'POST' },
+  )
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'MiniMax Music cancellation failed' }))
+    throw new Error(error.detail || 'MiniMax Music cancellation failed')
+  }
+  return res.json()
+}
+
+export async function generateStoryMusicCandidates(
+  params: StoryMusicCandidateRequest,
+  options: {
+    onJobSubmitted?: (job: MiniMaxMusicJob) => void
+    onProgress?: (job: MiniMaxMusicJob) => void
+  } = {},
+): Promise<{
+  candidates: MiniMaxMusicCandidate[]
+  status: 'completed' | 'cancelled' | 'failed' | 'interrupted'
+  jobId: string
+  taskId: string
+  message: string
+}> {
+  let job = await startStoryMusicCandidatesJob(params)
+  options.onJobSubmitted?.(job)
+  let pollFailures = 0
+  while (!['completed', 'failed', 'cancelled', 'interrupted'].includes(job.status)) {
+    await new Promise(resolve => window.setTimeout(resolve, pollFailures ? Math.min(10_000, pollFailures * 1_500) : 1_000))
+    try {
+      job = await fetchStoryMusicCandidatesJob(job.jobId)
+      pollFailures = 0
+      options.onProgress?.(job)
+    } catch (error) {
+      pollFailures += 1
+      if (pollFailures >= 20) {
+        throw new Error(
+          `Could not reconnect to MiniMax Music job ${job.jobId}; its ID was preserved: ${(error as Error).message}`,
+        )
+      }
+    }
+  }
+  if (job.status === 'completed' || job.candidates.length > 0) {
+    return {
+      candidates: job.candidates,
+      status: job.status as 'completed' | 'cancelled' | 'failed' | 'interrupted',
+      jobId: job.jobId,
+      taskId: job.taskId,
+      message: job.message,
+    }
+  }
+  throw new Error(
+    `${job.statusCode ? `HTTP ${job.statusCode}: ` : ''}`
+    + (job.error || job.message || `MiniMax Music job ${job.status}`),
+  )
 }
 
 export async function translateStoryLyrics(params: {
@@ -582,12 +787,14 @@ export async function saveScene(scene: import('../types').Scene, preview: string
   return res.json()
 }
 
-export function getFileUrl(filename: string): string {
-  return `${BASE}/api/v1/file/${encodeURIComponent(filename)}`
+export function getFileUrl(filename: string, workspace?: string): string {
+  const query = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+  return `${BASE}/api/v1/file/${encodeURIComponent(filename)}${query}`
 }
 
-export function getOutputThumbnailUrl(filename: string): string {
-  return `${BASE}/api/v1/outputs/thumbnail/${encodeURIComponent(filename)}`
+export function getOutputThumbnailUrl(filename: string, workspace?: string): string {
+  const query = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+  return `${BASE}/api/v1/outputs/thumbnail/${encodeURIComponent(filename)}${query}`
 }
 
 export function getUploadUrl(filename: string): string {
@@ -636,12 +843,18 @@ export async function fetchStoredAsset(pathOrFilename: string): Promise<Response
   return fetch(fallback)
 }
 
-export async function fetchOutputMetadata(name: string): Promise<import('../types').OutputMetadata> {
+export async function fetchOutputMetadata(
+  name: string,
+  workspace?: string,
+): Promise<import('../types').OutputMetadata> {
   // Retry with a per-attempt timeout. On a slow/high-latency link (e.g. the user
   // is remote over VPN) the request can stall long enough that a single attempt
   // hangs or is dropped by an intermediary; the old single-shot fetch then left
   // the caller with no metadata and the "Load Settings" button a silent no-op.
-  const url = `${BASE}/api/v1/outputs/${encodeURIComponent(name)}/metadata`
+  const workspaceQuery = workspace
+    ? `?workspace=${encodeURIComponent(workspace)}`
+    : ''
+  const url = `${BASE}/api/v1/outputs/${encodeURIComponent(name)}/metadata${workspaceQuery}`
   const ATTEMPTS = 3
   const PER_ATTEMPT_MS = 30000  // generous: the server may read embedded video metadata to recover a seed
   let lastErr: unknown = null
@@ -667,6 +880,126 @@ export async function fetchOutputMetadata(name: string): Promise<import('../type
     }
   }
   throw lastErr  // all attempts failed — loadOutputMetadata's catch sets meta null
+}
+
+// --- Style sheet library ---
+
+export interface StyleAttribution {
+  id: string
+  type: string
+  author: string
+  name: string
+  url: string
+  repoId: string
+  modelFamily: string
+  collection: string
+  license: string | null
+  licenseNotice?: string
+  description: string
+  expectedStyles: number
+  expectedBytes: number
+  revision?: string | null
+  lastModified?: string | null
+}
+
+export interface StyleSource extends StyleAttribution {
+  installed: boolean
+  styleCount: number
+  downloadedFiles: number
+  downloadedBytes: number
+  activeJob?: StyleImportJob | null
+}
+
+export interface StyleLibraryItem {
+  id: string
+  modelFamily: string
+  title: string
+  prompt: string
+  collection: string
+  group: string
+  tags: string[]
+  sourceOrder: number
+  sourceFilename: string
+  videoFilename: string
+  source: StyleAttribution
+  importedAt: number
+  previewUrl: string
+  videoUrl: string
+}
+
+export interface StyleImportJob {
+  jobId: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'interrupted'
+  stage: 'queued' | 'downloading' | 'indexing' | 'previews' | 'completed' | 'failed'
+  current: number
+  total: number
+  message: string
+  downloadedBytes: number
+  expectedBytes: number
+  error?: string | null
+  source: StyleAttribution
+}
+
+export interface StyleLibraryPage {
+  styles: StyleLibraryItem[]
+  total: number
+  offset: number
+  limit: number
+  facets: { sources: string[]; collections: string[]; groups: string[] }
+}
+
+export async function fetchStyleSources(): Promise<StyleSource[]> {
+  const res = await fetch(`${BASE}/api/v1/style-library/sources`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Could not load style sources')
+  const data = await res.json()
+  return data.sources || []
+}
+
+export async function fetchStyleLibrary(params: {
+  modelFamily?: string
+  sourceId?: string
+  collection?: string
+  group?: string
+  query?: string
+  sort?: string
+  offset?: number
+  limit?: number
+} = {}): Promise<StyleLibraryPage> {
+  const query = new URLSearchParams()
+  if (params.modelFamily) query.set('model_family', params.modelFamily)
+  if (params.sourceId) query.set('source_id', params.sourceId)
+  if (params.collection) query.set('collection', params.collection)
+  if (params.group) query.set('group', params.group)
+  if (params.query) query.set('q', params.query)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.offset) query.set('offset', String(params.offset))
+  if (params.limit) query.set('limit', String(params.limit))
+  const res = await fetch(`${BASE}/api/v1/style-library/styles?${query.toString()}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Could not load styles')
+  return res.json()
+}
+
+export async function startMiniMaxStyleImport(): Promise<StyleImportJob> {
+  const res = await fetch(`${BASE}/api/v1/style-library/imports/minimax-h3-1k`, { method: 'POST' })
+  if (!res.ok) throw new Error('Could not start the MiniMax style download')
+  return res.json()
+}
+
+export async function fetchStyleImport(jobId: string): Promise<StyleImportJob> {
+  const res = await fetch(`${BASE}/api/v1/style-library/imports/${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Could not load style import progress')
+  return res.json()
+}
+
+export async function deleteStyle(styleId: string): Promise<{ id: string; deleted: boolean }> {
+  const res = await fetch(`${BASE}/api/v1/style-library/styles/${encodeURIComponent(styleId)}?confirm=true`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: 'Could not delete style' }))
+    throw new Error(detail.detail || 'Could not delete style')
+  }
+  return res.json()
 }
 
 export async function fetchVideoExtraInfo(
@@ -728,12 +1061,19 @@ export interface VideoEditorProbe {
 
 export interface VideoEditorExportJob {
   job_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  task_id?: string | null
+  root_task_id?: string | null
+  workspace?: string
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
+  phase?: string
   progress: number
   message: string
   filename: string | null
   url: string | null
   error: string | null
+  acquired_resources?: string[]
+  cancel_mode?: 'immediate' | 'deferred' | string
+  safe_boundary?: string
   result?: { duration: number; clip_count: number }
 }
 
@@ -785,6 +1125,7 @@ export async function startVideoEditorExport(payload: {
   width: number
   height: number
   fps: number
+  workspace?: string
   clips: Array<{
     name: string
     source: string
@@ -812,7 +1153,7 @@ export async function startVideoEditorExport(payload: {
     transition_text: string
     transition_text_size: number
   }>
-}): Promise<{ job_id: string }> {
+}): Promise<VideoEditorExportJob> {
   const res = await fetch(`${BASE}/api/v1/video-editor/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -834,6 +1175,17 @@ export async function fetchVideoEditorExport(jobId: string): Promise<VideoEditor
   return res.json()
 }
 
+export async function cancelVideoEditorExport(jobId: string): Promise<VideoEditorExportJob> {
+  const res = await fetch(`${BASE}/api/v1/video-editor/export/${encodeURIComponent(jobId)}/cancel`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Could not cancel export' }))
+    throw new Error(error.detail || 'Could not cancel export')
+  }
+  return res.json()
+}
+
 export async function startComicAnimatic(payload: {
   comic_id: string
   comic_title: string
@@ -842,6 +1194,7 @@ export async function startComicAnimatic(payload: {
   fps: number
   transition: string
   transition_duration: number
+  workspace?: string
   panels: Array<{
     source: string
     page_number: number
@@ -850,7 +1203,7 @@ export async function startComicAnimatic(payload: {
     motion: string
     script: string
   }>
-}): Promise<{ job_id: string }> {
+}): Promise<VideoEditorExportJob> {
   const res = await fetch(`${BASE}/api/v1/comics/animatic`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1260,6 +1613,28 @@ export async function tagPipelineClip(pid: string, clipIndex: number, tag: strin
     body: JSON.stringify({ tag }),
   })
   if (!res.ok) throw new Error('Failed to tag clip')
+}
+
+export async function selectPipelineClipVideo(
+  pid: string,
+  clipIndex: number,
+  filename: string,
+): Promise<{
+  pipeline_id: string
+  clip_index: number
+  filename: string
+  attempt: import('../types').PipelineVideoAttempt
+}> {
+  const res = await fetch(`${BASE}/api/v1/director/pipelines/${encodeURIComponent(pid)}/clips/${clipIndex}/video-selection`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Clip selection failed' }))
+    throw new Error(err.error || err.detail || 'Could not select this clip version')
+  }
+  return res.json()
 }
 
 export async function startPipelineRepair(pid: string): Promise<{
@@ -2105,6 +2480,49 @@ export async function generateComicWithMiniMax(params: {
   return res.json()
 }
 
+export interface MiniMaxImageJob {
+  jobId: string
+  workspace: string
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
+  phase: string
+  message: string
+  current: number
+  total: number
+  progress: number
+  taskId?: string | null
+  rootTaskId?: string | null
+  statusCode?: number
+  error?: string | null
+  result?: { asset: import('../features/comics/types').ComicAsset } | null
+}
+
+export async function startMiniMaxImageJob(params: {
+  prompt: string
+  aspect_ratio: string
+  subject_reference?: string
+  workspace: string
+}): Promise<MiniMaxImageJob> {
+  const res = await fetch(`${BASE}/api/v1/comics/generate/minimax/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'MiniMax generation failed' }))
+    throw new Error(`HTTP ${res.status}: ${err.detail || 'MiniMax generation failed'}`)
+  }
+  return res.json()
+}
+
+export async function fetchMiniMaxImageJob(jobId: string): Promise<MiniMaxImageJob> {
+  const res = await fetch(`${BASE}/api/v1/comics/generate/minimax/jobs/${encodeURIComponent(jobId)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'MiniMax image job not found' }))
+    throw new Error(`HTTP ${res.status}: ${err.detail || 'MiniMax image job not found'}`)
+  }
+  return res.json()
+}
+
 export async function generateStorySection(params: {
   scope: import('../features/stories/types').StoryGenerationScope
   premise: string
@@ -2166,28 +2584,32 @@ export async function generateStorySection(params: {
         }, 1000)
         signal?.addEventListener('abort', onAbort, { once: true })
       })
-      const statusResponse = await fetch(
-        `${BASE}/api/v1/stories/generate/status/${encodeURIComponent(accepted.jobId)}`,
-        { signal },
+      const status = await getStoryGenerationStatusResilient(
+        accepted.jobId,
+        signal,
+        (attempt, delayMs) => onProgress?.({
+          ...accepted,
+          status: 'running',
+          stage: 'reconnecting',
+          message: `Mobile connection interrupted; retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempt})…`,
+          current: 0,
+          total: 0,
+        }),
       )
-      if (!statusResponse.ok) {
-        const err = await statusResponse.json().catch(() => ({ detail: 'Could not read Story Lab job' }))
-        throw new Error(err.detail || 'Could not read Story Lab job')
-      }
-      const status = await statusResponse.json()
       onProgress?.(status)
       if (status.status === 'failed' || status.status === 'cancelled') {
         throw new Error(`${status.error || status.message} Resume job: ${accepted.jobId}`)
       }
       if (status.status === 'completed') {
-        if (!status.result?.result) throw new Error('Story Lab job completed without a draft')
+        const result = status.result?.result
+        if (!result) throw new Error('Story Lab job completed without a draft')
         window.localStorage.setItem('maestro-last-story-plan-result', JSON.stringify({
           jobId: accepted.jobId,
           projectId: params.project.id,
           scope: params.scope,
-          result: status.result.result,
+          result,
         }))
-        return status.result
+        return { result }
       }
     }
   } finally {
@@ -2437,9 +2859,15 @@ export async function resumeSeriesPlanJob(jobId: string): Promise<import('../fea
   ), 'Could not resume Series planning job')
 }
 
-export async function applySeriesPlanJob(jobId: string): Promise<import('../features/series/types').SeriesEpisode> {
+export async function applySeriesPlanJob(
+  jobId: string,
+  episodeResult?: import('../features/series/types').SeriesEpisode,
+): Promise<import('../features/series/types').SeriesEpisode> {
   return seriesResponse(fetch(
-    `${BASE}/api/v1/series/plan/jobs/${encodeURIComponent(jobId)}/apply`, { method: 'POST' },
+    `${BASE}/api/v1/series/plan/jobs/${encodeURIComponent(jobId)}/apply`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(episodeResult ? { episodeResult } : {}),
+    },
   ), 'Could not apply Series planning proposal')
 }
 
@@ -2549,6 +2977,41 @@ export async function approveSeriesAttempt(
   ), 'Could not approve Series shot attempt')
 }
 
+export async function approveSeriesAttemptsBulk(
+  workspace: string,
+  seriesId: string,
+  episodeId: string,
+  selections: Array<{ shotId: string; attemptId: string }>,
+): Promise<{ seriesId: string; episodeId: string; revision: number; episode: import('../features/series/types').SeriesEpisode }> {
+  return seriesResponse(fetch(
+    `${BASE}/api/v1/series/${encodeURIComponent(seriesId)}/episodes/${encodeURIComponent(episodeId)}/attempts/approve-bulk`,
+    {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace, selections }),
+    },
+  ), 'Could not approve Series shot attempts')
+}
+
+export async function startSeriesEpisodeAssembly(
+  workspace: string, seriesId: string, episodeId: string,
+): Promise<import('../features/series/types').SeriesAssemblyJob> {
+  return seriesResponse(fetch(
+    `${BASE}/api/v1/series/${encodeURIComponent(seriesId)}/episodes/${encodeURIComponent(episodeId)}/assembly/start`,
+    {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace }),
+    },
+  ), 'Could not start Series episode assembly')
+}
+
+export async function fetchSeriesEpisodeAssembly(
+  jobId: string,
+): Promise<import('../features/series/types').SeriesAssemblyJob> {
+  return seriesResponse(fetch(
+    `${BASE}/api/v1/series/assembly/jobs/${encodeURIComponent(jobId)}`,
+  ), 'Could not read Series episode assembly')
+}
+
 export async function rejectSeriesAttempt(
   workspace: string, seriesId: string, episodeId: string, shotId: string, attemptId: string,
 ): Promise<import('../features/series/types').SeriesShot> {
@@ -2589,6 +3052,8 @@ export async function cancelStoryGeneration(jobId: string): Promise<void> {
 
 export interface StoryGenerationStatus {
   jobId: string
+  taskId?: string | null
+  rootTaskId?: string | null
   status: string
   message: string
   stage: string
@@ -2598,15 +3063,64 @@ export interface StoryGenerationStatus {
   result?: { result?: Record<string, unknown> } | null
 }
 
-export async function getStoryGenerationStatus(jobId: string): Promise<StoryGenerationStatus> {
+const STORY_STATUS_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000, 15_000]
+
+function isStoryStatusNetworkError(error: unknown): boolean {
+  return error instanceof TypeError || (error instanceof Error && error.name === 'TypeError')
+}
+
+function waitForStoryStatusRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Story generation cancelled', 'AbortError'))
+      return
+    }
+    const onAbort = () => {
+      window.clearTimeout(timer)
+      reject(new DOMException('Story generation cancelled', 'AbortError'))
+    }
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+export async function getStoryGenerationStatus(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<StoryGenerationStatus> {
   const response = await fetch(
     `${BASE}/api/v1/stories/generate/status/${encodeURIComponent(jobId)}`,
+    { signal },
   )
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Could not read Story Lab job' }))
     throw new Error(error.detail || 'Could not read Story Lab job')
   }
   return response.json()
+}
+
+async function getStoryGenerationStatusResilient(
+  jobId: string,
+  signal?: AbortSignal,
+  onRetry?: (attempt: number, delayMs: number) => void,
+): Promise<StoryGenerationStatus> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await getStoryGenerationStatus(jobId, signal)
+    } catch (error) {
+      if (signal?.aborted) throw new DOMException('Story generation cancelled', 'AbortError')
+      if (!isStoryStatusNetworkError(error)) throw error
+      if (attempt >= STORY_STATUS_RETRY_DELAYS_MS.length) {
+        throw new Error(`Connection to Maestro is still unavailable. The job remains saved. Resume job: ${jobId}`)
+      }
+      const delayMs = STORY_STATUS_RETRY_DELAYS_MS[attempt]
+      onRetry?.(attempt + 1, delayMs)
+      await waitForStoryStatusRetry(delayMs, signal)
+    }
+  }
 }
 
 export async function resumeStoryGeneration(
@@ -2639,7 +3153,18 @@ export async function resumeStoryGeneration(
   }
   for (;;) {
     await new Promise(resolve => window.setTimeout(resolve, 1000))
-    const status = await getStoryGenerationStatus(jobId)
+    const status = await getStoryGenerationStatusResilient(
+      jobId,
+      undefined,
+      (attempt, delayMs) => onProgress?.({
+        jobId,
+        status: 'running',
+        stage: 'reconnecting',
+        message: `Mobile connection interrupted; retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempt})…`,
+        current: 0,
+        total: 0,
+      }),
+    )
     onProgress?.(status)
     if (status.status === 'failed' || status.status === 'cancelled') {
       throw new Error(status.error || status.message)
@@ -2657,6 +3182,8 @@ export async function resumeStoryGeneration(
 
 export type ComicPlanProgress = {
   jobId?: string
+  taskId?: string | null
+  rootTaskId?: string | null
   status: 'queued' | 'loading_llm' | 'planning' | 'planning_bible' | 'planning_page' | 'completed' | 'failed'
   message: string
   provider?: string
@@ -3298,7 +3825,9 @@ export async function analyzeAudio(params: {
 
 export interface AudioAnalysisJobStatus {
   job_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  task_id?: string
+  root_task_id?: string
+  status: 'queued' | 'waiting_resource' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
   progress: number
   step: number
   total_steps: number
@@ -3313,7 +3842,8 @@ export async function startAudioAnalysisJob(params: {
   transcribe?: boolean
   extract_vocals?: boolean
   lyrics_hint?: string
-}): Promise<{ job_id: string }> {
+  workspace?: string
+}): Promise<{ job_id: string; task_id: string; root_task_id: string }> {
   const res = await fetch(`${BASE}/api/v1/audio/analyze/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

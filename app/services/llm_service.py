@@ -14,6 +14,8 @@ import subprocess
 import threading
 import logging
 import requests
+from contextlib import contextmanager
+from functools import wraps
 from typing import Optional
 from . import debug_trace
 from .debug_trace import trace_llm_call
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Singleton state
 _process: Optional[subprocess.Popen] = None
-_lock = threading.Lock()
+_lock = threading.RLock()
 _model_id: str = ""
 _device: str = ""
 _server_port: int = 0
@@ -1286,6 +1288,45 @@ def _get_server_exe() -> str:
     return os.path.join(bin_dir, "llama-server")
 
 
+def _scheduled_llm_load(function):
+    """Serialize local model loading on the same lane used for inference."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        model_id = kwargs.get("model_id", args[0] if len(args) > 0 else "")
+        device = kwargs.get("device", args[1] if len(args) > 1 else "cpu")
+        provider = kwargs.get("provider", args[3] if len(args) > 3 else "local")
+        remote_url = kwargs.get("remote_url", args[4] if len(args) > 4 else "")
+        if str(provider or "local").lower() in {
+            "remote", "openai", "anthropic", "minimax",
+        }:
+            return function(*args, **kwargs)
+        from . import resource_scheduler
+        lane = resource_scheduler.llm_lane(
+            str(provider or "local"),
+            base_url=str(remote_url or ""),
+            device=str(device or "cpu"),
+        )
+        task_id = f"llm-load-{threading.get_ident()}-{time.time_ns()}"
+        cancelled = _current_task_cancel_callback()
+        try:
+            with resource_scheduler.coordinator.acquire(
+                lane,
+                task_id=task_id,
+                description=f"Local LLM load · {model_id or 'default'}",
+                cancelled=cancelled,
+            ):
+                with _cancelable_singleton_lock(
+                    cancelled,
+                    task_id=task_id,
+                    operation="loading the local LLM",
+                ):
+                    return function(*args, **kwargs)
+        except resource_scheduler.ResourceAcquireCancelled as exc:
+            raise InterruptedError(str(exc)) from exc
+    return wrapped
+
+
+@_scheduled_llm_load
 def load_model(
     model_id: str = "",
     device: str = "cpu",
@@ -1326,11 +1367,12 @@ def load_model(
         return
 
     repo_id = model_id or DEFAULT_HF_REPO
-    _provider = "local"
-    _remote_url = ""
-    _api_key = ""
-
     with _lock:
+        # Keep every singleton routing mutation under the same lock used by
+        # scheduled requests when they validate their routing snapshot.
+        _provider = "local"
+        _remote_url = ""
+        _api_key = ""
         if is_loaded() and _model_id == repo_id and not force_reload:
             return
 
@@ -1709,7 +1751,135 @@ def _image_to_data_url(image_path: str, max_size: int = 768) -> Optional[str]:
         return f"data:{mime};base64,{data}"
 
 
+def _current_task_cancel_callback():
+    """Return a cheap cancellation probe for the active canonical task."""
+    try:
+        from .task_manager import current_task_context, get_task_registry
+        context = current_task_context()
+        parent_task_id = str(context.get("task_id") or "")
+        workspace_dir = str(context.get("workspace_dir") or "")
+        if not parent_task_id or not workspace_dir:
+            return None
+        operation_registry = get_task_registry(workspace_dir)
+    except Exception:
+        return None
+
+    def cancelled() -> bool:
+        try:
+            parent = operation_registry.get(parent_task_id)
+        except Exception:
+            return False
+        return bool(
+            parent and (
+                parent.get("status") in {"cancelled", "interrupted"}
+                or parent.get("phase") == "cancelling"
+            )
+        )
+
+    return cancelled
+
+
+@contextmanager
+def _cancelable_singleton_lock(
+    cancelled=None,
+    *,
+    task_id: str = "llm",
+    operation: str = "using the LLM",
+):
+    """Acquire the mutable singleton lock without making cancel wait forever."""
+    acquired = False
+    try:
+        if cancelled is None:
+            _lock.acquire()
+            acquired = True
+        else:
+            while True:
+                if cancelled():
+                    from .resource_scheduler import ResourceAcquireCancelled
+                    raise ResourceAcquireCancelled(
+                        f"Task {task_id} was cancelled while {operation}"
+                    )
+                if _lock.acquire(timeout=0.1):
+                    acquired = True
+                    break
+        yield
+    finally:
+        if acquired:
+            _lock.release()
+
+
+def _singleton_routing_snapshot(cancelled=None) -> tuple:
+    """Read all globals a singleton completion uses while holding its lock."""
+    with _cancelable_singleton_lock(
+        cancelled,
+        operation="waiting for the LLM configuration",
+    ):
+        return (
+            _provider,
+            _remote_url,
+            _model_id,
+            _device,
+            _api_key,
+            _vision_available,
+        )
+
+
+def _scheduled_llm_request(function):
+    """Acquire the concrete local/remote LLM lane for singleton requests."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        from . import resource_scheduler
+        cancelled = _current_task_cancel_callback()
+        try:
+            while True:
+                routing = _singleton_routing_snapshot(cancelled)
+                provider, remote_url, model_id, device, _key, _vision = routing
+                provider = str(provider or "local")
+                lane = resource_scheduler.llm_lane(
+                    provider,
+                    base_url=(remote_url if provider != "local" else ""),
+                    device=device or "cpu",
+                )
+                task_id = f"llm-{threading.get_ident()}-{time.time_ns()}"
+                # The GPU hand-off hook identifies an intentional CUDA LLM
+                # owner by this prefix. A generic label made it unload the
+                # very model this request was about to use.
+                owner_label = (
+                    "Local LLM" if provider == "local" else "Remote LLM"
+                )
+                with resource_scheduler.coordinator.acquire(
+                    lane,
+                    task_id=task_id,
+                    description=f"{owner_label} completion · {model_id or 'default'}",
+                    cancelled=cancelled,
+                ):
+                    # The provider may have changed while this request waited
+                    # for its physical lane. Revalidate under the singleton
+                    # lock; if it moved, release the stale lane and retry. The
+                    # lock then prevents load/unload from mutating routing or
+                    # killing llama-server during the active HTTP request.
+                    with _cancelable_singleton_lock(
+                        cancelled,
+                        task_id=task_id,
+                        operation="waiting to start the LLM request",
+                    ):
+                        if routing != (
+                            _provider,
+                            _remote_url,
+                            _model_id,
+                            _device,
+                            _api_key,
+                            _vision_available,
+                        ):
+                            continue
+                        return function(*args, **kwargs)
+        except resource_scheduler.ResourceAcquireCancelled as exc:
+            raise InterruptedError(str(exc)) from exc
+    return wrapped
+
+
 @trace_llm_call("generate", context=lambda: {"provider": _provider, "model_id": _model_id})
+@_scheduled_llm_request
 def generate(
     prompt: str,
     system_prompt: str = "",
@@ -2013,6 +2183,64 @@ def generate_openai_compatible(
     attempts = 2 if is_minimax or (json_schema is not None and is_deepseek) else 1
     from . import resource_scheduler
     request_lane = resource_scheduler.remote_lane(model_id, base_url)
+    operation_registry = None
+    operation_id = ""
+    parent_task_id = ""
+    try:
+        from .task_manager import current_task_context, get_task_registry, new_task_id
+        task_context = current_task_context()
+        parent_task_id = task_context.get("task_id", "")
+        workspace_dir = task_context.get("workspace_dir", "")
+        if parent_task_id and workspace_dir:
+            operation_registry = get_task_registry(workspace_dir)
+            parent_task = operation_registry.get(parent_task_id)
+            if parent_task:
+                operation_id = new_task_id("llm-call")
+                operation_registry.create(
+                    id=operation_id, root_id=parent_task["root_id"], parent_id=parent_task_id,
+                    workspace=parent_task.get("workspace") or "default",
+                    kind="llm-call", workflow=parent_task.get("workflow") or "llm",
+                    title=f"{model_id} completion", status="waiting_resource",
+                    phase="waiting_resource", message=f"Waiting to call {provider_name}",
+                    provider=provider_name, model=model_id, server_origin=base_url,
+                    resource_requirements=[request_lane.key], attempt=1, max_attempts=attempts,
+                    cancelable=False, recoverable=False,
+                    metadata={"operation": "generate_openai_compatible"},
+                )
+    except Exception as exc:
+        logger.debug("Could not publish LLM child operation: %s", exc)
+
+    def finish_operation(status: str, message: str, usage: Optional[dict] = None, error: str = "") -> None:
+        if not operation_registry or not operation_id:
+            return
+        normalized = usage or {}
+        prompt_count = int(normalized.get("prompt_tokens", normalized.get("input_tokens", 0)) or 0)
+        completion_count = int(normalized.get("completion_tokens", normalized.get("output_tokens", 0)) or 0)
+        total_count = int(normalized.get("total_tokens") or prompt_count + completion_count)
+        try:
+            operation_registry.update(
+                operation_id, status=status, phase=status, message=message,
+                token_usage={"prompt": prompt_count, "completion": completion_count,
+                             "total": total_count, "calls": 1},
+                error=({"message": error, "retryable": True} if error else None),
+                event_type=f"operation.{status}", force=True,
+            )
+            parent = operation_registry.get(parent_task_id)
+            if parent and total_count:
+                previous = parent.get("token_usage") or {}
+                operation_registry.update(
+                    parent_task_id,
+                    token_usage={
+                        "prompt": int(previous.get("prompt") or 0) + prompt_count,
+                        "completion": int(previous.get("completion") or 0) + completion_count,
+                        "total": int(previous.get("total") or 0) + total_count,
+                        "calls": int(previous.get("calls") or 0) + 1,
+                    },
+                    event_type="task.tokens",
+                )
+        except Exception as exc:
+            logger.debug("Could not finish LLM child operation: %s", exc)
+
     for content_attempt in range(attempts):
         request_payload = dict(payload)
         if is_minimax and content_attempt > 0:
@@ -2022,11 +2250,31 @@ def generate_openai_compatible(
             )
         try:
             task_id = f"llm-{threading.get_ident()}-{time.time_ns()}"
+
+            def request_cancelled() -> bool:
+                if not operation_registry:
+                    return False
+                operation = operation_registry.get(operation_id) if operation_id else None
+                parent = operation_registry.get(parent_task_id) if parent_task_id else None
+                return any(
+                    task and task.get("status") in {"cancelled", "interrupted"}
+                    for task in (operation, parent)
+                )
+
             with resource_scheduler.coordinator.acquire(
                 request_lane,
                 task_id=task_id,
                 description=f"{model_id} completion",
+                cancelled=request_cancelled,
             ):
+                if operation_registry and operation_id:
+                    operation_registry.update(
+                        operation_id, status="running", phase="requesting",
+                        message=f"Calling {provider_name} · attempt {content_attempt + 1}/{attempts}",
+                        attempt=content_attempt + 1,
+                        acquired_resources=[request_lane.key],
+                        event_type="operation.started", force=True,
+                    )
                 response = requests.post(
                     endpoint, json=request_payload, headers=headers, timeout=(10, 600),
                 )
@@ -2040,11 +2288,15 @@ def generate_openai_compatible(
                         endpoint, json=fallback_payload, headers=headers, timeout=(10, 600),
                     )
                 response.raise_for_status()
+        except resource_scheduler.ResourceAcquireCancelled as exc:
+            finish_operation("cancelled", "Provider call cancelled before it started")
+            raise InterruptedError(str(exc)) from exc
         except requests.exceptions.RequestException as exc:
             detail = ""
             if getattr(exc, "response", None) is not None:
                 detail = str(exc.response.text or "")[:500]
             suffix = f": {detail}" if detail else ""
+            finish_operation("failed", "Provider request failed", error=f"OpenAI-compatible request failed{suffix}")
             raise RuntimeError(f"OpenAI-compatible request failed{suffix}") from exc
 
         try:
@@ -2052,14 +2304,18 @@ def generate_openai_compatible(
             base_response = response_data.get("base_resp") or {}
             if base_response.get("status_code") not in (None, 0):
                 detail = str(base_response.get("status_msg") or "MiniMax returned an error")
+                finish_operation("failed", "Provider returned an error", error=detail)
                 raise RuntimeError(detail)
             choice = response_data["choices"][0]
             message = choice["message"]
             content = _strip_thinking_tags(str(message.get("content") or "")).strip()
         except (KeyError, IndexError, TypeError, ValueError) as exc:
+            finish_operation("failed", "Provider response was invalid", error="OpenAI-compatible provider returned an invalid response")
             raise RuntimeError("OpenAI-compatible provider returned an invalid response") from exc
         if content:
-            _record_activity_usage(response_data.get("usage") or {})
+            response_usage = response_data.get("usage") or {}
+            _record_activity_usage(response_usage)
+            finish_operation("completed", "Provider response received and parsed", response_usage)
             return content
         usage = response_data.get("usage") or {}
         token_details = usage.get("completion_tokens_details") or {}
@@ -2075,6 +2331,7 @@ def generate_openai_compatible(
         )
         if content_attempt + 1 < attempts:
             time.sleep(0.4)
+    finish_operation("failed", "Provider returned empty content", error=f"{provider_name} returned empty content")
     raise RuntimeError(
         f"{provider_name} returned empty content after {attempts} "
         f"{'attempts' if attempts != 1 else 'attempt'}"
@@ -2088,6 +2345,7 @@ def get_stream_status() -> dict:
 
 
 @trace_llm_call("generate_streaming", context=lambda: {"provider": _provider, "model_id": _model_id})
+@_scheduled_llm_request
 def generate_streaming(
     prompt: str,
     system_prompt: str = "",

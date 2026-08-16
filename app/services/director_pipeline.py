@@ -23,11 +23,13 @@ import secrets
 import subprocess
 import unicodedata
 import traceback
+from contextlib import nullcontext
 from functools import wraps
 from typing import Callable, Optional
 
 from services.job_lifecycle import (
     GENERATED_MEDIA_EXTENSIONS,
+    acknowledge_cancel,
     register_generation_job,
     request_cancel,
     snapshot_job,
@@ -60,6 +62,7 @@ _cancel_generation = None   # reference to launch._request_generation_cancel
 _wgp = None                 # reference to wgp module
 _gen_lock = None            # reference to launch._gen_lock
 _active_gen_states = None   # reference to launch._active_gen_states (abort signaling)
+_pipeline_state_observer: Optional[Callable[[dict, str], Optional[dict]]] = None
 
 _pipelines: dict = {}
 _pipeline_lock = threading.Lock()
@@ -399,13 +402,7 @@ def _saved_pipeline_shot_image_policy(state: dict) -> str:
     """Read a persisted policy; pre-feature projects required start images."""
 
     snapshot = state.get("_params_snapshot") or {}
-    if (
-        (
-            state.get("pipeline_type") == "music_video"
-            and state.get("generation_mode") == "direct_video"
-        )
-        or _direct_video_settings(snapshot)[0]
-    ):
+    if state.get("generation_mode") == "direct_video" or _direct_video_settings(snapshot)[0]:
         return SHOT_IMAGE_PROMPT_ONLY
 
     saved = str(state.get("shot_image_policy") or "").strip()
@@ -1254,6 +1251,7 @@ def _save_pipeline_state_locked(pid: str) -> bool:
 
     clips = []
     for i, plan in enumerate(clip_plans):
+        clip_video = clip_videos[i] if i < len(clip_videos) else None
         clip_state = {
             "index": i,
             "planned_clip": p.get("_planned_clips", [{}] * (i + 1))[i] if i < len(p.get("_planned_clips", [])) else None,
@@ -1306,7 +1304,27 @@ def _save_pipeline_state_locked(pid: str) -> bool:
             ),
             "end_image_filename": clip_end_images[i] if i < len(clip_end_images) else None,
             "keyframe_filenames": (p.get("_clip_keyframes", []) or [])[i] if i < len(p.get("_clip_keyframes", [])) else [],
-            "video_filename": clip_videos[i] if i < len(clip_videos) else None,
+            "video_filename": clip_video,
+            # Attempts are append-only. ``video_filename`` remains the active
+            # compatibility field, while this list lets Montage expose every
+            # version ever rendered for the same ordered slot.
+            "video_attempts": ([{
+                "id": clip_video,
+                "filename": clip_video,
+                "created_at": p.get("_completed_at") or time.time(),
+                "seed": _comic_shot_seed(params, i, plan),
+                "prompt": plan.get("video_prompt", ""),
+                "model_type": params.get("video_model", ""),
+                "resolution": (params.get("video_params") or {}).get(
+                    "resolution", "",
+                ),
+                "video_length": plan.get("duration_frames"),
+                "source": "original",
+            }] if clip_video else []),
+            # This is intentionally empty for legacy checkpoints. Their
+            # current video_filename is the implicit selection; the explicit
+            # field is written only after the user chooses a historical take.
+            "selected_video_filename": None,
             "video_stale": False,
             "tag": (p.get("_clip_tags", []) or [])[i] if i < len(p.get("_clip_tags", [])) else None,
             "image_gen_time_sec": clip_timings.get(f"image_{i}"),
@@ -1350,7 +1368,11 @@ def _save_pipeline_state_locked(pid: str) -> bool:
         "completed_at": p.get("_completed_at"),
         "status": p.get("status", "unknown"),
         "phase": p.get("phase"),
+        "error": p.get("error"),
         "progress": copy.deepcopy(p.get("progress") or {}),
+        "resource_schedule": copy.deepcopy(
+            p.get("resource_schedule") or {}
+        ),
         "pipeline_type": params.get("pipeline_type", "music_video"),
         "generation_mode": (
             "direct_video" if _direct_video_settings(params)[0] else "image_guided"
@@ -1767,17 +1789,30 @@ def list_pipeline_states(out_dir: str, workspace: Optional[str] = None) -> list[
                     results.append({
                         "id": pid,
                         "status": status,
+                        "phase": data.get("phase") or status,
                         "pipeline_type": data.get("pipeline_type", ""),
                         "generation_mode": data.get("generation_mode", "image_guided"),
                         "created_at": data.get("created_at"),
+                        "updated_at": data.get("updated_at"),
+                        "completed_at": data.get("completed_at"),
+                        "progress": copy.deepcopy(data.get("progress") or {}),
+                        "error": data.get("error"),
                         "clip_count": len(data.get("clips", [])),
                         "output_count": len(data.get("output_files", [])),
+                        "output_files": list(data.get("output_files", []) or []),
                         "scene_description": (data.get("scene_description", "") or "")[:100],
                         "comic_id": data.get("comic_id"),
                         "preview_fingerprint": data.get("preview_fingerprint"),
                         "preview_revision": data.get("preview_revision", 1),
                         "workspace": os.path.basename(scan_dir) if scan_dir != out_dir else "default",
                         "repair_status": (data.get("repair") or {}).get("status"),
+                        "generation_details": _public_pipeline_generation_details(
+                            _director_params_from_saved_state(data),
+                            len(data.get("clips", [])),
+                        ),
+                        "resource_schedule": copy.deepcopy(
+                            data.get("resource_schedule") or {}
+                        ),
                         "_filepath": filepath,
                     })
                 except Exception:
@@ -1804,18 +1839,236 @@ def _backfill_clip_video_filenames(state: dict, state_dir: str) -> dict:
         filename for filename in (state.get("output_files") or [])
         if "_multiclip" not in os.path.splitext(filename)[0].lower()
     ]
-    if not clips or len(outputs) != len(clips):
-        return state
-    for i, clip in enumerate(clips):
-        if not clip.get("video_filename") and os.path.isfile(os.path.join(state_dir, outputs[i])):
-            clip["video_filename"] = outputs[i]
-    return state
+    if clips and len(outputs) == len(clips):
+        for i, clip in enumerate(clips):
+            if not clip.get("video_filename") and os.path.isfile(os.path.join(state_dir, outputs[i])):
+                clip["video_filename"] = outputs[i]
+    return _backfill_clip_video_attempts(state, state_dir)
 
 
 _SAVED_MEDIA_EXTENSIONS = {
     "image": {".jpg", ".jpeg", ".png", ".webp"},
     "video": {".mkv", ".mov", ".mp4", ".webm"},
 }
+_clip_attempt_sidecar_cache: dict[
+    str,
+    tuple[int, dict[str, list[tuple[str, dict]]]],
+] = {}
+
+
+def _backfill_clip_video_attempts(state: dict, state_dir: str) -> dict:
+    """Recover append-only video histories from state and owned sidecars.
+
+    Old checkpoints retained superseded media in ``output_files`` and on disk,
+    but only remembered the latest filename per clip. Modern sidecars carry a
+    stable ``director_clip_index``. Reconcile both forms without guessing from
+    file order, and keep explicitly persisted Studio selections authoritative.
+    """
+
+    clips = state.get("clips") if isinstance(state.get("clips"), list) else []
+    if not clips:
+        return state
+    pid = str(state.get("pipeline_id") or "")
+    video_extensions = _SAVED_MEDIA_EXTENSIONS["video"]
+
+    attempts_by_clip: list[dict[str, dict]] = []
+    for clip in clips:
+        attempts: dict[str, dict] = {}
+        raw_attempts = (
+            clip.get("video_attempts")
+            if isinstance(clip.get("video_attempts"), list)
+            else []
+        )
+        for raw in raw_attempts:
+            if not isinstance(raw, dict):
+                continue
+            filename = str(raw.get("filename") or "").strip()
+            if (
+                not filename
+                or os.path.basename(filename) != filename
+                or os.path.splitext(filename)[1].lower() not in video_extensions
+                or not os.path.isfile(os.path.join(state_dir, filename))
+            ):
+                continue
+            attempts[filename] = {
+                **raw,
+                "id": str(raw.get("id") or filename),
+                "filename": filename,
+            }
+
+        current = str(clip.get("video_filename") or "").strip()
+        segments = clip.get("h3_segments") if isinstance(clip.get("h3_segments"), list) else []
+        if not current and len(segments) == 1:
+            current = str((segments[0] or {}).get("filename") or "").strip()
+            if current:
+                clip["video_filename"] = current
+        if (
+            current
+            and os.path.basename(current) == current
+            and os.path.isfile(os.path.join(state_dir, current))
+            and current not in attempts
+        ):
+            try:
+                created_at = os.path.getmtime(os.path.join(state_dir, current))
+            except OSError:
+                created_at = 0
+            segment = next(
+                (
+                    item for item in segments
+                    if isinstance(item, dict) and item.get("filename") == current
+                ),
+                {},
+            )
+            attempts[current] = {
+                "id": current,
+                "filename": current,
+                "created_at": created_at,
+                "seed": segment.get("seed", clip.get("seed")),
+                "prompt": segment.get("prompt") or clip.get("video_prompt", ""),
+                "model_type": state.get("video_model", ""),
+                "resolution": (state.get("video_params") or {}).get(
+                    "resolution", "",
+                ),
+                "video_length": segment.get("frames"),
+                "source": "recovered",
+            }
+        attempts_by_clip.append(attempts)
+
+    cache_key = os.path.realpath(state_dir)
+    try:
+        directory_revision = os.stat(state_dir).st_mtime_ns
+    except OSError:
+        directory_revision = 0
+    cached = _clip_attempt_sidecar_cache.get(cache_key)
+    if cached and cached[0] == directory_revision:
+        sidecars = cached[1].get(pid, [])
+    else:
+        sidecars_by_pipeline: dict[str, list[tuple[str, dict]]] = {}
+        try:
+            sidecar_names = [
+                name for name in os.listdir(state_dir) if name.endswith(".meta.json")
+            ]
+        except OSError:
+            sidecar_names = []
+        for sidecar_name in sidecar_names:
+            sidecar_path = os.path.join(state_dir, sidecar_name)
+            try:
+                with open(sidecar_path, "r", encoding="utf-8") as handle:
+                    metadata = json.load(handle)
+            except Exception:
+                continue
+            if not isinstance(metadata, dict):
+                continue
+            sidecar_params = metadata.get("params") if isinstance(metadata.get("params"), dict) else {}
+            owner = str(
+                metadata.get("director_pipeline_id")
+                or sidecar_params.get("_director_pipeline_id")
+                or ""
+            )
+            if owner:
+                sidecars_by_pipeline.setdefault(owner, []).append(
+                    (sidecar_name, metadata)
+                )
+        _clip_attempt_sidecar_cache[cache_key] = (
+            directory_revision,
+            sidecars_by_pipeline,
+        )
+        sidecars = sidecars_by_pipeline.get(pid, [])
+
+    for sidecar_name, metadata in sidecars:
+        params = metadata.get("params") if isinstance(metadata.get("params"), dict) else {}
+        raw_index = metadata.get("director_clip_index")
+        if raw_index is None:
+            raw_index = params.get("_director_clip_index")
+        if raw_index is None:
+            # Older H3 outputs predate the explicit sidecar index, but their
+            # durable progress label still names the ordered slot. Recover it
+            # so pre-upgrade projects also receive their existing histories.
+            legacy_label = str(params.get("_director_progress_label") or "")
+            legacy_match = re.search(r"\bclip\s+(\d+)(?:/\d+)?\b", legacy_label, re.I)
+            if legacy_match:
+                raw_index = int(legacy_match.group(1)) - 1
+        try:
+            clip_index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
+        if clip_index < 0 or clip_index >= len(clips):
+            continue
+
+        filename = str(metadata.get("output_filename") or "").strip()
+        if not filename:
+            media_stem = sidecar_name[: -len(".meta.json")]
+            matches = [
+                media_stem + extension
+                for extension in video_extensions
+                if os.path.isfile(os.path.join(state_dir, media_stem + extension))
+            ]
+            if len(matches) == 1:
+                filename = matches[0]
+        if (
+            not filename
+            or os.path.basename(filename) != filename
+            or os.path.splitext(filename)[1].lower() not in video_extensions
+            or not os.path.isfile(os.path.join(state_dir, filename))
+        ):
+            continue
+
+        clip = clips[clip_index]
+        segments = clip.get("h3_segments") if isinstance(clip.get("h3_segments"), list) else []
+        segment = next(
+            (
+                item for item in segments
+                if isinstance(item, dict) and item.get("filename") == filename
+            ),
+            {},
+        )
+        # A multi-segment H3 shot is one Montage slot but each sidecar is only
+        # a continuation fragment, not a complete alternative for that slot.
+        # Whole-shot Studio selections are persisted explicitly by the API.
+        if len(segments) > 1 and (
+            params.get("_director_h3_segment_index") is not None or segment
+        ):
+            continue
+        standalone = params.get("_director_clip_index") is not None
+        attempts_by_clip[clip_index][filename] = {
+            **attempts_by_clip[clip_index].get(filename, {}),
+            "id": filename,
+            "filename": filename,
+            "created_at": metadata.get("created_at")
+            or attempts_by_clip[clip_index].get(filename, {}).get("created_at")
+            or 0,
+            "seed": params.get("seed", segment.get("seed", clip.get("seed"))),
+            "prompt": (
+                params.get("prompt")
+                if standalone and params.get("prompt")
+                else segment.get("prompt") or clip.get("video_prompt", "")
+            ),
+            "model_type": params.get("model_type") or state.get("video_model", ""),
+            "resolution": params.get("resolution")
+            or (state.get("video_params") or {}).get("resolution", ""),
+            "video_length": segment.get("frames")
+            or (params.get("video_length") if standalone else None),
+            "source": (
+                "studio"
+                if params.get("_director_external_selection")
+                else "regenerated" if params.get("_director_detached_operation")
+                else "original"
+            ),
+        }
+
+    for index, clip in enumerate(clips):
+        selected = str(clip.get("selected_video_filename") or "").strip()
+        if selected and selected not in attempts_by_clip[index]:
+            selected = ""
+        clip["selected_video_filename"] = selected or None
+        if selected:
+            clip["video_filename"] = selected
+            clip["video_stale"] = False
+        clip["video_attempts"] = sorted(
+            attempts_by_clip[index].values(),
+            key=lambda item: (float(item.get("created_at") or 0), item["filename"]),
+        )
+    return state
 
 
 def _invalid_saved_media_numbers(
@@ -1935,6 +2188,103 @@ def _update_clip_tag_locked(out_dir: str, pid: str, clip_index: int, tag: Option
             _write_pipeline_json_unlocked(filepath, state)
             return True
     return False
+
+
+@_exclusive_pipeline_operation
+def select_clip_video_attempt(
+    out_dir: str,
+    pid: str,
+    clip_index: int,
+    filename: str,
+) -> dict:
+    """Make one historical/rendered video authoritative for an ordered slot."""
+
+    pipeline_file = _find_pipeline_file(out_dir, pid)
+    if not pipeline_file:
+        raise ValueError(f"Pipeline {pid} not found")
+    pipeline_dir = os.path.dirname(pipeline_file)
+    filename = str(filename or "").strip()
+    if (
+        not filename
+        or os.path.basename(filename) != filename
+        or os.path.splitext(filename)[1].lower()
+            not in _SAVED_MEDIA_EXTENSIONS["video"]
+    ):
+        raise ValueError("Select one valid video filename from this workspace")
+    if _invalid_saved_media_numbers([filename], 1, pipeline_dir, "video"):
+        raise ValueError("The selected video is missing, empty, or outside this workspace")
+
+    state = load_pipeline_state(out_dir, pid)
+    clips = state.get("clips", []) if state else []
+    if clip_index < 0 or clip_index >= len(clips):
+        raise ValueError(
+            f"Clip index {clip_index} out of range (0-{len(clips) - 1})"
+        )
+    clip = clips[clip_index]
+    attempt = next(
+        (
+            item for item in (clip.get("video_attempts") or [])
+            if isinstance(item, dict) and item.get("filename") == filename
+        ),
+        None,
+    )
+    if attempt is None:
+        metadata = {}
+        meta_path = os.path.join(
+            pipeline_dir,
+            os.path.splitext(filename)[0] + ".meta.json",
+        )
+        if os.path.isfile(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as handle:
+                    loaded = json.load(handle)
+                if isinstance(loaded, dict):
+                    metadata = loaded
+            except Exception:
+                metadata = {}
+        params = metadata.get("params") if isinstance(metadata.get("params"), dict) else {}
+        try:
+            created_at = float(
+                metadata.get("created_at")
+                or os.path.getmtime(os.path.join(pipeline_dir, filename))
+            )
+        except (OSError, TypeError, ValueError):
+            created_at = time.time()
+        attempt = {
+            "id": filename,
+            "filename": filename,
+            "created_at": created_at,
+            "seed": params.get("seed", clip.get("seed")),
+            "prompt": params.get("prompt") or clip.get("video_prompt", ""),
+            "model_type": params.get("model_type") or state.get("video_model", ""),
+            "resolution": params.get("resolution")
+            or (state.get("video_params") or {}).get("resolution", ""),
+            "video_length": params.get("video_length"),
+            "source": "studio",
+        }
+        clip.setdefault("video_attempts", []).append(attempt)
+
+    clip["selected_video_filename"] = filename
+    clip["video_filename"] = filename
+    clip["video_stale"] = False
+    segments = clip.get("h3_segments") if isinstance(clip.get("h3_segments"), list) else []
+    if len(segments) == 1:
+        segments[0]["filename"] = filename
+        segments[0]["prompt"] = attempt.get("prompt") or segments[0].get("prompt", "")
+        segments[0]["seed"] = attempt.get("seed", segments[0].get("seed"))
+        if attempt.get("video_length"):
+            segments[0]["frames"] = attempt["video_length"]
+        segments[0]["stale"] = False
+        segments[0]["updated_at"] = time.time()
+    if filename not in state.get("output_files", []):
+        state.setdefault("output_files", []).append(filename)
+    _replace_saved_pipeline(out_dir, pid, state)
+    return {
+        "pipeline_id": pid,
+        "clip_index": clip_index,
+        "filename": filename,
+        "attempt": attempt,
+    }
 
 
 def _find_pipeline_file(out_dir: str, pid: str) -> Optional[str]:
@@ -3078,6 +3428,9 @@ def _rerun_clip_video_impl(out_dir: str, pid: str, clip_index: int, prompt_overr
             m.split(";")[0] for m in (video_loras.get("loras_multipliers", "") or "").split(" ") if m
         ),
         "_director_pipeline_id": pid,
+        # Persisted into the output sidecar so superseded reruns can always be
+        # recovered into the correct Montage slot after a restart.
+        "_director_clip_index": clip_index,
         "_director_detached_operation": True,
         "_director_video_execution_profile": execution_profile,
         "minimax_h3_turbo_mode": bool(
@@ -3282,10 +3635,28 @@ def _rerun_clip_video_impl(out_dir: str, pid: str, clip_index: int, prompt_overr
         )
 
     def _update(s):
-        s["clips"][clip_index]["video_filename"] = new_filename
-        s["clips"][clip_index]["video_stale"] = False
-        s["clips"][clip_index]["video_prompt"] = prompt
-        s["clips"][clip_index]["_director_vocal_contract"] = (
+        saved_clip = s["clips"][clip_index]
+        saved_clip["video_filename"] = new_filename
+        saved_clip["selected_video_filename"] = new_filename
+        saved_clip["video_stale"] = False
+        saved_clip["video_prompt"] = prompt
+        attempts = [
+            item for item in (saved_clip.get("video_attempts") or [])
+            if isinstance(item, dict) and item.get("filename") != new_filename
+        ]
+        attempts.append({
+            "id": new_filename,
+            "filename": new_filename,
+            "created_at": time.time(),
+            "seed": gen_params.get("seed"),
+            "prompt": prompt,
+            "model_type": video_model,
+            "resolution": gen_params.get("resolution"),
+            "video_length": gen_params.get("video_length"),
+            "source": "regenerated",
+        })
+        saved_clip["video_attempts"] = attempts
+        saved_clip["_director_vocal_contract"] = (
             prompt_plan.get("_director_vocal_contract")
         )
         for key in (
@@ -3300,7 +3671,7 @@ def _rerun_clip_video_impl(out_dir: str, pid: str, clip_index: int, prompt_overr
             "_director_audio_plan",
         ):
             if prompt_plan.get(key) is not None:
-                s["clips"][clip_index][key] = prompt_plan.get(key)
+                saved_clip[key] = prompt_plan.get(key)
         if new_filename not in s.get("output_files", []):
             s.setdefault("output_files", []).append(new_filename)
         s["video_execution_profile"] = execution_profile
@@ -3404,6 +3775,11 @@ def rerun_h3_segment(
         segment_index
         if direct_video else len(segments) - 1 if cascade else segment_index
     )
+    if len(segments) > 1:
+        # Editing one native segment opts back into the segment sequence; a
+        # previously selected whole-shot Studio override must no longer mask
+        # the newly regenerated continuation chain during rejoin.
+        clip["selected_video_filename"] = None
     for record in segments[segment_index:]:
         record["stale"] = True
     _replace_saved_pipeline(out_dir, pid, state)
@@ -3464,6 +3840,10 @@ def rerun_h3_segment(
                     audio_direction=str(video_params.get("h3_audio_prompt") or ""),
                 )
             prompt = _saved_prompt_contract(state, prompt, "video")
+            prompt = _h3_apply_portrait_composition_contract(
+                prompt,
+                str(video_params.get("resolution") or "960x544"),
+            )
             gen_params = {
                 "model_type": str(state.get("video_model") or "minimax_h3"),
                 "prompt": prompt,
@@ -3485,6 +3865,9 @@ def rerun_h3_segment(
                 "h3_model_profile": video_params.get("h3_model_profile", "quality"),
                 "h3_reference_mode": segment_mode,
                 "_director_pipeline_id": pid,
+                "_director_clip_index": clip_index,
+                "_director_h3_segment_index": index,
+                "_director_detached_operation": True,
             }
             if not direct_video and segment_mode == "references":
                 gen_params["image_refs"] = [start_path, *image_refs]
@@ -3518,6 +3901,26 @@ def rerun_h3_segment(
                 output_files.append(new_name)
             state["output_files"] = output_files
             regenerated.append(new_name)
+            if len(segments) == 1:
+                clip["video_filename"] = new_name
+                clip["selected_video_filename"] = new_name
+                clip["video_stale"] = False
+                attempts = [
+                    item for item in (clip.get("video_attempts") or [])
+                    if isinstance(item, dict) and item.get("filename") != new_name
+                ]
+                attempts.append({
+                    "id": new_name,
+                    "filename": new_name,
+                    "created_at": time.time(),
+                    "seed": gen_params.get("seed"),
+                    "prompt": prompt,
+                    "model_type": gen_params.get("model_type"),
+                    "resolution": gen_params.get("resolution"),
+                    "video_length": gen_params.get("video_length"),
+                    "source": "regenerated",
+                })
+                clip["video_attempts"] = attempts
             _replace_saved_pipeline(out_dir, pid, state)
     finally:
         for path in temporary_frames:
@@ -3559,6 +3962,23 @@ def _rejoin_clips_impl(out_dir: str, pid: str) -> dict:
     if legacy_h3_segments:
         stale = []
         for clip in clips:
+            selected_override = str(
+                clip.get("selected_video_filename") or ""
+            ).strip()
+            if selected_override:
+                if _invalid_saved_media_numbers(
+                    [selected_override], 1, clip_out_dir, "video",
+                ):
+                    raise ValueError(
+                        "The selected historical video for clip "
+                        f"{int(clip.get('index', 0)) + 1} is missing or invalid."
+                    )
+                # An explicit whole-slot selection is authoritative. Ignore
+                # every older H3 segment version for this position.
+                video_files.append(
+                    os.path.join(clip_out_dir, selected_override)
+                )
+                continue
             for segment in (clip.get("h3_segments") or []):
                 if segment.get("stale"):
                     stale.append((clip.get("index", 0), segment.get("index", 0)))
@@ -4220,6 +4640,79 @@ def cancel_pipeline_repair(out_dir: str, pid: str) -> Optional[dict]:
     return snapshot
 
 
+def _pipeline_observer_snapshot(pipeline: dict) -> dict:
+    """Build one immutable, non-sensitive snapshot for task publication."""
+    snapshot = copy.deepcopy(pipeline)
+    params = snapshot.pop("params", None)
+    snapshot.pop("_llm_passes", None)
+    snapshot["pipeline_type"] = snapshot.get("pipeline_type") or (
+        params or {}
+    ).get("pipeline_type", "")
+    details = _public_pipeline_generation_details(
+        params,
+        len(snapshot.get("clip_plans") or []),
+    )
+    if details:
+        snapshot["generation_details"] = details
+    return snapshot
+
+
+def _observer_task_ids(result) -> tuple[Optional[str], Optional[str]]:
+    """Accept both TaskRegistry records and explicit observer ID payloads."""
+    if not isinstance(result, dict):
+        return None, None
+    task_id = str(
+        result.get("task_id") or result.get("id") or ""
+    ).strip()
+    root_task_id = str(
+        result.get("root_task_id")
+        or result.get("root_id")
+        or task_id
+        or ""
+    ).strip()
+    return task_id or None, root_task_id or None
+
+
+def _notify_pipeline_snapshot(
+    pid: str,
+    snapshot: Optional[dict] = None,
+) -> Optional[dict]:
+    """Publish a pipeline snapshot without holding Director's registry lock.
+
+    The callback is deliberately best-effort: task observability must never
+    stop a render.  A callback may return either the canonical TaskRegistry
+    record (``id``/``root_id``) or explicit ``task_id``/``root_task_id``
+    fields.  Retaining those IDs on the pipeline lets nested LLM calls attach
+    themselves to the Director root from inside the background worker.
+    """
+    with _pipeline_lock:
+        observer = _pipeline_state_observer
+        if snapshot is None:
+            pipeline = _pipelines.get(pid)
+            snapshot = copy.deepcopy(pipeline) if pipeline else None
+    if observer is None or snapshot is None:
+        return None
+
+    public_snapshot = _pipeline_observer_snapshot(snapshot)
+    workspace = str(public_snapshot.get("workspace") or "default")
+    try:
+        result = observer(public_snapshot, workspace)
+    except Exception as exc:
+        print(f"[Pipeline {pid}] State observer warning (non-fatal): {exc}")
+        return None
+
+    task_id, root_task_id = _observer_task_ids(result)
+    if task_id or root_task_id:
+        with _pipeline_lock:
+            pipeline = _pipelines.get(pid)
+            if pipeline is not None:
+                if task_id:
+                    pipeline["task_id"] = task_id
+                if root_task_id:
+                    pipeline["root_task_id"] = root_task_id
+    return result if isinstance(result, dict) else None
+
+
 def init(
     jobs_dict,
     run_gen_fn,
@@ -4227,16 +4720,18 @@ def init(
     gen_lock=None,
     cancel_gen_fn=None,
     active_gen_states=None,
+    state_observer=None,
 ):
     """Called by launch.py to wire up shared references."""
     global _jobs, _run_generation, _cancel_generation, _wgp, _gen_lock
-    global _active_gen_states
+    global _active_gen_states, _pipeline_state_observer
     _jobs = jobs_dict
     _run_generation = run_gen_fn
     _cancel_generation = cancel_gen_fn
     _wgp = wgp_module
     _gen_lock = gen_lock
     _active_gen_states = active_gen_states
+    _pipeline_state_observer = state_observer
 
 
 class _DirectorOutputs(list):
@@ -4314,6 +4809,48 @@ def _clear_active_generation_job(pid: Optional[str], job_id: str) -> None:
             pipeline.pop("_active_generation_job_id", None)
 
 
+def _pipeline_has_active_work_locked(pid: str) -> bool:
+    return bool(
+        pid in _pipeline_threads
+        or _pipeline_child_jobs.get(pid)
+        or pid in _pipeline_starting
+    )
+
+
+def _acknowledge_pipeline_cancel(pid: str, *, force: bool = False) -> bool:
+    """Publish Director cancellation only after all owned work has settled."""
+    snapshot = None
+    with _pipeline_lock:
+        pipeline = _pipelines.get(pid)
+        if not pipeline or not pipeline.get("_cancel_requested"):
+            return False
+        if pipeline.get("status") == "cancelled":
+            return True
+        if not force and _pipeline_has_active_work_locked(pid):
+            return False
+        now = time.time()
+        pipeline["status"] = "cancelled"
+        pipeline["phase"] = "cancelled"
+        pipeline["pause_reason"] = None
+        pipeline["_completed_at"] = now
+        pipeline["updated_at"] = now
+        pipeline["progress"] = {
+            "current": 0,
+            "total": 0,
+            "message": "Cancelled",
+            "step": 0,
+            "total_steps": 0,
+        }
+        snapshot = copy.deepcopy(pipeline)
+    _notify_pipeline_snapshot(pid, snapshot)
+    persisted = _save_pipeline_state(pid)
+    with _pipeline_lock:
+        current = _pipelines.get(pid)
+        if current is not None:
+            current["_state_persisted"] = persisted
+    return True
+
+
 def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None, out_dir: str = None) -> list[str]:
     """Submit a generation job and block until it completes.
 
@@ -4357,13 +4894,26 @@ def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None
                 return
             _run_generation(job_id)
         finally:
+            # `_run_generation` is synchronous: returning here means its
+            # generation slot/model invocation has fully unwound. A legacy or
+            # mocked worker may have observed the abort flag and returned
+            # before Director dispatched its compatibility callback; settle
+            # that sticky request here so the waiter cannot remain in
+            # `cancelling` forever.
+            acknowledge_cancel(job)
             if _dir_pid:
+                should_acknowledge_parent = False
                 with _pipeline_lock:
                     child_jobs = _pipeline_child_jobs.get(_dir_pid)
                     if child_jobs is not None:
                         child_jobs.discard(job_id)
                         if not child_jobs:
                             _pipeline_child_jobs.pop(_dir_pid, None)
+                    should_acknowledge_parent = not _pipeline_has_active_work_locked(
+                        _dir_pid,
+                    )
+                if should_acknowledge_parent:
+                    _acknowledge_pipeline_cancel(_dir_pid)
 
     # Run generation in a separate thread (it acquires _gen_lock internally).
     # The child lease outlives this waiter if cancellation cannot settle
@@ -4393,9 +4943,11 @@ def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None
                         request_cancel(job)
                         _skip_generation = True
                 elif not _detached_operation:
-                    pipeline_cancelled = (
-                        _pipelines.get(_dir_pid, {}).get("status")
-                        == "cancelled"
+                    current_pipeline = _pipelines.get(_dir_pid, {})
+                    pipeline_cancelled = bool(
+                        current_pipeline.get("_cancel_requested")
+                        or current_pipeline.get("status") == "cancelled"
+                        or current_pipeline.get("phase") == "cancelling"
                     )
                     if pipeline_cancelled:
                         request_cancel(job)
@@ -4508,11 +5060,6 @@ def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None
         if j["status"] == "completed":
             _clear_active_generation_job(_dir_pid, job_id)
             if not _detached_operation and _pipeline_cancel_requested(_dir_pid):
-                _update_pipeline(
-                    _dir_pid,
-                    status="cancelled",
-                    phase="cancelled",
-                )
                 _save_pipeline_state(_dir_pid)
                 raise PipelineCancelled("Director pipeline was cancelled.")
             return _director_job_outputs(j)
@@ -4545,9 +5092,7 @@ def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None
         # while this job runs (e.g. the job was submitted in the window
         # after the stop endpoint scanned _jobs), signal abort from here.
         if _dir_pid and not _detached_operation and not _abort_signalled:
-            with _pipeline_lock:
-                _cancelled = _pipelines.get(_dir_pid, {}).get("status") == "cancelled"
-            if _cancelled:
+            if _pipeline_cancel_requested(_dir_pid):
                 _abort_pipeline_jobs(_dir_pid)
                 _abort_signalled = True
         # Mirror denoising step progress to pipeline status
@@ -4586,11 +5131,19 @@ def _submit_and_wait(params: dict, timeout_s: float = 600, workspace: str = None
 
 def _update_pipeline(pid: str, **kwargs):
     """Thread-safe update; cancellation is an absorbing terminal state."""
+    snapshot = None
     with _pipeline_lock:
         pipeline = _pipelines.get(pid)
         if not pipeline:
             return False
-        if pipeline.get("status") == "cancelled":
+        cancellation_ack = (
+            kwargs.get("status") == "cancelled"
+            and kwargs.get("phase", "cancelled") == "cancelled"
+        )
+        if pipeline.get("_cancel_requested") and not cancellation_ack:
+            if set(kwargs) - _CANCELLED_ARTIFACT_FIELDS:
+                return False
+        if pipeline.get("status") == "cancelled" and not cancellation_ack:
             # Finished clips may still be reported after an in-flight abort,
             # but no later phase, completion, or failure may replace Stop.
             if set(kwargs) - _CANCELLED_ARTIFACT_FIELDS:
@@ -4604,13 +5157,53 @@ def _update_pipeline(pid: str, **kwargs):
             pipeline["phase_started_at"] = now
         pipeline.update(kwargs)
         pipeline["updated_at"] = now
-        return True
+        snapshot = copy.deepcopy(pipeline)
+    _notify_pipeline_snapshot(pid, snapshot)
+    return True
+
+
+def _director_worker_task_context(pid: str):
+    """Return the canonical task scope for one Director worker, if present."""
+    with _pipeline_lock:
+        pipeline = _pipelines.get(pid) or {}
+        task_id = str(pipeline.get("task_id") or "").strip()
+        root_task_id = str(
+            pipeline.get("root_task_id") or task_id or ""
+        ).strip()
+        workspace = str(pipeline.get("workspace") or "default")
+        out_dir = pipeline.get("out_dir")
+    if not task_id:
+        return nullcontext()
+    try:
+        from .task_manager import task_context_scope
+    except Exception:
+        try:
+            from services.task_manager import task_context_scope
+        except Exception:
+            return nullcontext()
+    try:
+        return task_context_scope(
+            task_id=task_id,
+            root_task_id=root_task_id,
+            root_id=root_task_id,
+            workspace=workspace,
+            workspace_dir=out_dir,
+            out_dir=out_dir,
+        )
+    except Exception:
+        return nullcontext()
+
+
+def _run_pipeline_worker(pid: str, *, resume: bool = False) -> None:
+    """Run Director with canonical context inherited by nested LLM calls."""
+    with _director_worker_task_context(pid):
+        _run_pipeline(pid, resume=resume)
 
 
 def _start_pipeline_worker(pid: str, *, resume: bool = False) -> None:
     """Start and track a Director worker until its ``finally`` completes."""
     thread = threading.Thread(
-        target=_run_pipeline,
+        target=_run_pipeline_worker,
         args=(pid,),
         kwargs={"resume": resume},
         daemon=False,
@@ -4626,6 +5219,7 @@ def _start_pipeline_worker(pid: str, *, resume: bool = False) -> None:
     try:
         thread.start()
     except BaseException as exc:
+        should_publish_failure = False
         with _pipeline_lock:
             if _pipeline_threads.get(pid) is thread:
                 _pipeline_threads.pop(pid, None)
@@ -4633,23 +5227,29 @@ def _start_pipeline_worker(pid: str, *, resume: bool = False) -> None:
             if pipeline and pipeline.get("status") not in {
                 "completed", "failed", "cancelled",
             }:
-                pipeline["status"] = "failed"
-                pipeline["phase"] = "failed"
-                pipeline["error"] = f"Could not start pipeline worker: {exc}"
-                pipeline["_completed_at"] = time.time()
-                pipeline["progress"] = {
+                should_publish_failure = True
+        if should_publish_failure:
+            _update_pipeline(
+                pid,
+                status="failed",
+                phase="failed",
+                error=f"Could not start pipeline worker: {exc}",
+                _completed_at=time.time(),
+                progress={
                     "current": 0,
                     "total": 0,
                     "message": "Could not start pipeline worker",
                     "step": 0,
                     "total_steps": 0,
-                }
+                },
+            )
         _save_pipeline_state(pid)
         raise
 
 
 def _accumulate_pipeline_time(pid: str, key: str, elapsed_sec: float) -> None:
     """Atomically add a wall-clock stage duration to a live pipeline."""
+    snapshot = None
     with _pipeline_lock:
         pipeline = _pipelines.get(pid)
         if not pipeline:
@@ -4659,6 +5259,8 @@ def _accumulate_pipeline_time(pid: str, key: str, elapsed_sec: float) -> None:
             2,
         )
         pipeline["updated_at"] = time.time()
+        snapshot = copy.deepcopy(pipeline)
+    _notify_pipeline_snapshot(pid, snapshot)
 
 
 
@@ -4755,6 +5357,11 @@ def start_pipeline(params: dict) -> str:
 
     with _pipeline_lock:
         _pipelines[pid] = pipeline
+
+    # Publish only after the pipeline is discoverable, but before its worker
+    # can advance.  The observer's canonical IDs are stored synchronously so
+    # the very first LLM call inherits the Director parent context.
+    _notify_pipeline_snapshot(pid)
 
     # Non-daemon so pipeline survives browser disconnect during overnight runs.
     _start_pipeline_worker(pid)
@@ -4880,6 +5487,98 @@ def list_active_pipelines(workspace: Optional[str] = None) -> list[dict]:
     results.sort(key=lambda item: item.get("created_at") or 0, reverse=True)
     return results
 
+
+_RECENT_PIPELINE_TERMINAL_STATUSES = frozenset({
+    "completed",
+    "failed",
+    "cancelled",
+    "crashed",
+    "preview_ready",
+})
+
+
+def list_recent_pipelines(
+    out_dir: str,
+    workspace: Optional[str] = None,
+    *,
+    terminal_limit: int = 50,
+) -> list[dict]:
+    """Return active runs plus recent terminal snapshots for task syncing.
+
+    ``list_active_pipelines`` intentionally powers the Dashboard's live-run
+    surface and therefore drops a pipeline at the instant it becomes
+    terminal.  The canonical task registry needs the opposite guarantee: it
+    must observe that final transition even when no poll happened between the
+    last running update and completion.  Merge sanitized in-memory snapshots
+    with durable checkpoints so this also works after a Maestro restart or a
+    failed final checkpoint write.
+    """
+    normalized_workspace = workspace or "default"
+    active_statuses = {"running", "queued", "paused"}
+    with _pipeline_lock:
+        memory = [dict(p) for p in _pipelines.values()]
+
+    by_id: dict[str, dict] = {}
+    for pipeline in memory:
+        pipeline_workspace = pipeline.get("workspace") or "default"
+        status = str(pipeline.get("status") or "").strip().lower()
+        if pipeline_workspace != normalized_workspace:
+            continue
+        if (
+            status not in active_statuses
+            and status not in _RECENT_PIPELINE_TERMINAL_STATUSES
+        ):
+            continue
+        pipeline_type = pipeline.get("pipeline_type") or (
+            pipeline.get("params") or {}
+        ).get("pipeline_type", "")
+        details = _public_pipeline_generation_details(
+            pipeline.get("params"),
+            len(pipeline.get("clip_plans") or []),
+        )
+        pipeline.pop("params", None)
+        pipeline.pop("_llm_passes", None)
+        pipeline["pipeline_type"] = pipeline_type
+        if details:
+            pipeline["generation_details"] = details
+        pipeline_id = str(pipeline.get("id") or "")
+        if pipeline_id:
+            by_id[pipeline_id] = pipeline
+
+    # Checkpoints cover terminal transitions missed by a poll and survive a
+    # backend restart.  Live memory wins for duplicate IDs because it may be
+    # newer than the most recent phase-boundary checkpoint.
+    for pipeline in list_pipeline_states(out_dir, normalized_workspace):
+        pipeline_id = str(pipeline.get("id") or "")
+        status = str(pipeline.get("status") or "").strip().lower()
+        if (
+            pipeline_id
+            and pipeline_id not in by_id
+            and status in _RECENT_PIPELINE_TERMINAL_STATUSES
+        ):
+            by_id[pipeline_id] = pipeline
+
+    active = [
+        pipeline for pipeline in by_id.values()
+        if str(pipeline.get("status") or "").strip().lower()
+        in active_statuses
+    ]
+    terminal = [
+        pipeline for pipeline in by_id.values()
+        if str(pipeline.get("status") or "").strip().lower()
+        in _RECENT_PIPELINE_TERMINAL_STATUSES
+    ]
+    sort_key = lambda item: (
+        item.get("completed_at")
+        or item.get("_completed_at")
+        or item.get("updated_at")
+        or item.get("created_at")
+        or 0
+    )
+    active.sort(key=sort_key, reverse=True)
+    terminal.sort(key=sort_key, reverse=True)
+    return active + terminal[:max(0, int(terminal_limit))]
+
 def get_pipeline_status(pid: str, out_dir: str) -> Optional[dict]:
     """Return live status or a terminal disk snapshot after a UI reconnect.
 
@@ -4948,6 +5647,7 @@ def get_pipeline_status(pid: str, out_dir: str) -> Optional[dict]:
 
 def continue_pipeline(pid: str, updates: Optional[dict] = None):
     """Resume a paused pipeline, optionally with updated clip_plans."""
+    snapshot = None
     with _pipeline_lock:
         p = _pipelines.get(pid)
         if not p or p["status"] != "paused":
@@ -4957,6 +5657,9 @@ def continue_pipeline(pid: str, updates: Optional[dict] = None):
                 p["clip_plans"] = updates["clip_plans"]
         p["status"] = "running"
         p["pause_reason"] = None
+        p["updated_at"] = time.time()
+        snapshot = copy.deepcopy(p)
+    _notify_pipeline_snapshot(pid, snapshot)
     return True
 
 
@@ -6389,6 +7092,10 @@ def _resume_pipeline_reserved(pid: str, out_dir: str) -> tuple[bool, str]:
     }
     with _pipeline_lock:
         _pipelines[pid] = pipeline
+    # Re-publish rehydrated state before either returning a recovered terminal
+    # checkpoint or launching the resumed worker. This also restores the
+    # canonical task IDs needed by nested remote LLM operations.
+    _notify_pipeline_snapshot(pid)
 
     if data.get("status") == "preview_ready" and data.get("preview_clips"):
         _update_pipeline(
@@ -6454,28 +7161,40 @@ def _abort_pipeline_jobs(pid: str):
 
 
 def stop_pipeline(pid: str) -> bool:
+    snapshot = None
     with _pipeline_lock:
         p = _pipelines.get(pid)
         if not p or p.get("status") in ("completed", "failed", "cancelled"):
             return False
-        p["status"] = "cancelled"
-        p["phase"] = "cancelled"
+        has_active_work = _pipeline_has_active_work_locked(pid)
         p["_cancel_requested"] = True
         p["pause_reason"] = None
-        p["_completed_at"] = time.time()
-        p["progress"] = {
-            "current": 0,
-            "total": 0,
-            "message": "Cancelled",
-            "step": 0,
-            "total_steps": 0,
-        }
+        if has_active_work:
+            # Keep the root active until its worker and all child leases have
+            # actually unwound. Canonical observers expose the phase in the
+            # footer while cancellation proceeds at a safe boundary.
+            p["status"] = "running"
+            p["phase"] = "cancelling"
+            p.pop("_completed_at", None)
+            p["progress"] = {
+                "current": 0,
+                "total": 0,
+                "message": "Cancelling at a safe boundary…",
+                "step": 0,
+                "total_steps": 0,
+            }
+        p["updated_at"] = time.time()
+        snapshot = copy.deepcopy(p)
+    _notify_pipeline_snapshot(pid, snapshot)
     _abort_pipeline_jobs(pid)
-    persisted = _save_pipeline_state(pid)
-    with _pipeline_lock:
-        current = _pipelines.get(pid)
-        if current is not None:
-            current["_state_persisted"] = persisted
+    if has_active_work:
+        persisted = _save_pipeline_state(pid)
+        with _pipeline_lock:
+            current = _pipelines.get(pid)
+            if current is not None:
+                current["_state_persisted"] = persisted
+    else:
+        _acknowledge_pipeline_cancel(pid)
     return True
 
 
@@ -6500,12 +7219,27 @@ def _run_pipeline(pid: str, resume: bool = False):
     generation phase re-runs — so a crash 2 hours into a run doesn't
     throw away the LLM planning that already succeeded.
     """
+    planning_resource_context = None
+    parallel_video_thread: Optional[threading.Thread] = None
+    parallel_image_failed = threading.Event()
+    parallel_clip_events: list[threading.Event] = []
     try:
         with _pipeline_lock:
             p = _pipelines.get(pid)
-            if not p or p.get("status") == "cancelled":
+            if not p or p.get("_cancel_requested") or p.get("status") == "cancelled":
                 return
         params = p["params"]
+        from services.director.spoken_language import (
+            append_spoken_language_contract,
+            extract_spoken_language,
+        )
+        if not params.get("spoken_language"):
+            params["spoken_language"] = extract_spoken_language(
+                params.get("scene_description", "")
+            )
+        params["scene_description"] = append_spoken_language_contract(
+            params.get("scene_description", ""), params.get("spoken_language", ""),
+        )
         pipeline_out_dir = p.get("out_dir") or _wgp.save_path
         pipeline_workspace = p.get("workspace")
         direct_video, direct_video_master_prompt = _direct_video_settings(params)
@@ -6564,12 +7298,39 @@ def _run_pipeline(pid: str, resume: bool = False):
             resource_schedule=_resource_schedule_payload(resource_lanes),
         )
 
-        # Only a local GPU planner must wait for the generation queue. Remote
-        # providers and a CPU LLM are independent resources and can plan while
-        # another workflow renders locally.
+        # A local CUDA planner owns the same physical GPU-0 semaphore as Studio,
+        # Series, H3, 3D and UniRig. Keep the lease through planning, prompt
+        # polish and optional vision style detection; polling alone has a race
+        # where a generation can start between the check and the LLM request.
         if resource_lanes["planning"].key.startswith("local_gpu:"):
-            if not _wait_for_gpu(pid):
-                return  # cancelled while waiting
+            try:
+                from services import resource_scheduler
+            except ImportError:  # pragma: no cover - package import mode
+                from app.services import resource_scheduler
+
+            _update_pipeline(
+                pid,
+                phase="waiting_resource",
+                progress={
+                    "current": 0,
+                    "total": 1,
+                    "message": "Waiting for local GPU 0 for LLM planning…",
+                    "step": 0,
+                    "total_steps": 0,
+                },
+            )
+            planning_resource_context = resource_scheduler.coordinator.acquire(
+                resource_lanes["planning"],
+                task_id=f"director-planning-{pid}",
+                description="Local LLM Director planning",
+                cancelled=lambda: _pipeline_cancel_requested(pid),
+            )
+            try:
+                planning_resource_context.__enter__()
+            except resource_scheduler.ResourceAcquireCancelled:
+                planning_resource_context = None
+                return
+            params["_planning_gpu_lease_held"] = True
         else:
             print(
                 f"[Pipeline {pid}] Planning on {resource_lanes['planning'].label}; "
@@ -6864,6 +7625,10 @@ def _run_pipeline(pid: str, resume: bool = False):
             # any LLM polish so a rewrite cannot reduce a recognizable set to
             # a generic room.
             clip_plans = apply_independent_shot_context(clip_plans)
+        from services.director.spoken_language import apply_spoken_language_to_plans
+        apply_spoken_language_to_plans(
+            clip_plans, params.get("spoken_language", ""),
+        )
         _preflight_h3_director_prompts(
             params.get("video_model", ""),
             clip_plans,
@@ -6873,7 +7638,7 @@ def _run_pipeline(pid: str, resume: bool = False):
         _save_pipeline_state(pid)  # Save after planning
 
         # Check cancellation
-        if _pipelines[pid]["status"] == "cancelled":
+        if _pipeline_cancel_requested(pid):
             return
 
         # In non-auto mode, pause for user review after planning
@@ -6892,7 +7657,7 @@ def _run_pipeline(pid: str, resume: bool = False):
             )
             _save_pipeline_state(pid)  # Save paused state so Dashboard shows it
             _wait_for_resume(pid)
-            if _pipelines[pid]["status"] == "cancelled":
+            if _pipeline_cancel_requested(pid):
                 return
             # Reload clip_plans in case user edited them
             clip_plans = _pipelines[pid]["clip_plans"]
@@ -7097,11 +7862,13 @@ def _run_pipeline(pid: str, resume: bool = False):
                 llm_service.unload_model()
         except Exception as e:
             print(f"[Pipeline] LLM unload warning (non-fatal): {e}")
+        finally:
+            if planning_resource_context is not None:
+                planning_resource_context.__exit__(None, None, None)
+                planning_resource_context = None
+                params.pop("_planning_gpu_lease_held", None)
 
-        parallel_video_thread: Optional[threading.Thread] = None
         parallel_video_result: dict = {"outputs": None, "error": None}
-        parallel_image_failed = threading.Event()
-        parallel_clip_events: list[threading.Event] = []
         parallel_clip_images: list[str] = []
         parallel_clip_keyframes: list[list[str]] = []
         can_pipeline_remote_images = bool(
@@ -7109,6 +7876,7 @@ def _run_pipeline(pid: str, resume: bool = False):
                 "workflow_parallelism_enabled", True
             )
             and auto_mode
+            and requires_shot_images
             and not direct_video
             and not resume_images
             and not provided_clip_image_paths
@@ -7308,7 +8076,7 @@ def _run_pipeline(pid: str, resume: bool = False):
         _update_pipeline(pid, clip_images=clip_images, _clip_keyframes=clip_keyframes)
         _save_pipeline_state(pid)  # Save after image generation
 
-        if _pipelines[pid]["status"] == "cancelled":
+        if _pipeline_cancel_requested(pid):
             return
 
         if params.get("comic_preflight_only"):
@@ -7347,7 +8115,7 @@ def _run_pipeline(pid: str, resume: bool = False):
             _update_pipeline(pid, status="paused", pause_reason="review_images",
                              progress={"current": 2, "total": 3, "message": "Review images", "step": 0, "total_steps": 0})
             _wait_for_resume(pid)
-            if _pipelines[pid]["status"] == "cancelled":
+            if _pipeline_cancel_requested(pid):
                 return
 
             # Review can be open for hours; a gallery cleanup or manual rename
@@ -7391,7 +8159,7 @@ def _run_pipeline(pid: str, resume: bool = False):
         # A Stop during the video phase lands here after the abort. Record
         # whatever clips finished (the Dashboard can rerun/rejoin them),
         # but don't overwrite the cancelled status with "completed".
-        if _pipelines[pid]["status"] == "cancelled":
+        if _pipeline_cancel_requested(pid):
             print(f"[Pipeline {pid}] Cancelled during video generation — keeping {len(output_files or [])} finished clip(s)")
             artifacts = {"output_files": output_files or []}
             if not params.get("seamless", True):
@@ -7443,19 +8211,6 @@ def _run_pipeline(pid: str, resume: bool = False):
         _save_pipeline_state(pid)  # Save on completion
 
     except PipelineCancelled:
-        _update_pipeline(
-            pid,
-            status="cancelled",
-            phase="cancelled",
-            _completed_at=time.time(),
-            progress={
-                "current": 0,
-                "total": 0,
-                "message": "Cancelled",
-                "step": 0,
-                "total_steps": 0,
-            },
-        )
         _save_pipeline_state(pid)
         return
     except Exception as e:
@@ -7555,6 +8310,27 @@ def _run_pipeline(pid: str, resume: bool = False):
             )
         _save_pipeline_state(pid)  # Save on failure too
     finally:
+        if (
+            parallel_video_thread is not None
+            and parallel_video_thread.is_alive()
+        ):
+            parallel_image_failed.set()
+            for event in parallel_clip_events:
+                event.set()
+            with _pipeline_lock:
+                active_job_id = (_pipelines.get(pid) or {}).get(
+                    "_active_generation_job_id"
+                )
+            if active_job_id and _cancel_generation is not None:
+                _cancel_generation(active_job_id)
+            parallel_video_thread.join()
+        if planning_resource_context is not None:
+            planning_resource_context.__exit__(None, None, None)
+            planning_resource_context = None
+            try:
+                params.pop("_planning_gpu_lease_held", None)
+            except Exception:
+                pass
         # H3 has two mutually exclusive owners: WGP for native variants and
         # isolated ComfyUI for Legacy ConvRot. Keep only a queued job that can
         # reuse the same owner; otherwise release before the next FIFO item.
@@ -7618,6 +8394,8 @@ def _run_pipeline(pid: str, resume: bool = False):
                         )
                 finally:
                     _gen_lock.release()
+        if _pipeline_cancel_requested(pid):
+            _acknowledge_pipeline_cancel(pid, force=True)
         with _pipeline_lock:
             current = _pipeline_threads.get(pid)
             if current is threading.current_thread():
@@ -7649,7 +8427,7 @@ def _wait_for_gpu(pid: str, poll_interval: float = 2.0):
     })
 
     while True:
-        if _pipelines.get(pid, {}).get("status") == "cancelled":
+        if _pipeline_cancel_requested(pid):
             return False
 
         # Check if any jobs are currently running
@@ -7770,7 +8548,12 @@ def _ensure_llm_loaded(params: dict):
     # identical request verified fine on a free GPU. Guarded by _gen_lock
     # so an active generation is never released mid-run; wgp reloads the
     # gen model transparently on its next job (reload_needed).
-    if desired_provider == "local" and desired_device == "cuda" and _wgp is not None:
+    if (
+        desired_provider == "local"
+        and desired_device == "cuda"
+        and _wgp is not None
+        and not params.get("_planning_gpu_lease_held")
+    ):
         acquired = _gen_lock.acquire(blocking=False) if _gen_lock is not None else True
         if acquired:
             try:
@@ -7968,7 +8751,9 @@ def _has_visual_references(params: dict) -> bool:
 
 def _direct_video_settings(params: dict) -> tuple[bool, str]:
     """Return the normalized direct-video flag and immutable master prompt."""
-    if str(params.get("pipeline_type") or "music_video") != "music_video":
+    if str(params.get("pipeline_type") or "music_video") not in {
+        "music_video", "short_film_story",
+    }:
         return False, ""
     try:
         from services.director.planners.music_video import normalize_music_video_treatment
@@ -9499,7 +10284,7 @@ def _run_image_generation(
         print(f"[Pipeline {pid}] Adopted establishing image as shared reference: {anchor_file}")
 
     for i, plan in enumerate(clip_plans):
-        if _pipelines[pid]["status"] == "cancelled":
+        if _pipeline_cancel_requested(pid):
             return clip_images, clip_keyframes
 
         # ── Determine image source: original reference or previous scene's output ──
@@ -9570,7 +10355,7 @@ def _run_image_generation(
             chain_ref = os.path.join(out_dir, clip_images[-1])  # start from the start image
 
             for ki, kf_prompt in enumerate(keyframe_prompts):
-                if _pipelines[pid]["status"] == "cancelled":
+                if _pipeline_cancel_requested(pid):
                     break
 
                 # Ensure kf_prompt is a string (LLM may return dicts or other types)
@@ -11371,6 +12156,35 @@ def _h3_apply_identity_contract(prompt: str) -> str:
     return f"{text} {identity}".strip()
 
 
+def _h3_apply_portrait_composition_contract(prompt: str, resolution: str) -> str:
+    """Tell H3 to compose for the actual tall canvas instead of letterboxing."""
+    text = str(prompt or "").strip()
+    try:
+        width, height = (
+            int(value) for value in str(resolution or "").lower().split("x", 1)
+        )
+    except (TypeError, ValueError):
+        return text
+    marker = "PORTRAIT COMPOSITION LOCK:"
+    if height <= width or marker.casefold() in text.casefold():
+        return text
+    contract = (
+        f"{marker} Compose natively for the full {width}x{height} vertical portrait "
+        "canvas. Stage subjects and camera movement for the tall frame; never place "
+        "a horizontal landscape frame, letterbox bars, rotated image, or sideways "
+        "composition inside it."
+    )
+    parts = re.split(
+        r"(?im)^\s*overall_soundscape\s*:", text, maxsplit=1,
+    )
+    if len(parts) == 2:
+        return (
+            f"{parts[0].rstrip()} {contract}\n\n"
+            f"overall_soundscape: {parts[1].lstrip()}"
+        )
+    return f"{text} {contract}".strip()
+
+
 def _h3_authored_segment_windows(prompts: list[str], segment_count: int) -> list[str]:
     """Split authored windows across H3 segments without replaying whole windows."""
     if not prompts:
@@ -11444,6 +12258,7 @@ def _minimax_h3_segment_prompt(
             plan=plan,
             audio_direction=global_audio_direction,
             allow_clip_text=allow_clip_text,
+            audio_source_prompt=plan.get("video_prompt"),
         )
 
     try:
@@ -11717,6 +12532,8 @@ def _run_minimax_h3_story_video(
     fps = 24
     video_model = str(params.get("video_model") or "minimax_h3")
     direct_video, direct_video_master_prompt = _direct_video_settings(params)
+    shot_image_policy = _director_effective_shot_image_policy(params)
+    uses_shot_images = shot_images_required(shot_image_policy)
     reference_mode = str(
         video_params.get("h3_reference_mode") or "first_frame"
     ).strip().lower()
@@ -11903,7 +12720,7 @@ def _run_minimax_h3_story_video(
                 raise PipelineCancelled("Director pipeline was cancelled.")
 
             if shot_index != current_shot:
-                if clip_ready_events and shot_index < len(clip_ready_events):
+                if uses_shot_images and clip_ready_events and shot_index < len(clip_ready_events):
                     _update_pipeline(
                         pid,
                         progress={
@@ -11980,9 +12797,15 @@ def _run_minimax_h3_story_video(
                 continue
             reuse_prefix = False
 
+            render_prompt = (
+                prompt if direct_video else _h3_apply_identity_contract(prompt)
+            )
+            render_prompt = _h3_apply_portrait_composition_contract(
+                render_prompt, resolution,
+            )
             gen_params: dict = {
                 "model_type": video_model,
-                "prompt": prompt if direct_video else _h3_apply_identity_contract(prompt),
+                "prompt": render_prompt,
                 "image_mode": 0,
                 "image_prompt_type": "" if direct_video else "S" if segment_start else "",
                 "num_inference_steps": video_params.get("num_inference_steps", 20),
@@ -12167,6 +12990,15 @@ def _preflight_h3_director_prompts(
     if not str(video_model or "").lower().startswith("minimax_h3"):
         return clip_plans
     from services.director.h3_dialogue import compile_h3_clip_plans
+    from services.director.spoken_language import apply_spoken_language_to_plans
+
+    language = ""
+    for plan in clip_plans:
+        audio_plan = plan.get("_director_audio_plan") or {}
+        if isinstance(audio_plan, dict) and audio_plan.get("spoken_language"):
+            language = audio_plan["spoken_language"]
+            break
+    apply_spoken_language_to_plans(clip_plans, language)
 
     if (
         prompt_modes is None
@@ -12227,6 +13059,8 @@ def _run_video_generation(pid: str, params: dict, clip_plans: list[dict],
         )
     _validate_director_models(params, stages=("video",))
     video_model = params.get("video_model") or "ltx2_22B_distilled_1_1"
+    from services.director.spoken_language import apply_spoken_language_to_plans
+    apply_spoken_language_to_plans(clip_plans, params.get("spoken_language", ""))
     _preflight_h3_director_prompts(video_model, clip_plans, pid=pid)
     video_params = params.get("video_params", {})
     video_loras = params.get("video_loras", {})

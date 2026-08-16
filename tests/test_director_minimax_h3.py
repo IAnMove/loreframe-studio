@@ -83,7 +83,11 @@ def test_h3_segment_prompt_renders_director_audio_plan_and_dialogue():
     assert "rain on the metal roof" in prompt
     assert "door clang" in prompt
     assert "Mara says <d>[English] We leave at dawn.</d>" in prompt
-    assert "precise lip sync" in prompt
+    assert "with quietly delivery" in prompt
+    soundscape = prompt.split("overall_soundscape:", 1)[1].split("non_diegetic_music:", 1)[0]
+    assert "precise lip sync" not in soundscape
+    assert "Vocal delivery:" not in soundscape
+    assert "non_diegetic_music: N/A" in prompt
 
 
 def test_h3_dialogue_is_assigned_once_across_continuation_segments():
@@ -204,7 +208,7 @@ def test_h3_direct_video_repeats_master_and_never_sends_images(tmp_path: Path):
                 "h3_ref_videos": ["/ignored/motion.mp4"],
                 "h3_ref_audios": ["/ignored/voice.wav"],
             },
-            "960x544",
+            "544x960",
             str(tmp_path),
         )
 
@@ -212,7 +216,9 @@ def test_h3_direct_video_repeats_master_and_never_sends_images(tmp_path: Path):
     assert all(item["prompt"].startswith("IMMUTABLE HEAVY METAL WORLD.") for item in submitted)
     assert all("Scene overview: A duel above an alien city" in item["prompt"] for item in submitted)
     assert all("overall_soundscape:" in item["prompt"] for item in submitted)
-    assert all("non_diegetic_music: none" in item["prompt"] for item in submitted)
+    assert all("non_diegetic_music: N/A" in item["prompt"] for item in submitted)
+    assert all("PORTRAIT COMPOSITION LOCK:" in item["prompt"] for item in submitted)
+    assert all("full 544x960 vertical portrait canvas" in item["prompt"] for item in submitted)
     assert all("VISIBLE TEXT LOCK" in item["prompt"] for item in submitted)
     assert all("Picture 1" not in item["prompt"] for item in submitted)
     assert all(item["image_prompt_type"] == "" for item in submitted)
