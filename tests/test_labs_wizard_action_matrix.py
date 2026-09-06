@@ -90,6 +90,28 @@ def test_every_audited_control_group_has_classification_and_phase():
     assert "StoryMusicProductionLegacyDrawer.tsx" in names
 
 
+def test_closed_labs_gaps_are_marked_addressed():
+    data = _matrix()
+    by_id = {gap["id"]: gap for gap in data["known_gaps"]}
+    closed = (
+        "fused_dropped_by_model_for_manifest",
+        "partial_global_profile_guard",
+        "approve_all_replaces_chosen_takes",
+        "script_shots_dialogue_desync",
+        "t2v_double_mode_and_image_requirements",
+    )
+    for gap_id in closed:
+        summary = by_id[gap_id]["summary"]
+        assert summary.startswith("Addressed:"), gap_id
+    review = (ROOT / "ui" / "src" / "features" / "series" / "actions.ts").read_text(encoding="utf-8")
+    assert "replaceFinals: action.scope === 'replace_latest' || action.scope === 'selected_latest'" in review
+    matcher = (ROOT / "ui" / "src" / "lib" / "productionProfile.ts").read_text(encoding="utf-8")
+    assert "settings.flowShift === fields.videoSettings.flowShift" in matcher
+    assert "settings.audioShift === fields.videoSettings.audioShift" in matcher
+    guidance = (ROOT / "ui" / "src" / "features" / "stories" / "storyVisualGuidance.ts").read_text(encoding="utf-8")
+    assert "return mode === 'image_guided'" in guidance
+
+
 def test_known_gaps_and_unregistered_series_comic_are_frozen():
     data = _matrix()
     gap_ids = {gap["id"] for gap in data["known_gaps"]}

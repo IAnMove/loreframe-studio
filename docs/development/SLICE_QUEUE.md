@@ -1,6 +1,6 @@
 # Cola vigente de refactor
 
-Base verificada: `origin/development` `ebed43fd`, 2026-09-06.
+Base verificada: `origin/development` `c2794f6c`, 2026-09-07.
 Lee primero [CURRENT_WORK](CURRENT_WORK.md): integrado, en curso y límites de QA.
 No uses la ola F1–F12 como cola actual; es distinta de Labs L0–L12.
 

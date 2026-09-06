@@ -27,15 +27,15 @@ not proof that its defect is still present after the linked fixes.
 
 | Id | Phase | Summary |
 |---|---|---|
-| `fused_dropped_by_model_for_manifest` | L1 | Addressed in #183: variant/workflow table preserves Fused. Real GPU verification was not repeated by L12. |
-| `partial_global_profile_guard` | L2 | Addressed in #183: effective profile/catalog resolver; preserve frozen episode snapshots. |
-| `approve_all_replaces_chosen_takes` | L3 | Addressed in #183: all_latest preserves finals; replacement is explicit. L12 does not prove selection of a specific attemptId. |
-| `script_shots_dialogue_desync` | L4 | Addressed in #183: dialogue sync/preflight. Full UI-to-real-render validation is separate. |
+| `fused_dropped_by_model_for_manifest` | L1 | Addressed in #183/#197: fused IDs stay fused; references use minimax_h3_ref2va_fused_turbo; frames use minimax_h3_fused_turbo. Real GPU verification was not repeated by L12. |
+| `partial_global_profile_guard` | L2 | Addressed in #183/#197: seriesProviderMatchesGlobal includes writingBaseUrl, flowShift, audioShift and modelProfile. Frozen episode snapshots stay. |
+| `approve_all_replaces_chosen_takes` | L3 | Addressed in #183/#197: pending takes / all_latest keep valid finals; replace_latest and explicit selected_latest remain replace paths. L12 does not prove selection of a specific attemptId. |
+| `script_shots_dialogue_desync` | L4 | Addressed in #183/#197: script edits annotate stale shots; render refuses them; sync is explicit. Full UI-to-real-render validation is separate. |
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
 | `wizard_auto_approves_canon` | L7 | Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series. |
 | `false_success_invisible_tab` | L8 | Addressed: open_story_section resolves a visible tab or explains incompatibility; it never claims an invisible tab opened. |
-| `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
+| `t2v_double_mode_and_image_requirements` | L9 | Addressed: exclusive visual modes; T2V does not require identity images. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
 | `ace_labelled_as_minimax` | L11 | Addressed: StoryMusicSettingsBar names ACE, MiniMax Music 3 local and MiniMax API from the effective model. |
 | `runtime_calls_omit_explicit_policy` | H-A | Addressed: runtime adapt_clip_plans_for_h3 now passes effective policy; ref2va quote path uses models-safe language tags. Default remains native when omitted. |

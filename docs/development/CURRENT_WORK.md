@@ -1,6 +1,6 @@
 # Estado de desarrollo y punto de entrada
 
-Verificado el 6 de septiembre de 2026 contra `origin/development` **`ebed43fd`**.
+Verificado el 7 de septiembre de 2026 contra `origin/development` **`c2794f6c`**.
 Es una fotografía con evidencia, no un sustituto de Git. Antes de reservar trabajo:
 `git fetch origin development`, consultar PR abiertos y comprobar sus archivos.
 
@@ -24,7 +24,7 @@ no autorizan acciones ni representan el estado actual.
 | Extracción I/O de estado Director | #167 | Locks, reconciliación, borrado y ejecución siguen en el pipeline |
 | Adopción H3, guías y finalización de prompts | #170, #172, #174, #178, #179 | Mantener diálogos literales y fixtures; no rehacer refactor |
 | Policy/idioma/Creative H3 | #185 | Pruebas de contrato no demuestran éxito audiovisual universal |
-| Labs/Wizard L0–L12 | #182, #183, #186–#189, #192, #194, #196 | Entregas integradas; quedan límites de validación indicados abajo |
+| Labs/Wizard L0–L12 | #182, #183, #186–#189, #192, #194, #196, #197 | Entregas integradas; #197 congela L1–L4 y L9 como resueltos. Quedan límites de validación indicados abajo |
 | Vídeo procedural y galería/plantillas | #168, #169, #173, #175, #177, #180, #181, #184 | No equivale a completar toda la hoja de ruta procedural |
 | Inspección GLB y parches faciales | #190, #193, #195 | Router de inspección de #195 todavía sin montar; parches tienen límites de piloto |
 
