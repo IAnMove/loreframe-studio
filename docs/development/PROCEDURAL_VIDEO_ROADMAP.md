@@ -188,6 +188,30 @@ P01 debe reutilizar este pequeño contrato de referencias, no introducir una seg
 identidad paralela para los mismos assets. P00D puede dividirse en PR de catálogo/
 referencias y PR de bindings/selector; después abordar la generación explícita.
 
+### Encuadre y actuación de recortes — decisión del usuario 2026-09-06
+
+- [ ] Separar acción de encuadre: cuerpo entero, plano medio (cintura hacia arriba),
+  medio corto y primer plano. Son opciones de una misma plantilla, no nuevas
+  plantillas para inflar el catálogo. Mostrar zona segura y límites en preview.
+- [ ] Para personajes estáticos, recomendar plano medio/medio corto. Los planos
+  generales siguen disponibles, con aviso visible: no hay locomoción articulada.
+- [ ] Encuadrar con anclas de cabeza/cintura y margen del asset, no un recorte fijo
+  que decapite personajes de distintas proporciones. Anclas ajustables en editor.
+- [ ] No desplazar horizontalmente un humano de cuerpo entero como si caminase:
+  pose sostenida, flotación explícita o movimiento de cámara sí; marcha requiere
+  rig/ciclo de pasos o un plano generado aparte. No fingir que un filtro lo arregla.
+- [ ] Montaje híbrido: planos procedurales para diálogo/insertos/entornos y H3 con
+  referencia de personaje para caminar, girarse o actuar. Conservar characterId,
+  referencia de imagen, shotId, modelo/proveedor/prompt y permiso por plano.
+- [ ] H3 es opt-in; no fallback silencioso desde provided_only. No ejecutar H3 ni
+  otro generador de vídeo mientras siguen las pruebas pesadas actuales.
+- [ ] QA: encuadre dentro de zona segura para distintos tamaños/padding, cara no
+  cortada, piernas fuera del plano medio, preview/export iguales, transiciones y
+  continuidad visual entre planos. Smoke H3 queda para validación local autorizada.
+
+Orden: encuadres y anclas primero (P00D/P03), montaje híbrido después (P07/P13),
+personajes articulados y locomoción real al final (P14).
+
 ## P01 — Base pequeña: documento procedural y matriz de capacidades
 
 Un PR, riesgo alto por compatibilidad; principal implementa, Luna prueba fixtures.
