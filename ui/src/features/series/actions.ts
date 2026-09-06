@@ -22,6 +22,7 @@ import type {
   StageSeriesComicCommand,
   UpdateSeriesEpisodeCommand,
 } from './commands'
+import { shouldApproveCanonForExplicitEpisodeCreate } from './canonPolicy'
 import { bulkApproveSelections } from './shotReviewPolicy'
 
 function seriesEpisodeResult(
@@ -104,6 +105,9 @@ export async function createFilledSeriesEpisode(action: CreateSeriesEpisodeComma
     if (!action.createIfMissing) throw new Error(`No existe la serie “${action.seriesTitle}” y la orden no autorizó crearla.`)
     series = await api.createSeriesProject(workspace, action.seriesTitle || 'Nueva serie')
   }
+  const previousApproval = series.canon.approval
+  const previousWorldSummary = series.canon.worldSummary.trim()
+  const previousCharacterCount = series.characters.length
 
   const existingEpisode = Object.values(series.episodesById).find(episode => (
     normalizeName(episode.title) === normalizeName(action.episodeTitle)
@@ -190,6 +194,13 @@ export async function createFilledSeriesEpisode(action: CreateSeriesEpisodeComma
   }
   let approvedCanon = false
   if (series.canon.approval !== 'approved') {
+    const decision = shouldApproveCanonForExplicitEpisodeCreate({
+      createdSeries,
+      previousApproval,
+      previousWorldSummary,
+      previousCharacterCount,
+    })
+    if (!decision.approve) throw new Error(decision.reason)
     series = await api.approveSeriesCanon(workspace, series.id, series.canon.revision)
     approvedCanon = true
   }

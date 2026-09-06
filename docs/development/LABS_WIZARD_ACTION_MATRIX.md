@@ -30,7 +30,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `script_shots_dialogue_desync` | L4 | update_series_episode can change script dialogue while shots.dialogueBeats stay old; shot_generation_prompt uses the old line. |
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
-| `wizard_auto_approves_canon` | L7 | UI requires approved canon to create an episode; Wizard create_series_episode may auto-approve. |
+| `wizard_auto_approves_canon` | L7 | Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series. |
 | `false_success_invisible_tab` | L8 | open_story_section can report open when StoryLabPanel discards a tab not visible for the project type. |
 | `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
@@ -74,7 +74,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `series.library.create` | series | condicional | L6 | `create_series_episode` | disponible | `create_series_project` | `tests/test_series_library.py` |
 | `series.library.import_story` | series | operativa | L6 | `—` | dominio_sin_capacidad | `importStoryAsSeries` | `tests/test_series_library.py` |
 | `series.library.duplicate_delete` | series | operativa | L10 | `—` | dominio_sin_capacidad | `duplicateSeriesProject` | `tests/test_series_library.py` |
-| `series.episode.create` | series | condicional | L7 | `create_series_episode` | registrada_defectuosa | `createFilledSeriesEpisode` | `ui/tests/seriesEpisodeJob.test.tsx` |
+| `series.episode.create` | series | condicional | L7 | `create_series_episode` | disponible | `createFilledSeriesEpisode` | `ui/tests/labsWizardL7.test.mjs` |
 | `series.episode.delete` | series | operativa | L10 | `—` | dominio_sin_capacidad | `deleteSeriesEpisode` | `tests/test_series_lifecycle.py` |
 | `series.setup.edit` | series | operativa | L2 | `update_series_episode` | disponible | `saveSeriesProject` | `tests/test_series_lab_ui.py` |
 | `series.setup.bootstrap_known` | series | operativa | L6 | `—` | dominio_sin_capacidad | `startSeriesCanonPreparation` | `tests/test_series_planning.py` |
@@ -175,7 +175,7 @@ Status: freeze of current contracts. This document does not implement the later 
 - Blocking defect: `none`
 - Notes: UI-only maintenance; no Wizard capability. Keep, do not remove for seeming unused.
 
-#### `story.workflow.mode` — Toggle guided vs automatic workflow
+#### `story.workflow.mode` — Choose whether to review proposals before applying them
 
 - Control: StoryLabLibraryChrome workflow mode
 - UI handler: `StoryLabPanel workflowMode`
@@ -190,7 +190,7 @@ Status: freeze of current contracts. This document does not implement the later 
 - Presentation: chrome
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Guided is review-before-apply, not a universal authorization. New stories should default to direct flow (L7).
+- Notes: Guided is “Review proposals before applying them”, not a universal authorization and not Director Auto. New stories default to direct flow; existing documents keep workflowMode.
 
 #### `story.prepare.section_text` — Generate a reviewable Story section proposal
 
@@ -645,11 +645,11 @@ Status: freeze of current contracts. This document does not implement the later 
 - In Wizard context snapshot: True
 - Available (strict): False
 - Preconditions: Series exists or createIfMissing
-- Persistence: episode + optional auto-approved canon on Wizard path
+- Persistence: episode + optional approval of a brand-new canon base created in the same request
 - Presentation: episode
 - Prompt fixture: `n/a`
-- Blocking defect: `wizard_auto_approves_canon`
-- Notes: UI requires approved canon; Wizard may auto-approve. Share an explicit policy in L7.
+- Blocking defect: `none`
+- Notes: Shared policy: a new series or empty canon base may be approved to satisfy episode creation. Pending canon on an existing series is not auto-approved.
 
 #### `series.episode.delete` — Delete an episode
 

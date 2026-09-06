@@ -132,8 +132,8 @@
     {
       "id": "wizard_auto_approves_canon",
       "phase": "L7",
-      "summary": "UI requires approved canon to create an episode; Wizard create_series_episode may auto-approve.",
-      "evidence": "createFilledSeriesEpisode vs SeriesLabPanel create episode"
+      "summary": "Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series.",
+      "evidence": "ui/src/features/series/canonPolicy.ts"
     },
     {
       "id": "false_success_invisible_tab",
@@ -287,7 +287,7 @@
       "id": "story.workflow.mode",
       "lab": "story",
       "surface": "chrome",
-      "user_operation": "Toggle guided vs automatic workflow",
+      "user_operation": "Choose whether to review proposals before applying them",
       "control": "StoryLabLibraryChrome workflow mode",
       "ui_handler": "StoryLabPanel workflowMode",
       "domain_function": "updateFilledStory",
@@ -305,7 +305,7 @@
       "persistence": "project.workflowMode",
       "presentation": "chrome",
       "test": "ui/tests/storyProductionController.test.ts",
-      "notes": "Guided is review-before-apply, not a universal authorization. New stories should default to direct flow (L7).",
+      "notes": "Guided is “Review proposals before applying them”, not a universal authorization and not Director Auto. New stories default to direct flow; existing documents keep workflowMode.",
       "prompt_fixture": "",
       "blocking_defect": ""
     },
@@ -999,17 +999,17 @@
       "wizard_capability": "create_series_episode",
       "wizard_schema": "capabilityRegistry.create_series_episode.inputSchema",
       "in_wizard_context": true,
-      "wizard_status": "registrada_defectuosa",
-      "wizard_available": false,
+      "wizard_status": "disponible",
+      "wizard_available": true,
       "classification": "condicional",
       "phase": "L7",
       "preconditions": "Series exists or createIfMissing",
-      "persistence": "episode + optional auto-approved canon on Wizard path",
+      "persistence": "episode + optional approval of a brand-new canon base created in the same request",
       "presentation": "episode",
-      "test": "ui/tests/seriesEpisodeJob.test.tsx",
-      "notes": "UI requires approved canon; Wizard may auto-approve. Share an explicit policy in L7.",
+      "test": "ui/tests/labsWizardL7.test.mjs",
+      "notes": "Shared policy: a new series or empty canon base may be approved to satisfy episode creation. Pending canon on an existing series is not auto-approved.",
       "prompt_fixture": "",
-      "blocking_defect": "wizard_auto_approves_canon"
+      "blocking_defect": ""
     },
     {
       "id": "series.episode.delete",

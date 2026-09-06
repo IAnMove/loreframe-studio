@@ -16,7 +16,11 @@
     "syllables": "{{count}} sílabas · {{rate}} s/sílaba",
     "recalculating": "Recalculando al cambiar el diálogo…",
     "minimumLimited": "El mínimo nativo del modelo deja margen visual no hablado.",
-    "requiresSplit": "El diálogo supera el máximo de un clip; divídelo antes de renderizar."
+    "requiresSplit": "El diálogo supera el máximo de un clip; divídelo antes de renderizar.",
+    "useThisTake": "Usar esta toma",
+    "usePendingTakes": "Usar tomas pendientes ({{count}})",
+    "usingPendingTakes": "Usando tomas {{current}}/{{total}}",
+    "usePendingTakesHint": "Usar tomas pendientes solo rellena finales vacíos. Las tomas ya elegidas se quedan salvo que sustituyas finales de forma explícita. Se omiten incompletos, rechazados o sin medio ({{kept}} conservados · {{omitted}} omitidos)."
   },
   "library": {
     "loading": "Cargando Series Lab…",

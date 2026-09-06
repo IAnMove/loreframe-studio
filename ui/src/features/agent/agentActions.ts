@@ -1990,6 +1990,18 @@ export function isHowToGenerateQuestion(request: string): boolean {
   return /[?]/.test(text) || /^(?:c[oó]mo|how)\b/i.test(text)
 }
 
+const EDITORIAL_COMMIT_TYPES = new Set([
+  'apply_story_proposal',
+  'approve_story_section',
+  'approve_story_visuals',
+  'commit_series_canon',
+])
+const EXPLICIT_EDITORIAL_COMMIT = /\b(?:aplica(?:r|d|me)?|acepta(?:r|d|me)?|aprueba(?:r|d|me)?|sella(?:r|d)?|marca(?:r)?\s+revisado|usa(?:r)?\s+esta\s+toma|apply|accept|approve|commit)\b/i
+
+export function requestAuthorizesEditorialCommit(request: string): boolean {
+  return EXPLICIT_EDITORIAL_COMMIT.test(request.trim())
+}
+
 export function isComicLaunchHowQuestion(request: string, history: ExampleConversation[] = []): boolean {
   const text = request.trim()
   if (!text || !COMIC_LAUNCH_HOW.test(text)) return false
@@ -2149,6 +2161,10 @@ export async function reconcileAgentTurnWithRequest(
         || action.type === 'open_series_section'
       )),
     }
+  }
+  if (!requestAuthorizesEditorialCommit(request)) {
+    const actions = turn.actions.filter(action => !EDITORIAL_COMMIT_TYPES.has(action.type))
+    if (actions.length !== turn.actions.length) turn = { ...turn, actions }
   }
   const targetedComicPanel = comicPanelTarget(request, history)
   if (targetedComicPanel) {
