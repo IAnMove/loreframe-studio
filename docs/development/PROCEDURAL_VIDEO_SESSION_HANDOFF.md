@@ -32,12 +32,12 @@ main. P01 y posteriores están diseñadas, **no implementadas**.
 Branch de conservación: `work/procedural-video-pilot-checkpoint`.
 Es un checkpoint, no una rama para mezclar de golpe contra development.
 
-| Futuro PR | Commit preparado | Contenido | Dependencia |
+| PR / fase | Commit de origen (no volver a aplicar si está mezclado) | Contenido | Estado observado |
 |---|---|---|---|
-| Piloto B | `5f6dc88e` | 24 candidatos/compiladores, SVG/GLB originales, tests | #168 mezclado |
-| Piloto C1 | `72e5cdd8` | Galería, abrir editor, decisiones, 3 E2E | B mezclado |
-| Piloto C2 | `246cb5f8` | Build estático temporal, renderer de revisión, API cerrada y tests | C1 mezclado |
-| Plan | commit de documentación posterior a C2 | Roadmap + cámaras + 3 inventarios de 50 | no activar P01 hasta P00 |
+| Piloto B #169 | `5f6dc88e` + correcciones posteriores | 24 candidatos/compiladores, SVG/GLB originales, tests | mezclado `39c7fd4f` |
+| Piloto C1 #173 | `72e5cdd8` + `ab55bd9b` | Galería, snapshot exacto, decisiones, 5 E2E | mezclado `e318a1f5` |
+| Piloto C2 | `246cb5f8` + hardening `d38294ae`; integrados en `3fec764d` | Build estático, renderer, API cerrada, CSP/cuotas/LAN lectura y 19 tests | local/commits; revisión/PR pendientes |
+| Plan | branch `docs/procedural-video-phases` | Roadmap + cámaras + 3 inventarios de 50 + bloque AN de 30 técnicas | documentos/commits; no prestaciones implementadas |
 
 La primera vez que se sube el checkpoint, comprobar con `git ls-remote` que su
 HEAD coincide; la existencia de este documento no prueba que el push haya terminado.
@@ -50,12 +50,14 @@ no se abre una cadena de PRs que incluya repetidamente los commits anteriores.
    compartido. Fetch sólo necesario, no force/reset/stash del trabajo ajeno.
 2. Verificar PRs y cuota. La excepción temporal de Cursor ya está autorizada;
    no pedir reintentos en bucle ni esperar cuota mientras pueda revisar otro agente.
-3. Con revisión obtenida, leer hallazgos de HEAD actual y CI; corregir si procede.
+3. Para el siguiente PR abierto, leer revisión de HEAD actual y CI; corregir si procede.
    Mezclar normalmente usando comprobación del SHA esperado, nunca admin bypass.
-4. Crear otro worktree temporal/branch desde nuevo origin/development. Cherry-pick
-   sólo `5f6dc88e`, inspeccionar compatibilidad con cambios recientes y probar.
-5. PR B (#169) → revisión independiente/CI actuales → arreglar → merge normal.
-6. Repetir con `72e5cdd8`, después `246cb5f8`, cada uno desde development mezclado.
+4. No volver a aplicar B/C1: #169 y #173 ya están mezclados. Consultar PRs
+   actuales para preservar merges externos de otras sesiones.
+5. Continuar C2 en su rama aislada, con pruebas/revisión/CI de HEAD actual;
+   merge normal sólo después. Si hay que reconstruirla, aplicar sólo C2 y su
+   hardening sobre development nuevo, no todo el checkpoint.
+6. Preparar el PR independiente de documentación desde development actualizado.
 7. Incorporar documentación, P00D selector/referencias y bindings durables; después
    P01 del roadmap, reutilizando el contrato mínimo de assets.
 8. Continuar fases sólo con dependencias mezcladas y aceptación cumplida. Ante
@@ -118,8 +120,9 @@ publicación externa v1; no sobrescribirlas al volver a ejecutar recetas.
 
 ### Worktrees y prueba pintada de la continuación
 
-- Catálogo PR #169: `/tmp/hocus-procedural-phases.g9zon7`, branch
-  `feat/procedural-scene-catalog`; separado del servidor de galería anterior.
+- Worktree de continuación: `/tmp/hocus-procedural-phases.g9zon7`, ahora branch
+  `feat/procedural-review-tooling`. Catálogo #169 y galería #173 ya mezclados;
+  consultar `git status` antes de reanudar. Separado del servidor de galería anterior.
 - Documentación: `/tmp/hocus-procedural-plan.jrMCSw`, branch
   `docs/procedural-video-phases`. No mezclar una pila entera del checkpoint.
 - Prueba pintada: `/tmp/hocus-painted-trial.628k1j`, MP4 en
