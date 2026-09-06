@@ -44,6 +44,8 @@ import { registerStudioCapabilities } from './studioCapabilities'
 import { registerNavigationQueueCapabilities } from './navigationQueueCapabilities'
 import { registerEditorAuxCapabilities } from './editorAuxCapabilities'
 import { registerToolCapabilities } from './toolCapabilities'
+import { registerProgrammaticVideoCapability } from './programmaticVideo'
+export { reconcileProgrammaticVideoRequest, type AgentPrepareProgrammaticVideoAction } from './programmaticVideo'
 import type { GenerationSubmissionContext } from '../studio/generationProvenance'
 import {
   LANGUAGE_INTENT_SCHEMA,
@@ -1111,6 +1113,7 @@ registerStudioCapabilities(defineCapability)
 registerNavigationQueueCapabilities(defineCapability)
 registerEditorAuxCapabilities(defineCapability)
 registerToolCapabilities(defineCapability)
+registerProgrammaticVideoCapability(defineCapability)
 
 export function getCapability(name: string): CapabilityDefinition | undefined {
   return definitions.get(name)
