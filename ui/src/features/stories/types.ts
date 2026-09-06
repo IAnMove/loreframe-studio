@@ -255,6 +255,27 @@ export interface StoryVideoOverride {
   aspectRatio: AspectRatio
 }
 
+/** Project-local generate recipe. Survives tab and project switches without touching Studio globals. */
+export interface StoryProductionRecipe {
+  filmDirection: string
+  filmDurationSeconds: number
+  filmPreserveVisualStyle: boolean
+  comicDirection: string
+  comicPageCount: number
+  comicPanelsPerPage: number
+  trailerDirection: string
+  trailerDurationSeconds: number
+  trailerFormat: StoryTrailerFormat
+  trailerNarration: StoryTrailerNarration
+  trailerSpoiler: StoryTrailerSpoiler
+  trailerIntensity: StoryTrailerIntensity
+  trailerTagline: string
+  trailerTitleCards: boolean
+  trailerPreserveVisualStyle: boolean
+  musicProductionMode: 'full' | 'trailer'
+  musicProductionPacing: 'cinematic' | 'balanced' | 'rhythmic'
+}
+
 export interface StoryProject {
   version: 1
   id: string
@@ -311,6 +332,8 @@ export interface StoryProject {
   provider: StoryProviderSettings
   /** Durable Story-only video recipe; ignored while the global profile is inherited. */
   videoOverride: StoryVideoOverride
+  /** Duration, direction and generate-mode extras local to this project. */
+  productionRecipe: StoryProductionRecipe
   world: StoryWorld
   characters: StoryCharacter[]
   relationships: StoryRelationship[]

@@ -8,6 +8,7 @@ import {
 } from '../../types/index.ts'
 import { normalizeStoryMusicModel } from './musicModel'
 import { normalizeLanguageIntent } from '../../lib/languageIntent'
+import { defaultStoryProductionRecipe, normalizeStoryProductionRecipe } from './storyProductionRecipe'
 
 export type StorySection = 'overview' | 'world' | 'characters' | 'relationships' | 'structure'
 
@@ -423,6 +424,7 @@ export function createStoryProject(projectType: StoryProject['projectType'] = 'f
     theme: '',
     ending: '',
     workflowMode: 'automatic',
+    productionRecipe: defaultStoryProductionRecipe(),
     provider: {
       useGlobalProfile: true,
       writingProvider: 'maestro',
@@ -611,6 +613,7 @@ export function normalizeStoryProject(value: unknown): StoryProject {
     theme: text(project.theme),
     ending: text(project.ending),
     workflowMode: project.workflowMode === 'automatic' ? 'automatic' : 'guided',
+    productionRecipe: normalizeStoryProductionRecipe(project.productionRecipe),
     provider: {
       ...fallback.provider,
       ...(project.provider && typeof project.provider === 'object' ? project.provider : {}),
