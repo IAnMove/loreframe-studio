@@ -41,7 +41,7 @@
     "save": "Save speech character",
     "discardReload": "Discard draft and reload library",
     "reload": "Reload library",
-    "unsaved": "Unsaved changes. Save before navigating to another section or changing workspace. Reload explicitly discards this draft.",
+    "unsaved": "Unsaved changes. This tab keeps a recovery draft per workspace when you navigate away. Save to keep it on the server; recovery is best-effort if browser storage is unavailable. Discard and reload explicitly removes the draft.",
     "busy": "Loading or saving character…",
     "errorHint": "No automatic retry or overwrite. Your draft is retained on save failure; if another editor saved first, resolve it before discarding and reloading.",
     "invalidImport": "Enter a name and choose a non-empty PNG, JPEG or WebP of at most 20 MiB.",

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchCharacterKitLibrary, saveCharacterKit, uploadImage } from '../../api/client'
 import { createCharacterKit, type CharacterKit, type CharacterKitLibrary } from '../../lib/characterKit'
 import { useUiTranslation } from '../../i18n'
+import { clearSpeechDraft, readSpeechDraft, writeSpeechDraft } from '../../lib/characterSpeechDraft'
 
 export const speechLibraryServices = { load: fetchCharacterKitLibrary, save: saveCharacterKit, upload: uploadImage }
 export type SpeechLibraryServices = typeof speechLibraryServices
@@ -11,6 +12,7 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
   const { t } = useUiTranslation('characters')
   const [library, setLibrary] = useState<CharacterKitLibrary | null>(null)
   const [draft, setDraft] = useState<CharacterKit | null>(null)
+  const [baseRevision, setBaseRevision] = useState(0)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState('')
@@ -23,8 +25,10 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
     epoch.current = owner
     void services.load(workspace).then(result => {
       if (epoch.current !== owner) return
+      const recovered = readSpeechDraft(workspace)
       setLibrary(result)
-      setDraft(result.kits[result.activeId] ?? Object.values(result.kits)[0] ?? null)
+      setBaseRevision(recovered?.baseRevision ?? result.revision)
+      setDraft(recovered?.kit ?? result.kits[result.activeId] ?? Object.values(result.kits)[0] ?? null)
     }).catch(cause => {
       if (epoch.current === owner) setError(cause instanceof Error ? cause.message : String(cause))
     }).finally(() => { if (epoch.current === owner) setBusy(false) })
@@ -52,13 +56,22 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
   }
 
   const change = (next: CharacterKit) => {
-    if (operation.current || !epoch.current) return
-    setDraft(current => current?.id === next.id ? next : current)
+    if (operation.current || !epoch.current || next.id !== draft?.id) return
+    remember(next, baseRevision)
     setStatus('')
+  }
+
+  const remember = (next: CharacterKit, revision: number) => {
+    setDraft(next)
+    setBaseRevision(revision)
+    try { writeSpeechDraft(workspace, { baseRevision: revision, kit: next }) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
   }
 
   const select = (id: string) => {
     if (busy || dirty || !library) return
+    clearSpeechDraft(workspace)
+    setBaseRevision(library.revision)
     setDraft(library.kits[id] ?? null); setStatus(''); setError(null)
   }
 
@@ -79,7 +92,7 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
       kit.base = { id: `${kit.id}-base`, name: name.trim(), source, kind: 'image', alphaStatus: 'unknown', reviewState: 'pending', workspace }
       kit.identityReference = { ...kit.base }
       kit.provenance = [{ method: 'character-speech-base-import', source, workspace, importedAt: new Date().toISOString() }]
-      setDraft(kit); setStatus(t('speechWorkshop.imported'))
+      remember(kit, library.revision); setStatus(t('speechWorkshop.imported'))
     })
   }
 
@@ -87,9 +100,11 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
     if (busy || !draft || !library || !dirty) return
     const snapshot = draft
     void run(async current => {
-      const result = await services.save(workspace, library, snapshot)
+      const result = await services.save(workspace, { ...library, revision: baseRevision }, snapshot)
       if (!current()) return
       if (!result.kits[snapshot.id]) throw new Error(t('speechWorkshop.invalidSave'))
+      clearSpeechDraft(workspace)
+      setBaseRevision(result.revision)
       setLibrary(result); setDraft(result.kits[snapshot.id]); setStatus(t('speechWorkshop.saved'))
     })
   }
@@ -100,6 +115,8 @@ export function useCharacterSpeechLibrary(workspace: string, services: SpeechLib
     void run(async current => {
       const result = await services.load(workspace)
       if (!current()) return
+      clearSpeechDraft(workspace)
+      setBaseRevision(result.revision)
       setLibrary(result)
       setDraft(result.kits[draft?.id ?? result.activeId] ?? null)
     })

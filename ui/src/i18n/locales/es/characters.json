@@ -41,7 +41,7 @@
     "save": "Guardar personaje para habla",
     "discardReload": "Descartar borrador y recargar biblioteca",
     "reload": "Recargar biblioteca",
-    "unsaved": "Cambios sin guardar. Guarda antes de navegar a otra sección o cambiar de workspace. Recargar descarta explícitamente este borrador.",
+    "unsaved": "Cambios sin guardar. Esta pestaña conserva un borrador por workspace al navegar. Guarda para conservarlo en el servidor; la recuperación no está garantizada si falla el almacenamiento del navegador. Descartar y recargar elimina el borrador.",
     "busy": "Cargando o guardando personaje…",
     "errorHint": "No hay reintento ni sobrescritura automática. Si falla el guardado, conservas el borrador; si otro editor guardó antes, resuélvelo antes de descartar y recargar.",
     "invalidImport": "Escribe un nombre y elige un PNG, JPEG o WebP no vacío de hasta 20 MiB.",

@@ -46,6 +46,10 @@ globalThis.fetch = async (input, init) => {
 }
 
 test.after(() => { globalThis.fetch = originalFetch })
+test.beforeEach(async () => {
+  const { clearSpeechDraft } = await import('../src/lib/characterSpeechDraft.ts')
+  for (const workspace of ['default', 'workspace-a', 'workspace-b']) clearSpeechDraft(workspace)
+})
 
 const asset = (id: string, reviewState: 'pending' | 'approved' | 'rejected' = 'approved', source = `/${id}.png`, kind: 'image' | 'overlay' = 'overlay') => ({
   id,
@@ -364,4 +368,63 @@ test('gives imported kits with the same name unique ids', { concurrency: false }
     globalThis.crypto.getRandomValues = originalGetRandomValues
     view.cleanup()
   }
+})
+
+test('recovers a draft after navigation without rebasing its original save revision', { concurrency: false }, async () => {
+  const first = kit('persistent-a', 'Recovery hero', 'pending')
+  const second = kit('persistent-b', 'Other workspace')
+  let revision = 8
+  const saves: number[] = []
+  const services = {
+    load: async (workspace: string) => workspace === 'workspace-a' ? library(revision, first) : library(1, second),
+    save: async (_workspace: string, current: ReturnType<typeof library>) => {
+      saves.push(current.revision)
+      throw new Error('revision conflict')
+    },
+    upload: async (file: File) => ({ filename: file.name, path: file.name, url: `/api/v1/uploads/${file.name}` }),
+  }
+  const view = await viewFor({ workspace: 'workspace-a', services })
+  try {
+    await view.screen.findByRole('option', { name: 'Recovery hero' })
+    view.fireEvent.click(view.screen.getByRole('button', { name: 'I have reviewed this base image' }))
+    await view.screen.findByText(/Unsaved changes/)
+    view.rerender(<view.Component workspace="workspace-b" services={services} />)
+    await view.screen.findByRole('option', { name: 'Other workspace' })
+    assert.equal(view.screen.queryByText(/Unsaved changes/) === null, true)
+    revision = 9 // another editor saved while this workspace was closed
+    view.rerender(<view.Component workspace="workspace-a" services={services} />)
+    await view.screen.findByRole('option', { name: 'Recovery hero' })
+    await view.screen.findByText(/Unsaved changes/)
+    assert.equal((view.screen.getByRole('button', { name: 'I have reviewed this base image' }) as HTMLButtonElement).disabled, true)
+    view.fireEvent.click(view.screen.getByRole('button', { name: 'Save speech character' }))
+    await view.screen.findByRole('alert')
+    assert.deepEqual(saves, [8], 'restore must not silently adopt revision 9')
+    await view.screen.findByText(/Unsaved changes/)
+  } finally { view.cleanup() }
+})
+
+test('recovers on full component remount and clears recovery only after a successful save', { concurrency: false }, async () => {
+  const first = kit('persistent', 'Remount hero', 'pending')
+  let current = library(4, first)
+  const services = {
+    load: async () => current,
+    save: async (_workspace: string, previous: ReturnType<typeof library>, draft: ReturnType<typeof kit>) => {
+      current = { ...previous, revision: previous.revision + 1, kits: { [draft.id]: draft } }
+      return current
+    },
+    upload: async (file: File) => ({ filename: file.name, path: file.name, url: `/api/v1/uploads/${file.name}` }),
+  }
+  const before = await viewFor({ services })
+  await before.screen.findByRole('option', { name: 'Remount hero' })
+  before.fireEvent.click(before.screen.getByRole('button', { name: 'I have reviewed this base image' }))
+  await before.screen.findByText(/Unsaved changes/)
+  before.cleanup()
+  const after = await viewFor({ services })
+  try {
+    await after.screen.findByText(/Unsaved changes/)
+    after.fireEvent.click(after.screen.getByRole('button', { name: 'Save speech character' }))
+    await after.screen.findByText(/Character saved to this workspace/)
+    const { readSpeechDraft } = await import('../src/lib/characterSpeechDraft.ts')
+    assert.equal(readSpeechDraft('default'), null)
+  } finally { after.cleanup() }
 })

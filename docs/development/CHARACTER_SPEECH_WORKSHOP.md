@@ -17,10 +17,20 @@ Base: development `ebed43fd`, 2026-09-06. Complementa
   asistidas previas. Referencia de identidad no equivale a edición con máscara.
 - [x] Conservar aislamiento de workspace y revisión optimista; conflicto de
   guardado conserva borrador, nunca sobreescribe la revisión remota en silencio.
+- [x] Corregir hallazgo de revisión: recuperación del borrador al salir de la
+  sección/cambiar workspace. Conservar baseRevision original; una revisión
+  remota nueva no autoriza a sobrescribir el kit recuperado. Caché de sesión,
+  no guardado de servidor; fallback en memoria si el navegador bloquea storage.
+  Payload versionado, validado y limitado a 2 MiB. Un fallo de reemplazo no
+  recupera una copia anterior obsoleta. Guardar o descartar limpia la recuperación.
 - [x] Tests baratos de estado, interacción, persistencia y respuestas tardías:
   13 casos específicos aprobados. Un E2E simulado abre el taller desde la
   navegación real, revisa, guarda y recarga sin inferencia. No es generación real.
-- [ ] Commit, PR a development, revisión independiente, CI exacto y merge normal.
+- [x] Commit inicial `4cfc6cdd` y revisión independiente de código por Luna.
+  Su hallazgo sobre recuperación de borradores se corrige antes de publicar.
+- [ ] Validación final del parche de recuperación y PR a development.
+- [ ] CI verde sobre HEAD exacto y revisión remota completada o dispensada.
+- [ ] Merge normal a development (no publicar main).
 - [ ] Prueba artística de un personaje hablando (pendiente, fuera de este PR).
 
 ## Alternativas y decisión
@@ -103,3 +113,10 @@ un límite real de procesos/cgroup o equivalente del sistema operativo. Este
 comando local no añade una dependencia de systemd al producto ni al CI. Si se
 alcanza el límite, registrar el fallo; no subirlo automáticamente ni repetir
 en paralelo. Builds/E2E se ejecutan por separado con presupuesto propio.
+
+En la primera tanda acotada pasaron 970 tests UI, lint/tipos/i18n y los guards;
+dos fixtures ffmpeg de la suite Python fallaron bajo el límite de tareas/hilos.
+La repetición completa con afinidad a dos CPUs y OMP/BLAS/MKL a un hilo pasó:
+2160 tests, 1 omitido, 79,32 s; se mantuvieron 3 GiB y swap 0. No se cambiaron
+ni omitieron esos tests para lograrlo. La corrección posterior de recuperación
+requiere una nueva tanda UI/ratchet/build/E2E; Python no se ha modificado.
