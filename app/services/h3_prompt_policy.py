@@ -25,14 +25,14 @@ def writing_contract(style: str = "faithful") -> str:
     creative = planning_style(style) == "creative"
     return (
         "WRITING MODE (takes precedence over generic expansion advice): "
-        + ("CREATIVE. Develop causal action and natural supporting dialogue for interacting characters. "
+        + ("CREATIVE. Treat the prompt as a creative brief. Write natural character-specific supporting dialogue when characters interact. Exact quoted lines are immutable anchors; additional meaningful lines may surround them unless the user requests only those lines. This permission overrides generic faithful-only guidance. "
            if creative else "FAITHFUL. Preserve the requested events and exact dialogue; do not add extra spoken lines when literal lines were supplied. ")
         + "Preserve exact actor/character portrayal, franchise, era, wardrobe and outcome. "
         "Never blend adaptations or invent powers. Every literal line is immutable, in its original language, "
         "and spoken once by its assigned person. If the user asks for speech without words, write actual "
         "short meaningful lines, not 'they discuss' or background chatter. Explicit silence and 'only these lines' "
         "override creative freedom. Visible signs/titles are not spoken dialogue. Budget the total speech "
-        "across all speakers for the real duration (about two words/second). Do not fill unused time with speech. "
+        "across all speakers for the real duration. Do not add filler, repeated lines or meaningless chatter. "
         "Use stable speaker IDs in first-vocal-event order; never transfer a line to another person's mouth. "
         "Only literal words and [Language] go inside <d> tags. Camera, delivery and acting stay outside. "
         "After the last word, use concrete nonverbal action with mouths closed. Voiceover does not move on-screen lips."

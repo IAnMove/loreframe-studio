@@ -21,6 +21,7 @@ class MemorySampler:
         self.peaks = {}
         self.errors = []
         self.samples = 0
+        self.server_samples = 0
         history = folder / "memory-samples.jsonl"
         if history.exists():
             for line in history.read_text().splitlines():
@@ -46,12 +47,17 @@ class MemorySampler:
         for process in processes:
             try:
                 memory = process.memory_full_info()
+                if process.pid == self.process.pid:
+                    data['server_rss_bytes'] = memory.rss
+                    data['server_pss_bytes'] = getattr(memory, 'pss', 0)
+                    data['server_swap_bytes'] = getattr(memory, 'swap', 0)
                 data['process_rss_bytes'] += memory.rss
                 data['process_pss_bytes'] += getattr(memory, 'pss', 0)
                 data['process_swap_bytes'] += getattr(memory, 'swap', 0)
             except self.psutil.NoSuchProcess:
                 continue
         ram = self.psutil.virtual_memory()
+        data['system_ram_total_bytes'] = ram.total
         data['system_ram_unavailable_bytes'] = ram.total - ram.available
         data['system_swap_used_bytes'] = self.psutil.swap_memory().used
         for index, gpu in enumerate(self.gpus):
@@ -68,6 +74,7 @@ class MemorySampler:
             if name != "time":
                 self.peaks[name] = max(self.peaks.get(name, 0), value)
         self.samples += 1
+        self.server_samples += int("server_pss_bytes" in data)
 
     def _run(self):
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -94,5 +101,11 @@ class MemorySampler:
         result = {'pid': self.process.pid, 'interval_seconds': 1,
                   'samples': self.samples, 'peak_bytes': self.peaks, 'errors': self.errors,
                   'note': 'Sampled observed usage, not a guaranteed hardware minimum. System totals include other apps; process totals include children. RSS can double count shared pages.'}
+        result['server_samples'] = self.server_samples
+        result['server_metrics_partial'] = self.server_samples < self.samples
+        result['ram_capacity_bytes'] = self.psutil.virtual_memory().total
+        result['invalid_peak_fields'] = [name for name in ('process_rss_bytes', 'process_pss_bytes', 'server_rss_bytes', 'server_pss_bytes') if self.peaks.get(name, 0) > result['ram_capacity_bytes']]
+        if result['invalid_peak_fields']:
+            result['errors'].append('RAM process aggregate exceeds physical capacity; non-atomic/shared-process sample cannot establish a RAM requirement. Raw data retained; use system measurements.')
         (self.folder / 'memory.json').write_text(json.dumps(result, indent=2))
         return result

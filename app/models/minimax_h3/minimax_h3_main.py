@@ -1503,9 +1503,14 @@ class MiniMaxH3Model:
         audio_prompt_type: str = "",
         video_prompt_type: str = "",
         window_start_frame_no: int = 0,
+        minimax_h3_semantic_bridge_alpha: float = 0.0,
+        minimax_h3_semantic_bridge_magnitude: str = "per_token",
         **_kwargs,
     ):
         self._interrupt = False
+        from .semantic_bridge import validate_options, apply_bridge
+        bridge_strength = validate_options(minimax_h3_semantic_bridge_alpha,
+            minimax_h3_semantic_bridge_magnitude, self.model_def)
         if not isinstance(input_prompt, str):
             raise ValueError("MiniMax H3 accepts one text prompt per generation.")
         if height % 32 or width % 32:
@@ -2122,6 +2127,8 @@ class MiniMaxH3Model:
             prompt_embeds, text_tags = self.conditioner(input_prompt, self.device, keyframes or None)
             if prompt_embeds is None or self._interrupt:
                 return None
+            prompt_embeds = apply_bridge(prompt_embeds, bridge_strength,
+                minimax_h3_semantic_bridge_magnitude, model_def=self.model_def)
             condition_rows, anchors = self._encode_visual_conditions(
                 visual_conditions,
                 latent_height,

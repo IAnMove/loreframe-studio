@@ -60,9 +60,11 @@ def prepare(base, output, source=PROMPT, prefix=''):
 
 def matrix():
     rows = []
-    def row(model, preset='', attention='sdpa', steps=20, style='faithful', audio='native', frames=243):
+    def row(model, preset='', attention='sdpa', steps=20, style='faithful', audio='native', frames=243, profile=3):
         label = '-'.join([model, preset or 'base', attention, str(steps), style, audio, str(frames)])
-        rows.append(dict(id=label, model=model, preset=preset, attention=attention, steps=steps, style=style, audio=audio, frames=frames))
+        if profile != 3:
+            label += f'-profile{profile}'
+        rows.append(dict(id=label, model=model, preset=preset, attention=attention, steps=steps, style=style, audio=audio, frames=frames, profile=profile))
     row('minimax_h3')
     for model, workflow in [('minimax_h3','fl2va'), ('minimax_h3_full','fl2va'), ('minimax_h3_ref2va','ref2va'), ('minimax_h3_ref2va_full','ref2va')]:
         if model == 'minimax_h3':
@@ -70,7 +72,7 @@ def matrix():
         row(model, 'v4-step600-ema', steps=6)
         preset = f'alibaba-pai-{workflow}-pdd-8step'
         row(model, preset, steps=8)
-        row(model, preset, attention='sol', steps=8)
+        row(model, preset, attention='sol', steps=8, profile=3.5 if model == 'minimax_h3_ref2va_full' else 3)
     for model in ['minimax_h3_fused_turbo','minimax_h3_ref2va_fused_turbo']:
         row(model, attention='sla', steps=4)
         row(model, attention='sdpa', steps=4)
@@ -126,9 +128,10 @@ def run_row(base, output, row, reference=None, server_pid=None):
         return monitor_job(base, folder, row, json.loads(active_file.read_text()))
     defaults = request(base, '/api/v1/defaults/'+row['model'])
     prefix = 'futurama-' if row.get('scene') == 'futurama' else ''
-    prompt_data = json.loads((output/f'{prefix}prompt-{row["style"]}.json').read_text())
+    prompt_file = row.get('prompt_file', f'{prefix}prompt-{row["style"]}.json')
+    prompt_data = json.loads((output / prompt_file).read_text())
     params = {**defaults, 'model_type': row['model'], 'prompt': prompt_data['enhanced'],
-        'override_profile': 3, 'multi_prompts_gen_type': 2, 'seed': 20260906, 'resolution': '864x480', 'video_length': row['frames'],
+        'override_profile': row.get('profile', 3), 'multi_prompts_gen_type': 2, 'seed': 20260906, 'resolution': '864x480', 'video_length': row['frames'],
         'num_inference_steps': row['steps'], 'guidance_scale': 1, 'batch_size': 1,
         'minimax_h3_turbo_mode': bool(row['preset']), 'minimax_h3_turbo_preset': row['preset'],
         'activated_loras': [], 'loras_multipliers': '', 'override_attention': row['attention'],

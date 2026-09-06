@@ -1,3 +1,4 @@
+import { H3SemanticBridgeControls } from './H3SemanticBridgeControls'
 import { useStore } from '../../stores/useStore'
 import { useUiTranslation } from '../../i18n'
 
@@ -55,5 +56,6 @@ export function H3PromptControls() {
       </select>
     </label>
     <p className="text-text-muted">{t('h3Adoption.fallback')}</p>
+    <H3SemanticBridgeControls />
   </div>
 }

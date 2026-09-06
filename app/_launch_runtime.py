@@ -6581,6 +6581,7 @@ def get_model_options(model_type: str):
         "supports_end_frame": "E" in md.get("image_prompt_types_allowed", ""),
         # Raw conditioning letters let Studio expose only compatible sub-modes.
         "image_prompt_types_allowed": md.get("image_prompt_types_allowed", ""),
+        "minimax_h3_semantic_bridge": md.get("minimax_h3_semantic_bridge", False),
         "minimax_h3_fused_turbo": md.get("minimax_h3_fused_turbo", False),
         "omni_reference": md.get("omni_reference", False),
         "omni_reference_limits": md.get("omni_reference_limits"),
@@ -10791,6 +10792,11 @@ async def generate(request: Request):
     except Exception:
         _base_model_type = body.get("model_type")
     _generation_model_def = wgp.get_model_def(body["model_type"]) or {}
+    try:
+        from services.h3_runtime_policy import normalize_optional_conditioning
+        normalize_optional_conditioning(body, _generation_model_def)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     if legacy_h3:
         character_sheet = _is_character_sheet_engine(body)
         body.setdefault("resolution", minimax_h3_service.DEFAULTS["resolution"])

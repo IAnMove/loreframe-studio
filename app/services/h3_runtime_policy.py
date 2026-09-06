@@ -171,3 +171,15 @@ def resolve_model_attention(attention: str, model_def: dict, supported) -> str:
         print(f"[H3] {attention} unavailable for this model/runtime; using dense attention.")
         return "sdpa"
     return attention
+
+
+def normalize_optional_conditioning(body: dict, model_def: dict) -> None:
+    from models.minimax_h3.semantic_bridge import normalize_request
+    normalize_request(body, model_def)
+
+
+def conditioning_kwargs(model_def: dict, alpha=0, magnitude="per_token") -> dict:
+    if not str(model_def.get("architecture") or "").startswith("minimax_h3"):
+        return {}
+    return {"minimax_h3_semantic_bridge_alpha": alpha,
+            "minimax_h3_semantic_bridge_magnitude": magnitude}

@@ -139,7 +139,7 @@ def test_short_line_gets_bounded_by_silence_for_the_full_h3_minimum():
     assert timeline["leading_silence_seconds"] >= 0.45
     assert timeline["trailing_silence_seconds"] > 1.0
     assert "the first tagged line is spoken exactly once" in timeline["text"]
-    assert "VOCAL TIMELINE LOCK" in params["prompt"]
+    assert "VOCAL TIMELINE LOCK" not in params["prompt"]
     assert "<d>[Spanish] Ya están aquí.</d>" in params["prompt"]
 
 
@@ -152,7 +152,7 @@ def test_vocal_timeline_reapplication_replaces_old_physical_boundary():
     first, _ = inject_h3_vocal_timeline(prompt, 5.0)
     second, timeline = inject_h3_vocal_timeline(first, 5.167)
 
-    assert second.count("VOCAL TIMELINE LOCK") == 1
+    assert "VOCAL TIMELINE LOCK" not in second
     assert second.count("<d>") == 1
     assert timeline["intervals"][-1]["end_seconds"] == 5.167
 
@@ -189,3 +189,14 @@ def test_unstructured_singing_prompt_is_not_accidentally_silenced():
     assert apply_h3_vocal_timeline(params, MODEL) is None
     assert "VOCAL TIMELINE LOCK" not in params["prompt"]
     assert "remain silent" not in params["prompt"]
+
+
+def test_saved_verbose_timeline_is_removed_without_changing_dialogue_or_ambience():
+    prompt = ('integrated_multimodal_description: Ana (S1) <d>[Spanish] Ya están aquí.</d>. '
+              'VOCAL TIMELINE LOCK: From 00:00 to 00:05 all characters remain silent. '
+              'overall_soundscape: Footsteps. non_diegetic_music: N/A')
+    compact, metadata = inject_h3_vocal_timeline(prompt, 5.167)
+    assert 'VOCAL TIMELINE LOCK' not in compact
+    assert '<d>[Spanish] Ya están aquí.</d>' in compact
+    assert 'overall_soundscape: Footsteps.' in compact
+    assert metadata['intervals'][-1]['end_seconds'] == 5.167

@@ -1,3 +1,4 @@
+import { h3ModelSwitchSettings, restoreSemanticBridgeSettings } from '../lib/h3OptionalSettings'
 import { create } from 'zustand'
 import type { GenerateParams, OutputFile, MediaFilter, AspectRatio, ResolutionPreset, ScailResolutionProfile, GenerationDetails, GenerationJob, ModelFamily, ModelDef, GenerationMode, ModelOptions, SystemConfig, SettingsTab, OutputMetadata, MultiClip, ServicesConfig, ProductionProfile, AudioAnalysisResult, PlannedClip, ClipPlan, DirectorClipImage, DirectorImageGenProgress, SpeakerMapping, DirectorSkill, DirectorShotImageGuidance, ShortFilmCharacter, ShortFilmPath, MusicVideoTreatment, CivitAIModel, CivitAIDownload, PipelineListItem, PipelineRepairState, SavedPipelineState, SystemDetectResponse, SystemStats, RecastCharacterMapping, RepaintRegionMapping, H3WindowPlan, DirectorV2PlanJob, DirectorV2PlanResponse } from '../types'
 import { DEFAULT_DIRECT_VIDEO_MASTER_PROMPT } from '../types'
@@ -8531,6 +8532,7 @@ export const useStore = create<AppState>((set, get) => {
       params: {
         ...s.params,
         model_type: modelType,
+        ...h3ModelSwitchSettings(s.params, modelType),
         activated_loras: [],
         loras_multipliers: '',
         minimax_h3_turbo_mode: false,
@@ -8751,6 +8753,7 @@ export const useStore = create<AppState>((set, get) => {
     newParams.minimax_h3_planning_style = p.minimax_h3_planning_style === 'creative' ? 'creative' : 'faithful'
     newParams.minimax_h3_audio_policy = p.minimax_h3_audio_policy === 'legacy' ? 'legacy' : 'native'
     newParams.minimax_h3_reference_sequence = p.minimax_h3_reference_sequence === true
+    Object.assign(newParams, restoreSemanticBridgeSettings(p, modelType))
     newParams.h3_reference_context = typeof p.h3_reference_context === 'string' ? p.h3_reference_context : undefined
     newParams.self_refiner_setting = (p.self_refiner_setting as number) ?? undefined
     newParams.audio_guide = (p.audio_guide as string) || ''

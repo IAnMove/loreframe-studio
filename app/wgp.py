@@ -7353,6 +7353,8 @@ def generate_video(
     minimax_h3_audio_policy="native",
     minimax_h3_turbo_preset="",
     minimax_h3_reference_sequence=False,
+    minimax_h3_semantic_bridge_alpha=0.0,
+    minimax_h3_semantic_bridge_magnitude="per_token",
     minimax_h3_multi_window=True,
     h3_reference_context="",
 ):
@@ -7530,7 +7532,7 @@ def generate_video(
     overridden_attention = override_attention if len(override_attention) else get_overridden_attention(model_type)
     # if overridden_attention is not None and overridden_attention !=  attention_mode: print(f"Attention mode has been overriden to {overridden_attention} for model type '{model_type}'")
     attn = overridden_attention if overridden_attention is not None else attention_mode
-    from services.h3_runtime_policy import resolve_model_attention, release_special_loras
+    from services.h3_runtime_policy import resolve_model_attention, release_special_loras, conditioning_kwargs
     attn = resolve_model_attention(attn, model_def, attention_modes_supported)
     if attn == "auto":
         attn = get_auto_attention()
@@ -8956,6 +8958,7 @@ def generate_video(
                         "ltx2_prefetch_prompts": ltx2_prefetch_prompts,
                         "ltx2_prefetch_window": ltx2_prefetch_window,
                     } if str(base_model_type).startswith("ltx2_") else {}),
+                    **conditioning_kwargs(model_def, minimax_h3_semantic_bridge_alpha, minimax_h3_semantic_bridge_magnitude),
                     **({} if not model_def.get("omni_reference", False) else {
                         "minimax_h3_references": minimax_h3_references,
                         "minimax_h3_reference_detail": minimax_h3_reference_detail,

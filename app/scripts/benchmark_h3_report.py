@@ -47,13 +47,19 @@ def render(records: Path, destination: Path):
         phases = [phase for task in status.get('task_timings', []) for phase in task.get('phase_timings', [])]
         phase_text = ' · '.join(f'{phase["phase"]}: {phase["seconds"]:.1f} s' for phase in phases)
         peaks = memory.get('peak_bytes', {})
-        memory_text = ' · '.join(f'{label}: {peaks[key] / 2**30:.2f} GiB' for key, label in [('process_pss_bytes', 'RAM PSS pico'), ('process_rss_bytes', 'RAM RSS pico'), ('gpu0_process_used_bytes', 'VRAM proceso pico'), ('system_ram_unavailable_bytes', 'RAM equipo pico'), ('system_swap_used_bytes', 'Swap equipo pico')] if key in peaks) or 'Memoria: todavía sin medición'
+        memory_text = ' · '.join(f'{label}: {peaks[key] / 2**30:.2f} GiB' for key, label in [('process_pss_bytes', 'RAM proceso (PSS) pico'), ('gpu0_process_used_bytes', 'VRAM proceso pico'), ('process_swap_bytes', 'Swap proceso pico'), ('system_ram_unavailable_bytes', 'RAM equipo pico'), ('gpu0_total_used_bytes', 'VRAM equipo pico'), ('system_swap_used_bytes', 'Swap equipo pico')] if key in peaks and key not in memory.get('invalid_peak_fields', [])) or 'Memoria: todavía sin medición'
+        if memory.get('invalid_peak_fields'):
+            memory_text += ' · RAM agregada de procesos: muestra anómala; consultar RAM del equipo'
+        if 'server_pss_bytes' in peaks and 'server_pss_bytes' not in memory.get('invalid_peak_fields', []):
+            memory_text += f' · RAM servidor sin auxiliares: {peaks["server_pss_bytes"] / 2**30:.2f} GiB'
+            if memory.get('server_metrics_partial'):
+                memory_text += ' (registro parcial)'
         scene = 'Futurama · segunda ejecución' if row.get('scene') == 'futurama' else 'Seinfeld · primera ejecución'
         if assessment:
             details['assessment'] = assessment
         cards.append(f'''<article data-state="{html.escape(state)}" data-style="{row['style']}">
 <h2>{index + 1}. {html.escape(row['model'])}</h2>
-<p>{html.escape(row['preset'] or 'Sin adaptador Turbo')} · {row['steps']} pasos · {html.escape(attention)} · {row['frames']} fotogramas</p>
+<p>{html.escape(row['preset'] or 'Sin adaptador Turbo')} · {row['steps']} pasos · {html.escape(attention)} · {row['frames']} fotogramas · perfil de memoria {row.get('profile', 3)}</p>
 <p><strong>{html.escape(state)}</strong> · {timing} · {row['style']} · audio {row['audio']}</p>
 <p>{scene}</p><p>{memory_text}</p><p>{html.escape(phase_text)}</p>{videos}<p>{html.escape(notes)}</p><p class="error">{html.escape(str(error))}</p>
 <details><summary>Configuración y evaluación</summary><pre>{html.escape(json.dumps(details, ensure_ascii=False, indent=2))}</pre></details></article>''')
@@ -69,9 +75,13 @@ body{margin:auto;padding:24px;max-width:1250px;background:#10141c;color:#ecf0f7;
     document = document.replace('COMPLETED', str(completed)).replace('TOTAL', str(len(rows)))
     diagnostics = []
     for path in sorted(records.glob('*-diagnostics/*/result.json')):
-        result = read_json(path, {}).get('result', {})
+        diagnostic = read_json(path, {})
+        result = diagnostic.get('result', {})
+        review = read_json(path.parent / 'assessment.json', {}).get('notes', '')
+        wall = diagnostic.get('elapsed_seconds')
+        timing = f'{wall:.1f} s' if isinstance(wall, (int, float)) else ''
         for name in result.get('output_files') or []:
-            diagnostics.append('<article><h2>Primer resultado de diagnóstico · PDD 8 / SDPA</h2><p>Sol pasó a atención densa en este intento. Se conserva para revisar imagen y español; la versión corregida se mide por separado.</p><video controls preload="metadata" src="/api/v1/file/' + quote(str(name), safe='') + '?workspace=h3_benchmark"></video></article>')
+            diagnostics.append('<article><h2>Resultado de diagnóstico · PDD 8 / SDPA</h2><p>' + html.escape(timing + ' · ' + review) + '</p><p>Sol pasó a atención densa en este intento. Se conserva para revisar imagen y español; la versión corregida se mide por separado.</p><video controls preload="metadata" src="/api/v1/file/' + quote(str(name), safe='') + '?workspace=h3_benchmark"></video></article>')
     document = document.replace('FRYPROMPT', html.escape(futurama_prompt)).replace('PROMPT', html.escape(prompt)).replace('CARDS', ''.join(diagnostics + cards))
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(document)

@@ -203,6 +203,8 @@ export interface GenerateParams {
   minimax_h3_planning_style?: 'faithful' | 'creative'
   minimax_h3_audio_policy?: 'native' | 'legacy'
   minimax_h3_reference_sequence?: boolean
+  minimax_h3_semantic_bridge_alpha?: number
+  minimax_h3_semantic_bridge_magnitude?: 'per_token' | 'global' | 'none'
   minimax_h3_multi_window?: boolean
   h3_reference_context?: string
   /** Automatically expand one long H3 concept into window-local prompts. */
@@ -746,6 +748,7 @@ export interface ModelOptions {
     recommended?: boolean
   }[] | null
   minimax_h3_text_encoder_default?: string
+  minimax_h3_semantic_bridge?: boolean
   minimax_h3_fused_turbo?: boolean
   minimax_h3_turbo?: {
     preset_id?: string

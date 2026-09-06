@@ -305,7 +305,7 @@ def plan_h3_vocal_timeline(
 
 
 def inject_h3_vocal_timeline(prompt: Any, duration_seconds: float, *, audio_policy: str = "native") -> tuple[str, dict[str, Any]]:
-    """Insert one idempotent vocal schedule before H3's sound fields."""
+    """Plan vocal timing as metadata and remove previously injected prose."""
 
     source = str(prompt or "").strip()
     if not source or float(duration_seconds or 0.0) <= 0:
@@ -330,13 +330,9 @@ def inject_h3_vocal_timeline(prompt: Any, duration_seconds: float, *, audio_poli
         duration_seconds,
         mapped_driving_audio=mapped_driving_audio,
     )
-    if audio_policy == "legacy":
-        return re.sub(r"[ \t]+", " ", clean).strip(), timeline
-    # The native recipe carries the schedule to the audiovisual model, not just metadata.
-    lock = " VOCAL TIMELINE LOCK: " + timeline["text"] + "\n\n"
-    field = _SOUND_FIELD.search(clean)
-    offset = field.start() if field else len(clean)
-    return (clean[:offset].rstrip() + lock + clean[offset:].lstrip()).strip(), timeline
+    # Keep scheduling as metadata. Feeding long silence instructions back to H3
+    # can itself elicit speech; authored concise stage directions stay untouched.
+    return re.sub(r"[ \t]+", " ", clean).strip(), timeline
 
 
 

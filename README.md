@@ -490,7 +490,7 @@ Bug reports and feature requests: [github.com/IAnMove/hocuspocus/issues](https:/
 The Studio H3 controls offer **AI Faithful** and **AI Creative** for one shot or a
 window storyboard. Both preserve authored dialogue; Creative may add meaningful
 lines when the request permits it. Names, film/series portrayals and voice roles
-remain explicit. Native audio keeps ambience and places dialogue inside timed
+remain explicit. Native audio keeps ambience and requests dialogue within timed
 intervals; **Legacy audio** retains the previous sanitizer for comparisons.
 These are prompting controls, not a guarantee that a model never babbles.
 
@@ -508,3 +508,13 @@ use `planning_style` and `h3_audio_policy`. Enable
 `minimax_h3_reference_sequence` for reference-based continuation. The benchmark
 client in `app/scripts/benchmark_h3.py` records exact requests and status history
 against a separately running instance; it never starts or changes the main app.
+
+The benchmark accepts `--paired` for consecutive Seinfeld/Futurama clips and
+`--server-pid <local-server-pid>` for sampled process/system RAM, swap and NVIDIA
+VRAM peaks (psutil and nvidia-ml-py required in the client environment). Results
+include raw memory samples, cold/warm phase timings and a standalone HTML
+comparison rendered by `app/scripts/benchmark_h3_report.py`. Sampled consumption
+is not a guaranteed minimum hardware requirement; system values include other
+applications. `benchmark_h3_review.py --transcribe` extracts frames and requests
+ASR through the app API; run it after generation so it does not compete for GPU
+memory. ASR output complements listening, without deciding speech quality alone.

@@ -1900,6 +1900,7 @@ class family_handler:
                 )
             },
             "minimax_h3_full_checkpoint": full_checkpoint,
+            "minimax_h3_semantic_bridge": False,  # Enable after the separate adapter validation.
             "minimax_h3_fused_turbo": fused_turbo,
             "lock_inference_steps": False if fused_turbo else bool(
                 (model_def or {}).get("lock_inference_steps", False)
