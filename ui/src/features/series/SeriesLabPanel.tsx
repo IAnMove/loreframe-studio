@@ -11,7 +11,7 @@ import { SeriesReviewPanel } from './SeriesReviewPanel'
 import { Pill, seriesFormatLabel } from './components'
 import { primaryButton, secondaryButton } from './styles'
 import { stageSeriesComic } from './adapters'
-import type { SeriesJobStatus, SeriesProject } from './types'
+import type { SeriesJobStatus } from './types'
 import { listenForAgentSeriesRenderJob, listenForAgentSeriesSection } from '../../lib/uiBus'
 import { useUiTranslation } from '../../i18n'
 import {
