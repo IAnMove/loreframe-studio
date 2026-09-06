@@ -202,18 +202,24 @@ class MusicSubmissionStore:
                 raise
             return payload
 
-    def get_by_generation_id(self, generation_id: str) -> dict[str, Any] | None:
-        token = str(generation_id or "").strip()
-        if not token or not self.root.is_dir():
+    def _find_by_field(self, field: str, token: str) -> dict[str, Any] | None:
+        value = str(token or "").strip()
+        if not value or not self.root.is_dir():
             return None
         for path in sorted(self.root.glob("*.json")):
             try:
-                value = json.loads(path.read_text(encoding="utf-8"))
+                record = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if isinstance(value, dict) and str(value.get("generation_id") or "") == token:
-                return dict(value)
+            if isinstance(record, dict) and str(record.get(field) or "") == value:
+                return dict(record)
         return None
+
+    def get_by_generation_id(self, generation_id: str) -> dict[str, Any] | None:
+        return self._find_by_field("generation_id", generation_id)
+
+    def get_by_job_id(self, job_id: str) -> dict[str, Any] | None:
+        return self._find_by_field("job_id", job_id)
 
     def replace(self, record: Mapping[str, Any]) -> dict[str, Any]:
         """Overwrite an existing reservation with the same spec hash."""
