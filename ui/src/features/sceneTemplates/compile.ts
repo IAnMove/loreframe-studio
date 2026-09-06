@@ -51,7 +51,9 @@ export function compileCandidateScene(id: string, bindings: TemplateBindings, op
     width: 1280, height: 720, fps: 30, duration: controls.duration, layers,
     narrative: { templateId: id, category: template.family, visualIntent: template.description,
       controls: { ...controls, catalogVersion: CATALOG_VERSION, templateVersion: template.version, reviewStatus: template.status, renderer: 'layer-compositor-v1' },
-      assets: Object.entries(bindings).filter(([, value]) => value).map(([slot, value]) => ({ slot, source: value!.source, name: value!.name, type: value!.type })),
+      assets: Object.entries(bindings).filter(([, value]) => value).map(([slot, value]) => ({ slot, source: value!.source, name: value!.name, type: value!.type,
+        ...(value!.catalogAtAssignment ? { catalogAtAssignment: { ...value!.catalogAtAssignment } } : {}),
+      })),
       prompt: template.promptExample, evaluationCues: [...template.limits],
     },
   }
