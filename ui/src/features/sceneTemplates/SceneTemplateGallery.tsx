@@ -1,0 +1,251 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { Scene } from '../../types'
+import { CATALOG_VERSION, CANDIDATE_SCENE_TEMPLATES, getCandidateSceneTemplate } from './catalog'
+import { candidateDemoScene } from './demoScenes'
+import {
+  createReviewChoices,
+  createReviewExport,
+  loadReviewChoicesResult,
+  saveReviewChoices,
+  updateReviewChoice,
+  type ReviewChoice,
+  type ReviewDecision,
+  type ReviewChoicesState,
+} from './reviewDecisions'
+
+export interface SceneTemplateGalleryProps {
+  onOpenScene: (scene: Scene) => void
+  previewBaseUrl?: string
+}
+
+type DemoVariant = 'coral' | 'teal'
+type Family = 'cinema' | 'music' | 'space'
+
+const FAMILY_LABELS: Record<Family, string> = { cinema: 'Cine', music: 'Música', space: 'Espacio' }
+const FAMILY_ORDER: Family[] = ['cinema', 'music', 'space']
+
+const templateRefs = () => CANDIDATE_SCENE_TEMPLATES.map(template => ({ id: template.id, version: template.version }))
+
+const initialReview = () => {
+  const refs = templateRefs()
+  const blank = createReviewChoices(CATALOG_VERSION, refs)
+  if (typeof window === 'undefined') return { state: blank }
+  try {
+    return loadReviewChoicesResult(window.localStorage, CATALOG_VERSION, refs)
+  } catch {
+    return { state: blank, warning: 'No se pudo abrir el almacenamiento; las decisiones quedan pendientes en esta sesión.' }
+  }
+}
+
+const reviewTone: Record<ReviewDecision, string> = {
+  pending: 'border-border text-text-muted',
+  keep: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-100',
+  discard: 'border-rose-400/50 bg-rose-400/10 text-rose-100',
+}
+
+const reviewLabel: Record<ReviewDecision, string> = {
+  pending: 'Pendiente',
+  keep: 'Conservar',
+  discard: 'Descartar',
+}
+
+const errorMessage = (reason: unknown) => reason instanceof Error ? reason.message : 'No se pudo abrir la escena candidata.'
+
+export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-template-previews' }: SceneTemplateGalleryProps) {
+  const [initial] = useState(initialReview)
+  const [reviews, setReviews] = useState<ReviewChoicesState>(initial.state)
+  const [storageWarning, setStorageWarning] = useState(initial.warning || '')
+  const [family, setFamily] = useState<'all' | Family>('all')
+  const [variantById, setVariantById] = useState<Record<string, DemoVariant>>({})
+  const [activePreview, setActivePreview] = useState<string | null>(null)
+  const [previewErrors, setPreviewErrors] = useState<Record<string, boolean>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (saveReviewChoices(window.localStorage, reviews)) return
+      setStorageWarning('No se pudo guardar el estado; las decisiones sólo viven en esta sesión.')
+    } catch {
+      setStorageWarning('No se pudo abrir el almacenamiento; las decisiones sólo viven en esta sesión.')
+    }
+  }, [reviews])
+
+  const visibleTemplates = useMemo(() => {
+    if (family === 'all') return CANDIDATE_SCENE_TEMPLATES
+    return CANDIDATE_SCENE_TEMPLATES.filter(template => template.family === family)
+  }, [family])
+
+  const groupedTemplates = useMemo(() => FAMILY_ORDER
+    .map(item => ({ family: item, templates: visibleTemplates.filter(template => template.family === item) }))
+    .filter(group => group.templates.length > 0), [visibleTemplates])
+
+  const counts = useMemo(() => Object.values(reviews.choices).reduce((result, choice) => {
+    result[choice.decision] += 1
+    return result
+  }, { pending: 0, keep: 0, discard: 0 } as Record<ReviewDecision, number>), [reviews])
+
+  const openScene = (id: string, variant: DemoVariant) => {
+    try {
+      const template = getCandidateSceneTemplate(id)
+      onOpenScene(candidateDemoScene(template.id, variant))
+      setActionErrors(current => ({ ...current, [id]: '' }))
+    } catch (reason) {
+      setActionErrors(current => ({ ...current, [id]: errorMessage(reason) }))
+    }
+  }
+
+  const copyPrompt = async (id: string, prompt: string) => {
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable')
+      await navigator.clipboard.writeText(prompt)
+      setCopiedId(id)
+      window.setTimeout(() => setCopiedId(current => current === id ? null : current), 1_500)
+    } catch {
+      setActionErrors(current => ({ ...current, [id]: 'No se pudo copiar el prompt en este navegador.' }))
+    }
+  }
+
+  const exportReviews = () => {
+    try {
+      const payload = JSON.stringify(createReviewExport(reviews), null, 2)
+      const blob = new Blob([payload], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `scene-template-review-${CATALOG_VERSION}.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setStorageWarning('No se pudo exportar el JSON de revisión en este navegador.')
+    }
+  }
+
+  const setDecision = (id: string, decision: ReviewDecision, notes?: string) => {
+    setReviews(current => updateReviewChoice(current, id, decision, notes))
+  }
+
+  return (
+    <section className="space-y-4" aria-label="Galería de plantillas candidatas de Video3D">
+      <header className="rounded-xl border border-border bg-bg-secondary/70 p-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300">Video3D · catálogo candidato</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">Escenas programáticas reutilizables</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-text-secondary">
+              Explora 24 gramáticas editables con el compositor real. Son candidatas: una preview o un PR no las aprueba automáticamente.
+            </p>
+          </div>
+          <button type="button" onClick={exportReviews} className="rounded-lg border border-violet-300/40 bg-violet-400/10 px-3 py-2 text-[11px] font-medium text-violet-100 hover:bg-violet-400/20">
+            Exportar revisión JSON
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
+          <span className="rounded-full border border-border px-2 py-1">Catálogo {CATALOG_VERSION}</span>
+          <span>{counts.pending} pendientes</span>
+          <span>{counts.keep} para conservar</span>
+          <span>{counts.discard} descartadas</span>
+        </div>
+        {storageWarning && <p role="status" className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-100">{storageWarning}</p>}
+      </header>
+
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrar familia de plantillas">
+        <button type="button" role="tab" aria-selected={family === 'all'} onClick={() => setFamily('all')} className={`rounded-lg border px-3 py-1.5 text-[11px] ${family === 'all' ? 'border-violet-300/60 bg-violet-400/15 text-violet-100' : 'border-border text-text-muted hover:bg-bg-hover'}`}>
+          Todas ({CANDIDATE_SCENE_TEMPLATES.length})
+        </button>
+        {FAMILY_ORDER.map(item => {
+          const count = CANDIDATE_SCENE_TEMPLATES.filter(template => template.family === item).length
+          return <button key={item} type="button" role="tab" aria-selected={family === item} onClick={() => setFamily(item)} className={`rounded-lg border px-3 py-1.5 text-[11px] ${family === item ? 'border-violet-300/60 bg-violet-400/15 text-violet-100' : 'border-border text-text-muted hover:bg-bg-hover'}`}>{FAMILY_LABELS[item]} ({count})</button>
+        })}
+      </div>
+
+      <div className="space-y-6">
+        {groupedTemplates.map(group => (
+          <section key={group.family} aria-labelledby={`scene-template-family-${group.family}`} className="space-y-3">
+            <div className="flex items-baseline gap-2">
+              <h3 id={`scene-template-family-${group.family}`} className="text-sm font-semibold text-text-primary">{FAMILY_LABELS[group.family]}</h3>
+              <span className="text-[10px] text-text-muted">{group.templates.length} candidatas</span>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-2">
+              {group.templates.map(template => {
+                const choice: ReviewChoice = reviews.choices[template.id] || { id: template.id, templateVersion: template.version, decision: 'pending', notes: '' }
+                const selectedVariant = variantById[template.id] || 'coral'
+                const previewUrl = `${previewBaseUrl.replace(/\/+$/, '')}/${template.id}.mp4`
+                return (
+                  <article key={template.id} data-template-id={template.id} className="overflow-hidden rounded-xl border border-border bg-bg-secondary/60">
+                    <div className="flex flex-wrap items-start gap-2 border-b border-border p-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-semibold text-text-primary">{template.title}</h4>
+                          <span className={`rounded-full border px-2 py-0.5 text-[9px] ${reviewTone[choice.decision]}`}>{reviewLabel[choice.decision]}</span>
+                        </div>
+                        <p className="mt-1 text-[10px] text-text-muted">{template.id} · candidata v{template.version} · {template.defaultDuration}s</p>
+                      </div>
+                      <span className="rounded-full border border-border px-2 py-1 text-[9px] text-text-muted">{FAMILY_LABELS[template.family as Family]}</span>
+                    </div>
+
+                    <div className="relative aspect-video overflow-hidden bg-slate-950">
+                      {activePreview === template.id
+                        ? <video className="h-full w-full" controls autoPlay muted playsInline loop preload="none" src={previewUrl} aria-label={`Preview coral de ${template.title}`} onError={() => setPreviewErrors(current => ({ ...current, [template.id]: true }))} />
+                        : <img loading="lazy" src={`${previewBaseUrl}/${template.id}.png`} alt={`Fotograma de revisión: ${template.title}`} className="h-full w-full object-contain" onError={event => { event.currentTarget.style.visibility = 'hidden' }} />}
+                      {activePreview !== template.id && <button type="button" onClick={() => setActivePreview(template.id)} className="absolute inset-0 flex items-center justify-center bg-black/10 text-lg font-semibold text-white hover:bg-black/25"><span className="rounded-full border border-white/40 bg-black/70 px-5 py-3">▶ Ver escena · 4 s</span></button>}
+                      {previewErrors[template.id] && <p role="alert" className="absolute inset-x-0 bottom-0 bg-black/85 p-3 text-xs text-amber-200">Preview no renderizada en esta instalación</p>}
+                    </div>
+                    <div className="space-y-3 p-3">
+                      <p className="text-xs leading-5 text-text-secondary">{template.description}</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Slots</p>
+                          <ul className="mt-1 space-y-1 text-[10px] text-text-secondary">
+                            {template.slots.map(slot => <li key={slot.id}><span className="font-medium text-text-primary">{slot.id}</span> · {slot.required ? 'obligatorio' : 'opcional'} · {slot.kinds.join(', ')}</li>)}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Límites</p>
+                          <ul className="mt-1 space-y-1 text-[10px] text-text-secondary">
+                            {template.limits.map(limit => <li key={limit}>• {limit}</li>)}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-bg-primary/50 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Prompt de ejemplo</p>
+                          <button type="button" onClick={() => void copyPrompt(template.id, template.promptExample)} className="text-[10px] text-violet-200 hover:text-violet-100">{copiedId === template.id ? 'Copiado' : 'Copiar'}</button>
+                        </div>
+                        <p className="mt-1 text-[10px] leading-4 text-text-secondary">{template.promptExample}</p>
+                      </div>
+
+                      <p className="text-xs text-text-muted">Muestra coral · render del compositor real, sin audio · no implica aprobación</p>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" data-testid={`open-scene-${template.id}`} onClick={() => openScene(template.id, 'coral')} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400">Abrir en editor</button>
+                        <select aria-label={`Variante para probar ${template.title}`} value={selectedVariant} onChange={event => setVariantById(current => ({ ...current, [template.id]: event.target.value as DemoVariant }))} className="rounded-lg border border-border bg-bg-primary px-2 py-2 text-[10px] text-text-primary">
+                          <option value="coral">Coral · preview disponible</option>
+                          <option value="teal">Teal · objeto alternativo</option>
+                        </select>
+                        <button type="button" data-testid={`open-scene-variant-${template.id}`} onClick={() => openScene(template.id, selectedVariant)} className="rounded-lg border border-violet-300/40 px-3 py-2 text-[10px] text-violet-100 hover:bg-violet-400/10">Abrir variante seleccionada</button>
+                      </div>
+                      {selectedVariant === 'teal' && <p className="text-[10px] text-teal-200">Teal cambia los objetos de la escena; no se afirma que exista un MP4 para esta variante.</p>}
+                      {actionErrors[template.id] && <p role="alert" className="text-[10px] text-rose-200">{actionErrors[template.id]}</p>}
+
+                      <div className="border-t border-border pt-3">
+                        <div className="flex flex-wrap gap-2">
+                          {(['pending', 'keep', 'discard'] as ReviewDecision[]).map(decision => <button key={decision} type="button" aria-pressed={choice.decision === decision} onClick={() => setDecision(template.id, decision)} className={`rounded border px-2 py-1 text-[10px] ${choice.decision === decision ? reviewTone[decision] : 'border-border text-text-muted hover:bg-bg-hover'}`}>{reviewLabel[decision]}</button>)}
+                        </div>
+                        <label className="mt-2 block text-[10px] text-text-muted">Notas de revisión
+                          <textarea value={choice.notes} maxLength={4_000} onChange={event => setDecision(template.id, choice.decision, event.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-border bg-bg-primary p-2 text-[10px] text-text-primary outline-none focus:border-violet-300" placeholder="Qué conservar, qué corregir o qué falta…" />
+                        </label>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  )
+}
