@@ -2,9 +2,13 @@ import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { closeApp } from '../helpers/gotoApp'
 import { installApiRoutes, type ApiRouteSession } from '../helpers/apiRoutes'
+import { lockUiLanguage } from '../helpers/lockUiLanguage'
 import { CATALOG_VERSION, EXPANDED_CATALOG_VERSION } from '../../src/features/sceneTemplates/catalog'
 import { CATALOG_REVIEW_STORAGE_KEY } from '../../src/features/sceneTemplates/catalogReview'
 import { candidateDemoScene } from '../../src/features/sceneTemplates/demoScenes'
+import { animatorLabels } from '../../src/i18n/animatorLabels'
+
+const copy = animatorLabels('en')
 
 const PENDING_SCENE_KEY = 'maestro_scene_animator_pending_scene'
 const REVIEW_STORAGE_KEY = CATALOG_REVIEW_STORAGE_KEY
@@ -72,6 +76,7 @@ function reviewRouteState(): ReviewRouteState {
 async function prepareReviewPage(page: Page): Promise<ApiRouteSession> {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const session = await installApiRoutes(page)
+  await lockUiLanguage(page, 'en')
   await page.addInitScript(() => {
     const originalSetItem = Storage.prototype.setItem
     Storage.prototype.setItem = function setItem(key: string, value: string) {
@@ -183,7 +188,7 @@ test('opens cinema-establishing in the real editor, saves exact scene JSON, and 
     await handoffCard.getByTestId('open-scene-cinema-establishing').click()
     await expect(page).toHaveURL(/\/scene-template-review\?editor=1$/)
 
-    const sceneName = page.getByLabel('Scene name', { exact: true })
+    const sceneName = page.getByLabel(copy.sceneNameAria, { exact: true })
     await expect(sceneName).toBeVisible()
     await expect(sceneName).toHaveValue('Referencia coral guardada')
     await expect(page.locator('model-viewer')).toHaveCount(0)
@@ -200,7 +205,7 @@ test('opens cinema-establishing in the real editor, saves exact scene JSON, and 
     await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
 
     await sceneName.fill('Ajuste prueba')
-    await page.getByRole('button', { name: 'Save scene', exact: true }).first().click()
+    await page.getByRole('button', { name: copy.saveScene, exact: true }).first().click()
     await expect.poll(() => state.postedPayloads.length).toBe(1)
     const postedPayload = state.postedPayloads[0]
     const postedScene = postedPayload.scene as SceneLike
@@ -277,9 +282,9 @@ test('Library template bindings survive the real editor save and reopen without 
     await expect(composer).toHaveCount(0)
     expect(catalogRequests).toContain('/api/v1/assets/canonical-hero')
     expect(catalogRequests).toContain('/api/v1/assets/canonical-plate')
-    const name = page.getByLabel('Scene name', { exact: true })
+    const name = page.getByLabel(copy.sceneNameAria, { exact: true })
     await name.fill('Library binding roundtrip')
-    await page.getByRole('button', { name: 'Save scene', exact: true }).first().click()
+    await page.getByRole('button', { name: copy.saveScene, exact: true }).first().click()
     await expect.poll(() => state.postedPayloads.length).toBe(1)
     const saved = state.postedPayloads[0].scene as SceneLike
     expect(saved.generationPolicy).toBe('provided_only')
@@ -415,7 +420,7 @@ test('opens an expanded music template with explicit component roles without inv
     await expect(card.getByTestId('open-scene-music-orbit-duel')).toBeDisabled()
     await card.getByTestId('open-scene-variant-music-orbit-duel').click()
     await expect(page).toHaveURL(/\/scene-template-review\?editor=1$/)
-    await expect(page.getByLabel('Scene name', { exact: true })).toBeVisible()
+    await expect(page.getByLabel(copy.sceneNameAria, { exact: true })).toBeVisible()
     const handoff = await page.evaluate(() => JSON.parse(sessionStorage.getItem('__scene_template_test_handoff')!))
     expect(handoff.generationPolicy).toBe('provided_only')
     expect(handoff.narrative.controls.catalogVersion).toBe(EXPANDED_CATALOG_VERSION)

@@ -2167,7 +2167,7 @@ export function SceneAnimatorPanel() {
       }
       await new Promise(resolve => window.setTimeout(resolve, 250))
     }
-    throw new Error('The 3D models did not paint in time. Keep the 3D Video tab visible and try again.')
+    throw new Error(t('animator.modelsTimeout'))
   }
   const applyRecipeScene = async (recipe: SceneRecipe, nextScene: Scene, status: (message: string) => void, prompt: string) => {
     recipeContextRef.current = { prompt }
@@ -2176,7 +2176,7 @@ export function SceneAnimatorPanel() {
     status(t('animator.waitingModels'))
     await waitForModelViewers()
     if (recipe.record !== true && recipe.save !== true) {
-      status('3D models ready. Scene mounted; press Export MP4 when ready.')
+      status(t('animator.modelsReady'))
     }
     if (recipe.record === true) {
       status(t('animator.recordingScene'))
