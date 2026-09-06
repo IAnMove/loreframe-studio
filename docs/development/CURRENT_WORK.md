@@ -1,6 +1,6 @@
 # Estado de desarrollo y punto de entrada
 
-Verificado el 7 de septiembre de 2026 contra `origin/development` **`c2794f6c`**.
+Verificado el 7 de septiembre de 2026 contra `origin/development` **`a0bf91c6`**.
 Es una fotografía con evidencia, no un sustituto de Git. Antes de reservar trabajo:
 `git fetch origin development`, consultar PR abiertos y comprobar sus archivos.
 
@@ -27,19 +27,16 @@ no autorizan acciones ni representan el estado actual.
 | Labs/Wizard L0–L12 | #182, #183, #186–#189, #192, #194, #196, #197 | Entregas integradas; #197 congela L1–L4 y L9 como resueltos. Quedan límites de validación indicados abajo |
 | Vídeo procedural y galería/plantillas | #168, #169, #173, #175, #177, #180, #181, #184 | No equivale a completar toda la hoja de ruta procedural |
 | Inspección GLB y parches faciales | #190, #193, #195 | Router de inspección de #195 todavía sin montar; parches tienen límites de piloto |
+| Taller de habla 2D (preparación manual) | #200 | Panel, borrador, recarga y e2e simulado. El test del panel evita aserciones HTMLElement-vs-null (~260 MiB RSS). No es validación artística de un personaje hablando ni cierra R2–R4 |
 
 La integración es en **development**. No implica que el servidor local esté usando
 esa revisión ni que exista una publicación de aplicación en main.
 
 ## En curso al comprobarlo
 
-En la primera consulta había cambios locales sin PR. Al cerrar esta revisión,
-escenas 3D ya tiene el PR #198 abierto; no está integrado. Estado por dominio:
+Al cerrar esta revisión el taller de habla ya está integrado (#200, merge
+`a0bf91c6`). Escenas 3D sigue en un PR abierto, no integrado. Estado por dominio:
 
-- **Taller de habla/personajes**: PR [#200](https://github.com/IAnMove/hocuspocus/pull/200),
-  rama `feat/character-speech-workshop`. Documentos `CHARACTER_SPEECH_RASTER_PLAN.md` y
-  `CHARACTER_SPEECH_WORKSHOP.md`. El test del panel evita aserciones HTMLElement-vs-null
-  que agotaban RAM; 13 tests dirigidos ~260 MiB de RSS máximo. No integrado hasta CI.
 - **Escenas 3D reales**: PR [#198](https://github.com/IAnMove/hocuspocus/pull/198),
   rama `feat/video3d-real-scene-mode`, cambios en
   `PROCEDURAL_3D_SCENE_SPEC.md`, SceneAnimator, `features/scene3d`, dependencias e i18n.
