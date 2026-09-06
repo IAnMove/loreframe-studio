@@ -14,7 +14,12 @@ export function layer(id: string, type: SceneLayer['type'], source: string, dura
   return { id, name: id, type, source, visible: true, z, parallax: 1, transform, animation: { start: transform, end: transform, duration, curve: 'ease' } }
 }
 export function keyframes(item: SceneLayer, beats: Beat[]): SceneLayer {
-  return { ...item, animation: { ...item.animation, keyframes: beats.map(({ at, ...pose }, i) => ({ id: `${item.id}-${i}`, time: at * item.animation.duration, ...basePose, ...item.transform, curve: 'ease', ...pose })) } }
+  const frames: SceneKeyframe[] = beats.map(({ at, ...pose }, i) => ({ id: `${item.id}-${i}`, time: at * item.animation.duration, ...basePose, ...item.transform, curve: 'ease', ...pose }))
+  const endpoint = (frame: SceneKeyframe) => ({ ...item.transform, x: frame.x, y: frame.y, scale: frame.scale, rotation: frame.rotation, opacity: frame.opacity })
+  return { ...item, animation: { ...item.animation,
+    ...(frames.length ? { start: endpoint(frames[0]), end: endpoint(frames[frames.length - 1]) } : {}),
+    keyframes: frames,
+  } }
 }
 export function asset(ctx: BuildContext, slot: TemplateSlotName, pose: Pose = {}, z = 10): SceneLayer {
   const binding = ctx.bindings[slot]

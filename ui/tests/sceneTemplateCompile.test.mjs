@@ -9,6 +9,7 @@ import {
   candidateDemoScene,
 } from '../src/features/sceneTemplates/demoScenes.ts'
 import { compileCandidateScene } from '../src/features/sceneTemplates/compile.ts'
+import { keyframes, layer } from '../src/features/sceneTemplates/sceneBuilders.ts'
 import { parseSceneFile, serializeSceneFile } from '../src/lib/sceneFile.ts'
 import { sceneFromLibraryPayload } from '../src/lib/sceneLibrary.ts'
 
@@ -170,6 +171,42 @@ test('all candidate scenes have finite positive frames and valid relationship ta
     assertSceneFrames(scene)
     assertRelationships(scene)
   }
+})
+
+test('keyframed templates expose the actual endpoint poses to legacy editor controls', () => {
+  for (const current of cases()) {
+    for (const item of build(current).layers) {
+      const frames = item.animation.keyframes
+      if (!frames?.length) continue
+      for (const key of ['x', 'y', 'scale', 'rotation', 'opacity']) {
+        assert.equal(item.animation.start[key], frames[0][key], `${current.id}/${item.id}/start/${key}`)
+        assert.equal(item.animation.end[key], frames.at(-1)[key], `${current.id}/${item.id}/end/${key}`)
+      }
+      assert.equal(item.animation.start.id, undefined)
+      assert.equal(item.animation.end.time, undefined)
+    }
+  }
+  const item = layer('test', 'model3d', '/api/v1/file/ship.glb', 4)
+  item.transform.rotationX = 65
+  assert.deepEqual(keyframes(item, []).animation.start, item.animation.start)
+  const animated = keyframes(item, [{ at: 0, x: 10 }, { at: 1, x: 80 }])
+  assert.equal(animated.animation.start.rotationX, 65)
+  assert.equal(animated.animation.end.rotationX, 65)
+})
+
+test('compiler rejects repeated GLB sources and mismatched inline MIME types', () => {
+  const pair = candidateDemoBindings('space-chase', 'coral')
+  assert.throws(() => compileCandidateScene('space-chase', { ...pair, prop: pair.hero }), /GLB.*repetid/i)
+  assert.throws(() => compileCandidateScene('space-chase', {
+    ...pair, hero: { ...pair.hero, source: 'data:image/png;base64,AA==' },
+  }), /MIME/i)
+  const cinema = candidateDemoBindings('cinema-establishing', 'coral')
+  assert.throws(() => compileCandidateScene('cinema-establishing', {
+    ...cinema, plate: { ...cinema.plate, source: pair.hero.source },
+  }), /MIME/i)
+  assert.doesNotThrow(() => compileCandidateScene('cinema-establishing', {
+    ...cinema, plate: { type: 'image', source: '/api/v1/files/asset-id' },
+  }))
 })
 
 test('all 24 builders have distinct motion fingerprints beyond asset sources and names', () => {

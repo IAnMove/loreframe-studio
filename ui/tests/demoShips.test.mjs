@@ -9,6 +9,12 @@ const BIN_CHUNK = 0x004e4942
 const COMPONENT_BYTES = { 5126: 4 }
 const COMPONENTS = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }
 
+test('demo ships fail closed on unknown runtime variants', () => {
+  for (const variant of ['blue', '', null, 1, {}]) {
+    assert.throws(() => demoShip(variant), /variante/i)
+  }
+})
+
 const decodeGlb = asset => {
   assert.equal(asset.type, 'model3d')
   assert.ok(asset.source.startsWith(DATA_PREFIX))

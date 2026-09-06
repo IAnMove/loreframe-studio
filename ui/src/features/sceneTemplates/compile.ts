@@ -14,6 +14,11 @@ function finiteRange(value: number, min: number, max: number, label: string) {
 function validateAsset(value: TemplateAsset) {
   if (typeof value.source !== 'string' || !value.source.trim() || value.source.length > 2_000_000) throw new Error('Cada slot necesita un recurso existente y durable (máximo 2 MB de referencia).')
   if (!/^(?:data:(?:image\/|model\/gltf-binary;)|\/api\/v1\/|https?:\/\/)/i.test(value.source)) throw new Error('Usa un asset de Library o una referencia de imagen/GLB durable; no blob:, scripts ni rutas del disco.')
+  // HTTP/API references are checked by the media loader; only inline MIME is known here.
+  if (/^data:/i.test(value.source)) {
+    const matchesKind = value.type === 'image' ? /^data:image\//i : /^data:model\/gltf-binary;/i
+    if (!matchesKind.test(value.source)) throw new Error('El MIME del asset inline no coincide con su tipo declarado.')
+  }
 }
 function validateBindings(template: SceneTemplateDefinition, bindings: TemplateBindings) {
   const allowed = new Set(template.slots.map(slot => slot.id))
@@ -25,6 +30,8 @@ function validateBindings(template: SceneTemplateDefinition, bindings: TemplateB
     if (!slot.kinds.includes(value.type)) throw new Error(`El slot ${slot.id} no admite ${value.type}.`)
     validateAsset(value)
   }
+  const models = Object.values(bindings).filter(value => value?.type === 'model3d').map(value => value!.source)
+  if (new Set(models).size !== models.length) throw new Error('Los slots GLB no admiten fuentes repetidas en este compositor.')
 }
 export function compileCandidateScene(id: string, bindings: TemplateBindings, options: Partial<TemplateControls> = {}): Scene {
   const template = getCandidateSceneTemplate(id)
