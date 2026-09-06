@@ -6,7 +6,7 @@ import {
   CANDIDATE_SCENE_TEMPLATES,
   EXPANDED_CATALOG_VERSION,
 } from '../src/features/sceneTemplates/catalog.ts'
-import { loadCatalogReview } from '../src/features/sceneTemplates/catalogReview.ts'
+import { CATALOG_REVIEW_STORAGE_KEY, loadCatalogReview, saveCatalogReview } from '../src/features/sceneTemplates/catalogReview.ts'
 import {
   REVIEW_DECISIONS_STORAGE_KEY,
   serializeReviewChoices,
@@ -120,4 +120,20 @@ test('storage errors fail closed without importing any decision', () => {
   const loaded = loadCatalogReview({ getItem: () => { throw new Error('blocked') } })
   assert.match(loaded.warning, /almacenamiento/)
   assert.equal(Object.values(loaded.state.choices).every(item => item.decision === 'pending'), true)
+})
+
+test('saving expanded choices preserves legacy bytes and reads the expanded key first', () => {
+  const legacy = JSON.stringify({ schemaVersion: 1, catalogVersion: CATALOG_VERSION,
+    choices: { [CANDIDATE_SCENE_TEMPLATES[0].id]: choice(CANDIDATE_SCENE_TEMPLATES[0], 'keep') } })
+  const values = new Map([[REVIEW_DECISIONS_STORAGE_KEY, legacy]])
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  const state = loadCatalogReview(storage).state
+  state.choices['music-spiral-exit'].decision = 'discard'
+  assert.equal(saveCatalogReview(storage, state), true)
+  assert.equal(values.get(REVIEW_DECISIONS_STORAGE_KEY), legacy)
+  assert.equal(loadCatalogReview(storage).state.choices['music-spiral-exit'].decision, 'discard')
+  values.set(CATALOG_REVIEW_STORAGE_KEY, '{broken')
+  assert.equal(loadCatalogReview(storage).state.choices[CANDIDATE_SCENE_TEMPLATES[0].id].decision, 'pending')
+  assert.equal(saveCatalogReview(storage, { ...state, catalogVersion: CATALOG_VERSION }), false)
+  assert.equal(saveCatalogReview({ setItem() { throw new Error('full') } }, state), false)
 })

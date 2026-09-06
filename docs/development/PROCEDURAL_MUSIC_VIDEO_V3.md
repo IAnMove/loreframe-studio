@@ -37,7 +37,7 @@ no 24 variantes del mismo zoom. Independiente del backend y de nuevos modelos.
   Respetar presupuestos, poses de entrada y fuentes; sin flashes automáticos.
 - [x] A5. Tests preparados para CI y ejecutados localmente: contratos, componentes ausentes/incorrectos, identidades aisladas,
   trayectorias distintas, bounds, round-trip y compatibilidad con originales.
-- [ ] A6. Galería de pruebas renderizadas, con aprobación pendiente. La ausencia
+- [x] A6. Galería de pruebas renderizadas, con aprobación pendiente. La ausencia
   de un MP4 es visible; no fingir que existe una referencia aprobada.
 
 PR A: catálogo, compiladores puros, UI de componentes y tests. Root integra;
@@ -136,7 +136,7 @@ Serializar cambios en los grandes paneles; no usar varios agentes sobre ellos.
 
 | Bloque | Implementado local | Commit | PR | CI | Revisión | Merge | Real / artístico |
 |---|---|---|---|---|---|---|---|
-| A | Catálogo, compiladores, UI y tests | `80513765` | #184 abierto | En curso | Hallazgos de catálogo corregidos; D0 identificado | — | 24 ensayos MP4 reales; revisión artística pendiente |
+| A | Catálogo, compiladores, UI; 891 tests + 17 E2E; galería ampliada | `80513765` + correcciones de revisión en PR | #184 abierto | Reejecución pendiente; E2E de 24→48 corregido localmente | Unicidad slots, versión contrato, migración y ausencia de referencia corregidos; D0 identificado | — | 24 ensayos MP4 reales; galería 43 tarjetas/3 canciones anteriores; revisión artística pendiente |
 | B | Pendiente | — | — | — | — | — | Pendiente |
 | C | Pendiente | — | — | — | — | — | Pendiente |
 | D | Pendiente | — | — | — | — | — | Pendiente |

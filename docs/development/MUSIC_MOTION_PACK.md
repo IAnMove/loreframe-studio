@@ -3,8 +3,10 @@
 Este documento acompaña a `ui/src/features/sceneTemplates/musicMotionCatalog.ts`.
 Define 24 movimientos musicales candidatos para escenas procedurales, no 24
 transiciones de montaje. El catálogo y los compiladores puros ya existen en el
-worktree de desarrollo; todavía faltan tests del bloque, PR, revisión, merge y
-validación visual/renderizada.
+worktree de desarrollo. El PR #184 está abierto y hay evidencia local de 887
+tests, lint, tsc, build y 24 renders reales. CI falla actualmente en E2E y sigue
+en diagnóstico; todavía no hay merge ni aprobación artística. Esta evidencia no
+declara validación de píxeles, alpha o tileabilidad.
 
 ## Contrato común
 
@@ -18,6 +20,11 @@ validación visual/renderizada.
 - Los sujetos y props deben llegar como recortes con alpha limpio. El fondo es
   una placa durable, normalmente 16:9, con contraste suficiente para leer la
   trayectoria.
+- En `music-speed-flight`, `music-infinite-fall` y `music-conveyor`, el strip
+  repite la misma imagen en el eje indicado. Una fuente que no sea tileable puede
+  mostrar costuras; no se garantiza continuidad ni se valida tileabilidad por
+  píxeles. La preview y el render requieren revisión artística antes de aprobar
+  cualquiera de esos movimientos.
 - Las coreografías son rutas de keyframes deterministas, guardables y
   reabribles. No son simulaciones de física, colisiones, gravedad, caminata,
   iluminación 3D u oclusión global.
@@ -46,8 +53,8 @@ validación visual/renderizada.
 | ID | Nombre | Objetivo y mecanismo visual | Componentes requeridos | Duración / intensidad |
 | --- | --- | --- | --- | --- |
 | `music-spiral-exit` | Salida en espiral | El foco se encoge y desvanece en el centro mientras gira dos vueltas; ruta 2D, sin órbita física. | `subject_1`, `background` | 4 s / high |
-| `music-speed-flight` | Vuelo de velocidad | El foco cruza de izquierda a derecha; el fondo puede desplazarse a la izquierda a 95 unidades/s, sin sincronización al compás. | `subject_1`, `background` | 4 s / high |
-| `music-infinite-fall` | Caída infinita | Entrada desde arriba, descenso finito y reducción hasta salir por abajo; no hay bucle limpio ni mundo infinito. | `subject_1`, `background` | 6 s / high |
+| `music-speed-flight` | Vuelo de velocidad | El foco cruza de izquierda a derecha; el fondo puede repetirse y desplazarse a la izquierda a 95 unidades/s. Si no es tileable en horizontal pueden verse costuras; la continuidad no está garantizada y exige revisión artística de preview/render. | `subject_1`, `background` | 4 s / high |
+| `music-infinite-fall` | Caída infinita | Entrada desde arriba, descenso finito y reducción hasta salir por abajo; el strip vertical puede repetir una fuente no tileable y mostrar costuras. No hay continuidad garantizada ni bucle limpio o mundo infinito. | `subject_1`, `background` | 6 s / high |
 | `music-pinball` | Rebote de pinball | Trayectoria zigzag con puntos de rebote escritos; no hay colisiones ni solver de pinball. | `subject_1`, `background` | 4 s / high |
 | `music-boomerang` | Bumerán | El foco se aleja por un arco y vuelve a su origen; no simula aerodinámica. | `subject_1`, `background` | 4 s / moderate |
 | `music-cannon-launch` | Lanzamiento de cañón | El foco sale disparado y abandona el cuadro por arriba a la derecha siguiendo un arco; no aterriza ni hace pausa. | `subject_1`, `background` | 4 s / high |
@@ -63,7 +70,7 @@ validación visual/renderizada.
 | `music-staircase-pop` | Ascenso por escalones | Saltos discretos entre posiciones, como un sampler visual; no hay ciclo de caminar. | `subject_1`, `background` | 4 s / high |
 | `music-accordion-clones` | Clones acordeón | Instancias limitadas del mismo foco se expanden y contraen; no crea personajes nuevos. | `subject_1`, `background` | 6 s / high |
 | `music-domino-wave` | Ola de dominó | Copias limitadas se inclinan por turnos y recuperan su orientación; no entran ni salen como personajes nuevos ni hay dominós físicos. | `subject_1`, `background` | 6 s / high |
-| `music-conveyor` | Cinta transportadora | Desplazamiento direccional con bucle opcional y fondo de cadena; no hay maquinaria simulada. | `subject_1`, `background` | 4 s / moderate |
+| `music-conveyor` | Cinta transportadora | Desplazamiento direccional con bucle opcional y strip horizontal repetido; una fuente no tileable puede mostrar costuras. La continuidad no está garantizada y exige revisión artística de preview/render; no hay maquinaria simulada. | `subject_1`, `background` | 4 s / moderate |
 | `music-spotlight-relay` | Relevo de focos | Dos presencias se alternan el centro mediante opacidad, escala y foco suave; no hay luz física. | `subject_1`, `subject_2`, `background` | 6 s / moderate |
 | `music-corkscrew-rise` | Ascenso sacacorchos | Ascenso con deriva lateral y rotación 2D; no es una trayectoria 3D. | `subject_1`, `background` | 4 s / high |
 | `music-shockwave` | Onda expansiva | El foco central recibe un zoom de movimiento; no cambia la opacidad ni representa presión o daño físico. | `subject_1`, `background` | 4 s / high |
@@ -77,21 +84,26 @@ duración fija y keyframes deterministas, no con beats ni con BPM. El control de
 intensidad sólo clasifica la energía visual esperada para el futuro compilador;
 no autoriza flashes, física, deformaciones ni sincronización fonética.
 
-## Estado y dependencias
+## Estado verificable y dependencias
 
-El catálogo y los compiladores puros locales (`musicMotionSolo.ts`,
-`musicMotionEnsemble.ts` y `musicMotionBuilders.ts`) son implementación del
-candidato, pero no implican aprobación, preview renderizada ni existencia de
-assets válidos. El estado actual sigue siendo pendiente de tests, PR, revisión
-independiente, merge y validación visual/renderizada. El siguiente trabajo debe
-completar, en módulos separados:
+- [x] Catálogo y compiladores puros locales (`musicMotionSolo.ts`,
+  `musicMotionEnsemble.ts` y `musicMotionBuilders.ts`) implementados.
+- [x] Evidencia local tras revisión: 891 tests, 17 E2E de navegador, lint, tsc,
+  build, ratchet contra la base y 24 renders reales. Los
+  outputs y pesos no forman parte del repositorio.
+- [ ] CI verde del nuevo commit: pendiente. El CI de `23f54bfc` detectó tests
+  E2E anclados a 24 entradas; corregidos para 48, con cobertura adicional de
+  componentes nuevos y migración sin sobrescribir decisiones legacy.
+- [ ] PR #184 mezclado: sigue abierto.
+- [ ] Aprobación artística de previews/renders y validación visual del alpha,
+  píxeles o tileabilidad: no realizada.
 
-1. tests de los compiladores y de las 24 coreografías, incluyendo bounds,
-   identidades y determinismo;
-2. bindings y selector de Library para los cuatro slots;
-3. validación de assets canónicos, workspace y alpha;
-4. round-trip de escena, bounds y trayectorias distintas;
-5. previews locales explícitamente pendientes y revisión visual del alpha.
+El orden restante debe seguir el plan
+[`PROCEDURAL_MUSIC_VIDEO_V3.md`](./PROCEDURAL_MUSIC_VIDEO_V3.md), fases A–E,
+respetando sus dependencias. En particular, primero hay que confirmar el nuevo
+CI y la revisión de las previews antes de presentar estos candidatos como
+aprobados; después pueden continuar los bloques de integración, montaje,
+recuperación y Wizard que el plan deja condicionados.
 
 No se deben añadir pesos de modelos, imágenes, audio o MP4 al repositorio.
 

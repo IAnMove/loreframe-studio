@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Scene } from '../../types'
-import { EXPANDED_CATALOG_VERSION as CATALOG_VERSION, ALL_SCENE_TEMPLATES as CANDIDATE_SCENE_TEMPLATES, getCandidateSceneTemplate } from './catalog'
+import { EXPANDED_CATALOG_VERSION as CATALOG_VERSION, ALL_SCENE_TEMPLATES as CANDIDATE_SCENE_TEMPLATES, CANDIDATE_SCENE_TEMPLATES as LEGACY_TEMPLATES, getCandidateSceneTemplate } from './catalog'
 import { candidateDemoScene } from './demoScenes'
 import { loadRenderedReferenceScene } from './previewSnapshot'
-import { loadCatalogReview } from './catalogReview'
+import { loadCatalogReview, saveCatalogReview } from './catalogReview'
 import {
   createReviewChoices,
   createReviewExport,
-  saveReviewChoices,
   updateReviewChoice,
   type ReviewChoice,
   type ReviewDecision,
@@ -24,6 +23,7 @@ type Family = 'cinema' | 'music' | 'space'
 
 const FAMILY_LABELS: Record<Family, string> = { cinema: 'Cine', music: 'Música', space: 'Espacio' }
 const FAMILY_ORDER: Family[] = ['cinema', 'music', 'space']
+const ORIGINAL_REFERENCE_IDS = new Set(LEGACY_TEMPLATES.map(template => template.id))
 
 const templateRefs = () => CANDIDATE_SCENE_TEMPLATES.map(template => ({ id: template.id, version: template.version }))
 
@@ -69,7 +69,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      if (saveReviewChoices(window.localStorage, reviews)) return
+      if (saveCatalogReview(window.localStorage, reviews)) return
       setStorageWarning('No se pudo guardar el estado; las decisiones sólo viven en esta sesión.')
     } catch {
       setStorageWarning('No se pudo abrir el almacenamiento; las decisiones sólo viven en esta sesión.')
@@ -194,6 +194,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                 const choice: ReviewChoice = reviews.choices[template.id] || { id: template.id, templateVersion: template.version, decision: 'pending', notes: '' }
                 const selectedVariant = variantById[template.id] || 'coral'
                 const previewUrl = `${previewBaseUrl.replace(/\/+$/, '')}/${template.id}.mp4`
+                const hasReference = ORIGINAL_REFERENCE_IDS.has(template.id)
                 return (
                   <article key={template.id} data-template-id={template.id} className="overflow-hidden rounded-xl border border-border bg-bg-secondary/60">
                     <div className="flex flex-wrap items-start gap-2 border-b border-border p-3">
@@ -208,10 +209,10 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                     </div>
 
                     <div className="relative aspect-video overflow-hidden bg-slate-950">
-                      {activePreview === template.id
+                      {!hasReference ? <p className="flex h-full items-center justify-center p-4 text-center text-xs text-text-muted">Sin referencia coral publicada. Los ensayos MiniMax se consultan en la pestaña de videoclips.</p> : activePreview === template.id
                         ? <video className="h-full w-full" controls autoPlay muted playsInline loop preload="none" src={previewUrl} aria-label={`Preview coral de ${template.title}`} onError={() => setPreviewErrors(current => ({ ...current, [template.id]: true }))} />
-                        : <img loading="lazy" src={`${previewBaseUrl}/${template.id}.png`} alt={`Fotograma de revisión: ${template.title}`} className="h-full w-full object-contain" onError={event => { event.currentTarget.style.visibility = 'hidden' }} />}
-                      {activePreview !== template.id && <button type="button" onClick={() => setActivePreview(template.id)} className="absolute inset-0 flex items-center justify-center bg-black/10 text-lg font-semibold text-white hover:bg-black/25"><span className="rounded-full border border-white/40 bg-black/70 px-5 py-3">▶ Ver escena · {template.defaultDuration} s</span></button>}
+                        : <img loading="lazy" src={`${previewBaseUrl}/${template.id}.png`} alt={`Fotograma de revisión: ${template.title}`} className="h-full w-full object-contain" onError={event => { event.currentTarget.style.visibility = 'hidden'; setPreviewErrors(current => ({ ...current, [template.id]: true })) }} />}
+                      {hasReference && activePreview !== template.id && <button type="button" onClick={() => setActivePreview(template.id)} className="absolute inset-0 flex items-center justify-center bg-black/10 text-lg font-semibold text-white hover:bg-black/25"><span className="rounded-full border border-white/40 bg-black/70 px-5 py-3">▶ Ver escena · {template.defaultDuration} s</span></button>}
                       {previewErrors[template.id] && <p role="alert" className="absolute inset-x-0 bottom-0 bg-black/85 p-3 text-xs text-amber-200">Preview no renderizada en esta instalación</p>}
                     </div>
                     <div className="space-y-3 p-3">
@@ -239,10 +240,10 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                         <p className="mt-1 text-[10px] leading-4 text-text-secondary">{template.promptExample}</p>
                       </div>
 
-                      <p className="text-xs text-text-muted">Muestra coral · render del compositor real, sin audio · no implica aprobación</p>
+                      <p className="text-xs text-text-muted">{hasReference ? 'Muestra coral · render del compositor real, sin audio · no implica aprobación' : 'Plantilla candidata · sin referencia coral publicada ni aprobación artística'}</p>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" data-testid={`open-scene-${template.id}`} disabled={loadingReference === template.id} onClick={() => void openReference(template.id)} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400 disabled:opacity-50">{loadingReference === template.id ? 'Cargando referencia…' : 'Abrir referencia en editor'}</button>
+                        <button type="button" data-testid={`open-scene-${template.id}`} disabled={!hasReference || loadingReference === template.id} onClick={() => void openReference(template.id)} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400 disabled:opacity-50">{loadingReference === template.id ? 'Cargando referencia…' : 'Abrir referencia en editor'}</button>
                         <select aria-label={`Variante para probar ${template.title}`} value={selectedVariant} onChange={event => setVariantById(current => ({ ...current, [template.id]: event.target.value as DemoVariant }))} className="rounded-lg border border-border bg-bg-primary px-2 py-2 text-[10px] text-text-primary">
                           <option value="coral">Coral · variante de referencia</option>
                           <option value="teal">Teal · objeto alternativo</option>

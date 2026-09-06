@@ -8,9 +8,23 @@ import {
   REVIEW_DECISIONS_STORAGE_KEY,
   createReviewChoices,
   parseReviewChoicesResult,
+  serializeReviewChoices,
   type ReviewChoicesState,
   type ReviewTemplateRef,
 } from './reviewDecisions'
+
+export const CATALOG_REVIEW_STORAGE_KEY = `${REVIEW_DECISIONS_STORAGE_KEY}.${EXPANDED_CATALOG_VERSION}`
+
+/** Never overwrite the legacy decisions: an older build must still read them. */
+export function saveCatalogReview(storage: Pick<Storage, 'setItem'>, state: ReviewChoicesState): boolean {
+  if (state.catalogVersion !== EXPANDED_CATALOG_VERSION) return false
+  try {
+    storage.setItem(CATALOG_REVIEW_STORAGE_KEY, serializeReviewChoices(state))
+    return true
+  } catch {
+    return false
+  }
+}
 
 export interface CatalogReviewLoadResult {
   state: ReviewChoicesState
@@ -61,6 +75,8 @@ const migrateLegacyChoices = (legacyState: ReviewChoicesState): ReviewChoicesSta
 export function loadCatalogReview(storage: Pick<Storage, 'getItem'>): CatalogReviewLoadResult {
   let raw: string | null
   try {
+    raw = storage.getItem(CATALOG_REVIEW_STORAGE_KEY)
+    if (raw !== null) return parseReviewChoicesResult(raw, EXPANDED_CATALOG_VERSION, EXPANDED_REFS)
     raw = storage.getItem(REVIEW_DECISIONS_STORAGE_KEY)
   } catch {
     return {

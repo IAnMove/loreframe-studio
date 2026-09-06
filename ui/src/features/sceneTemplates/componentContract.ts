@@ -1,5 +1,6 @@
 import {
   getCandidateSceneTemplate,
+  templateCatalogVersion,
   type TemplateSlotName,
 } from './catalog'
 
@@ -34,6 +35,7 @@ export type TemplateComponentContract = {
   readonly version: 1
   readonly templateId: string
   readonly templateVersion: 1
+  readonly catalogVersion: string
   readonly status: 'candidate'
   readonly generationPolicy: 'provided_only'
   readonly description: string
@@ -49,6 +51,7 @@ export function describeTemplateComponents(id: string): TemplateComponentContrac
     version: 1,
     templateId: template.id,
     templateVersion: template.version,
+    catalogVersion: templateCatalogVersion(template),
     status: 'candidate',
     generationPolicy: 'provided_only',
     description: template.description,

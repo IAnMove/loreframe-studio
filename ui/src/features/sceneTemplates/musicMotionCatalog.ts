@@ -51,6 +51,7 @@ const COMMON_LIMITS = [
   'No genera vídeo ni audio con IA y no modifica la canción adjunta.',
   'No utiliza estroboscopio ni flashes blancos deliberados. Algunos movimientos incluyen giros o desplazamientos fuertes: evita repetición densa y revisa el resultado para detectar mareo.',
   'El alpha limpio es un requisito de entrada; este catálogo no inspecciona píxeles ni garantiza que el asset lo cumpla.',
+  'Los movimientos que declaran un strip repiten la misma imagen en el eje indicado; pueden mostrar costuras si el asset no es tileable. No garantizan continuidad y requieren revisión artística de la preview y del render antes de aprobarlos; este catálogo no valida píxeles ni tileabilidad.',
 ] as const
 
 type MotionSpec = {
@@ -102,8 +103,8 @@ const DEFINITIONS = [
     title: 'Vuelo de velocidad',
     description: 'El protagonista cruza el encuadre de izquierda a derecha en una pasada rápida con una salida clara.',
     subject: 'Figura u objeto recortado orientado hacia el trayecto, sin exigir un ciclo de locomoción.',
-    background: 'Placa con carril, horizonte o rayas gráficas que sugiera velocidad sin depender de motion blur; puede desplazarse hacia la izquierda.',
-    note: 'La ruta va de izquierda a derecha y el fondo puede usar un strip hacia la izquierda a 95 unidades por segundo; no es sincronización al compás ni vuelo físico.',
+    background: 'Placa con carril, horizonte o rayas gráficas que sugiera velocidad sin depender de motion blur; puede desplazarse hacia la izquierda mediante un strip horizontal que repite la imagen y puede mostrar costuras si la fuente no es tileable en horizontal.',
+    note: 'La ruta va de izquierda a derecha y el fondo puede usar un strip horizontal hacia la izquierda a 95 unidades por segundo; no garantiza continuidad, requiere revisar artísticamente preview y render, no es sincronización al compás ni vuelo físico.',
     motionIntensity: 'high',
   }),
   makeTemplate({
@@ -111,8 +112,8 @@ const DEFINITIONS = [
     title: 'Caída infinita',
     description: 'El protagonista entra desde arriba, desciende por una ruta finita y se hace pequeño hasta salir por abajo.',
     subject: 'Figura u objeto recortado con orientación coherente durante el descenso y una silueta que tolere la reducción.',
-    background: 'Placa vertical o campo gráfico que mantenga legible la entrada superior y la salida inferior.',
-    note: 'Es una única ruta de arriba abajo con escala decreciente; no hay bucle limpio, mundo infinito, gravedad ni profundidad 3D.',
+    background: 'Placa vertical o campo gráfico que mantenga legible la entrada superior y la salida inferior; un strip vertical repite la imagen y puede mostrar costuras si la fuente no es tileable en vertical.',
+    note: 'Es una única ruta de arriba abajo con escala decreciente; el strip vertical no garantiza continuidad y requiere revisar artísticamente preview y render; no hay bucle limpio, mundo infinito, gravedad ni profundidad 3D.',
     duration: 6,
     motionIntensity: 'high',
   }),
@@ -260,8 +261,8 @@ const DEFINITIONS = [
     title: 'Cinta transportadora',
     description: 'El foco se desplaza en una dirección constante mientras el entorno conserva una sensación de cadena.',
     subject: 'Figura u objeto recortado que viaja horizontalmente sin necesitar animación de piernas.',
-    background: 'Placa con banda, flechas o módulos repetibles que sugieran una cinta plana.',
-    note: 'El transporte es un desplazamiento de capas con bucle opcional; no existe maquinaria, física ni colisión.',
+    background: 'Placa con banda, flechas o módulos repetibles que sugieran una cinta plana; un strip horizontal repite la imagen y puede mostrar costuras si la fuente no es tileable en horizontal.',
+    note: 'El transporte es un desplazamiento de capas con bucle opcional; el strip horizontal no garantiza continuidad y requiere revisar artísticamente preview y render; no existe maquinaria, física ni colisión.',
   }),
   makeTemplate({
     id: 'music-spotlight-relay',

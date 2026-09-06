@@ -238,6 +238,51 @@ test('two-subject choreography preserves distinct identities without swapping sl
   assert.equal(assetBySlot(scene).get('subject_2')?.source, bindings.subject_2.source)
 })
 
+test('musical identity slots reject repeated sources and canonical asset aliases', () => {
+  const template = MUSIC_MOTION_TEMPLATES.find(item => item.slots.some(slot => slot.id === 'subject_2'))
+  assert.ok(template)
+  const bindings = bindingsFor(template)
+
+  assert.throws(
+    () => compileCandidateScene(template.id, {
+      ...bindings,
+      subject_2: { ...bindings.subject_2, source: bindings.subject_1.source },
+    }),
+    /subject_1.*subject_2.*source coincide/i,
+  )
+
+  assert.throws(
+    () => compileCandidateScene(template.id, {
+      ...bindings,
+      subject_2: {
+        ...bindings.subject_2,
+        source: '/api/v1/file/another-subject.png?workspace=music-motion-tests',
+        catalogAtAssignment: { ...bindings.subject_2.catalogAtAssignment, assetId: bindings.subject_1.catalogAtAssignment.assetId },
+      },
+    }),
+    /subject_1.*subject_2.*assetId canónico/i,
+  )
+
+  assert.doesNotThrow(() => compileCandidateScene(template.id, {
+    ...bindings,
+    subject_2: {
+      ...bindings.subject_2,
+      source: '/api/v1/file/legitimate-variant.png?workspace=music-motion-tests',
+      catalogAtAssignment: { ...bindings.subject_2.catalogAtAssignment, assetId: 'asset-legitimate-variant' },
+    },
+  }))
+})
+
+test('legacy hero and prop are outside the musical identity duplicate rule', () => {
+  const legacy = CANDIDATE_SCENE_TEMPLATES.find(template => template.id === 'music-duet')
+  assert.ok(legacy)
+  const bindings = bindingsFor(legacy)
+  assert.doesNotThrow(() => compileCandidateScene(legacy.id, {
+    ...bindings,
+    prop: { ...bindings.prop, source: bindings.hero.source },
+  }))
+})
+
 test('all 24 music motion builders have distinct choreographies beyond assets and names', () => {
   const fingerprints = new Map()
   for (const template of MUSIC_MOTION_TEMPLATES) {

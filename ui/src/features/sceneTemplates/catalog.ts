@@ -497,8 +497,13 @@ export const CANDIDATE_SCENE_TEMPLATES = [
  * infer that a new choreography has an approved reference because it compiles. */
 export const ALL_SCENE_TEMPLATES: readonly SceneTemplateDefinition[] = [...CANDIDATE_SCENE_TEMPLATES, ...MUSIC_MOTION_TEMPLATES]
 
+// Membership is explicit: the legacy catalogue contains a few `music-*`
+// IDs of its own, and a slot name alone must not move one of those templates
+// into the expanded review version.
+const EXPANDED_TEMPLATE_IDS = new Set(MUSIC_MOTION_TEMPLATES.map(template => template.id))
+
 export function templateCatalogVersion(template: SceneTemplateDefinition): string {
-  return template.slots.some(slot => slot.id === 'subject_1') ? EXPANDED_CATALOG_VERSION : CATALOG_VERSION
+  return EXPANDED_TEMPLATE_IDS.has(template.id) ? EXPANDED_CATALOG_VERSION : CATALOG_VERSION
 }
 
 export function getCandidateSceneTemplate(id: string): SceneTemplateDefinition {

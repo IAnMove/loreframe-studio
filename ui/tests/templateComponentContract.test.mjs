@@ -3,8 +3,11 @@ import test from 'node:test'
 
 import {
   ALL_SCENE_TEMPLATES,
+  CATALOG_VERSION,
   CANDIDATE_SCENE_TEMPLATES,
+  EXPANDED_CATALOG_VERSION,
   getCandidateSceneTemplate,
+  templateCatalogVersion,
 } from '../src/features/sceneTemplates/catalog.ts'
 import {
   describeTemplateComponents,
@@ -26,7 +29,27 @@ test('resuelve las 24 plantillas legacy y las 24 musicales sin mezclar roles', (
     assert.equal(contract.schema, 'hocuspocus.template-components')
     assert.equal(contract.generationPolicy, 'provided_only')
     assert.equal(contract.status, 'candidate')
+    assert.equal(contract.catalogVersion, templateCatalogVersion(template))
   }
+})
+
+test('versiona por pertenencia explícita al catálogo, no por el nombre de un slot', () => {
+  for (const template of CANDIDATE_SCENE_TEMPLATES) {
+    assert.equal(templateCatalogVersion(template), CATALOG_VERSION)
+    assert.equal(describeTemplateComponents(template.id).catalogVersion, CATALOG_VERSION)
+  }
+  for (const template of ALL_SCENE_TEMPLATES.slice(CANDIDATE_SCENE_TEMPLATES.length)) {
+    assert.equal(templateCatalogVersion(template), EXPANDED_CATALOG_VERSION)
+    assert.equal(describeTemplateComponents(template.id).catalogVersion, EXPANDED_CATALOG_VERSION)
+  }
+
+  const legacyWithMusicRole = {
+    ...CANDIDATE_SCENE_TEMPLATES[0],
+    slots: [...CANDIDATE_SCENE_TEMPLATES[0].slots, {
+      id: 'subject_1', required: false, kinds: ['image'], description: 'test',
+    }],
+  }
+  assert.equal(templateCatalogVersion(legacyWithMusicRole), CATALOG_VERSION)
 })
 
 test('mantiene subject_2 separado de prop_1', () => {
