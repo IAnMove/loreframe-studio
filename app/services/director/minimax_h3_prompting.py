@@ -14,7 +14,7 @@ from typing import Any
 
 from .spoken_language import infer_h3_spoken_language
 from ..h3_prompt_finalization import finalize_h3_prompt
-from ..h3_prompt_policy import h3_field_labels, tagged_dialogue
+from ..h3_prompt_policy import audio_policy, h3_field_labels, tagged_dialogue
 
 
 FIRST_FRAME_REFERENCE = (
@@ -298,6 +298,49 @@ def format_minimax_h3_prompt(
     )
 
 
+def h3_audio_policy_from_payload(payload: dict | None) -> str:
+    """Read the effective audio policy; omitted or invalid values stay native."""
+    data = payload or {}
+    raw = data.get("h3_audio_policy")
+    if raw in (None, ""):
+        raw = data.get("minimax_h3_audio_policy")
+    if raw in (None, ""):
+        return "native"
+    try:
+        return audio_policy(raw)
+    except ValueError:
+        return "native"
+
+
+def _format_adapted_prompt(
+    shot: dict,
+    text: str,
+    *,
+    reference_mode: str,
+    audio_direction: str,
+    h3_audio_policy: str,
+    duration_seconds: float,
+) -> str:
+    return format_minimax_h3_prompt(
+        shot,
+        text,
+        reference_mode=reference_mode,
+        audio_direction=audio_direction,
+        h3_audio_policy=h3_audio_policy,
+        duration_seconds=duration_seconds,
+    )
+
+
+def _record_h3_prompt_trace(clip: dict, source: str, final: str, policy: str) -> None:
+    """Keep plan vs send on existing Director provenance fields."""
+    if not clip.get("_director_h3_source_prompt"):
+        clip["_director_h3_source_prompt"] = source
+    clip["_director_h3_compiled_prompt"] = final
+    audio_plan = dict(clip.get("_director_audio_plan") or {})
+    audio_plan["h3_audio_policy"] = policy
+    clip["_director_audio_plan"] = audio_plan
+
+
 def adapt_clip_plans_for_h3(
     clip_plans: list[dict],
     shots: list[dict] | None = None,
@@ -309,16 +352,20 @@ def adapt_clip_plans_for_h3(
 ) -> list[dict]:
     """Adapt all rendered Director plans without changing image prompts."""
     shots = shots or []
+    policy = h3_audio_policy_from_payload({"h3_audio_policy": h3_audio_policy})
     for index, clip in enumerate(clip_plans):
         shot = shots[index] if index < len(shots) and isinstance(shots[index], dict) else clip
-        clip["video_prompt"] = format_minimax_h3_prompt(
+        source = str(clip.get("video_prompt") or "")
+        final = _format_adapted_prompt(
             shot,
-            str(clip.get("video_prompt") or ""),
+            source,
             reference_mode=reference_mode,
             audio_direction=audio_direction,
-            h3_audio_policy=h3_audio_policy,
+            h3_audio_policy=policy,
             duration_seconds=duration_seconds,
         )
+        clip["video_prompt"] = final
+        _record_h3_prompt_trace(clip, source, final, policy)
         windows = clip.get("window_prompts")
         if isinstance(windows, list):
             adapted: list[Any] = []
@@ -326,22 +373,22 @@ def adapt_clip_plans_for_h3(
                 if isinstance(window, dict):
                     updated = dict(window)
                     key = "prompt" if "prompt" in updated else "text"
-                    updated[key] = format_minimax_h3_prompt(
+                    updated[key] = _format_adapted_prompt(
                         shot,
                         str(updated.get(key) or ""),
                         reference_mode=reference_mode,
                         audio_direction=audio_direction,
-                        h3_audio_policy=h3_audio_policy,
+                        h3_audio_policy=policy,
                         duration_seconds=duration_seconds,
                     )
                     adapted.append(updated)
                 else:
-                    adapted.append(format_minimax_h3_prompt(
+                    adapted.append(_format_adapted_prompt(
                         shot,
                         str(window),
                         reference_mode=reference_mode,
                         audio_direction=audio_direction,
-                        h3_audio_policy=h3_audio_policy,
+                        h3_audio_policy=policy,
                         duration_seconds=duration_seconds,
                     ))
             clip["window_prompts"] = adapted

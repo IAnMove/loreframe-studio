@@ -763,6 +763,9 @@ _H3_AUDIO_CLAUSE_RE = re.compile(
     r"(?:^|\n)\s*Audio\s*:.*?(?=\n\s*\S|\Z)",
     re.IGNORECASE | re.DOTALL,
 )
+_H3_QUOTED_SPAN_RE = re.compile(
+    r'"([^"\r\n]{1,500})"|“([^”\r\n]{1,500})”|«([^»\r\n]{1,500})»',
+)
 
 
 def _strip_h3_sound_instructions(text: str) -> str:
@@ -775,6 +778,7 @@ def _strip_h3_sound_instructions(text: str) -> str:
         return f"@@H3_D_{len(protected) - 1}@@"
 
     body = _H3_STRICT_DIALOGUE_RE.sub(stash, str(text or ""))
+    body = _H3_QUOTED_SPAN_RE.sub(stash, body)
     body = _H3_AUDIO_CLAUSE_RE.sub(" ", body)
     chunks = re.split(r"(?<=[.!?])\s+", body)
     kept: list[str] = []

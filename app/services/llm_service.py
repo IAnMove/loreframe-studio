@@ -3792,9 +3792,10 @@ def enhance_prompt(
             ),
             system_prompt=(
                 "Write only the concise dialogue requested by the user. Output one to three lines in "
-                "the exact form 'Speaker description (S1): <d>[English] Literal words.</d>', using "
-                "stable sequential speaker IDs. Communicate the requested topic. No narration, "
-                "markdown, quotation marks, headings, or dialogue beyond the word budget."
+                "the exact form 'Speaker description (S1): <d>[Language] Literal words.</d>', using "
+                "stable sequential speaker IDs and the language of the spoken words. Communicate the "
+                "requested topic. No narration, markdown, quotation marks, headings, or dialogue "
+                "beyond the word budget."
             ),
             max_new_tokens=min(320, effective_max_tokens),
             temperature=min(float(temperature), 0.5),
@@ -3817,6 +3818,17 @@ def enhance_prompt(
             )
         else:
             print("[Enhance] Focused H3 dialogue pass returned no valid <d> block.")
+
+    if is_h3_structured:
+        result = _apply_creative_supporting_dialogue(
+            result,
+            prompt,
+            planning_style=planning_style,
+            duration_seconds=duration_seconds,
+            is_h3_ref2va=is_h3_ref2va,
+            effective_max_tokens=effective_max_tokens,
+            temperature=temperature,
+        )
 
     # Explicit user dialogue is immutable. Even if both LLM attempts omit it,
     # compile every quoted line into H3 syntax before returning the prompt.
@@ -3853,6 +3865,19 @@ def _h3_requests_speech(text: str) -> bool:
             flags=re.IGNORECASE,
         )
     )
+
+
+_H3_EXTRA_SPEECH_RE = re.compile(
+    r"\b(?:add(?:ing)?\s+(?:a\s+)?(?:short\s+)?(?:reply|line|phrase|exchange)|"
+    r"supporting\s+dialogue|"
+    r"a[nñ]ade(?:r)?\s+(?:una?\s+)?(?:r[eé]plica|frase|l[ií]nea)|"
+    r"di[aá]logo\s+adicional)\b",
+    re.IGNORECASE,
+)
+
+
+def _h3_requests_extra_speech(text: str) -> bool:
+    return bool(_H3_EXTRA_SPEECH_RE.search(str(text or "")))
 
 
 def _extract_h3_dialogue_blocks(text: str) -> list[str]:
@@ -3903,18 +3928,25 @@ def _build_h3_dialogue_requirement(
         required = "\n".join(
             f'- REQUIRED VERBATIM ({line["speaker"]}): {tagged_dialogue(line["language"], line["text"])}' for line in quotes
         )
+        extra = (
+            " The user asked for an additional spoken line. Write that new line with a stable "
+            "speaker ID, a [Language] tag matching the spoken words, and a duration budget. "
+            "Do not copy a canned sentence from the system."
+            if planning_style == "creative" and _h3_requests_extra_speech(prompt)
+            else ""
+        )
         return (
             "IMMUTABLE H3 DIALOGUE CONTRACT: The user supplied the spoken lines below. "
             "Every line must appear verbatim inside a <d> block in the output; do not summarize, "
             "paraphrase, censor, or omit it. Additional speech follows WRITING MODE. Give each line a stable (S1), (S2), etc. "
             f"speaker outside its tag. Never repeat these words as ordinary quoted text in summary "
-            f"or any other field.\n{required}\n{timed_clause}"
+            f"or any other field.{extra}\n{required}\n{timed_clause}"
         )
     if _h3_requests_speech(prompt):
         return (
             "MANDATORY H3 DIALOGUE CONTRACT: The user explicitly requests speech but supplied no "
             "script. Write concise, meaningful dialogue that communicates the requested subject, "
-            "using stable speaker IDs and one or more <d>[English] literal words</d> blocks. "
+            "using stable speaker IDs and one or more <d>[Language] literal words</d> blocks. "
             "Writing only 'speaks', 'talks', or 'they discuss' makes the output invalid. "
             f"{timed_clause}"
         )
@@ -4011,6 +4043,70 @@ def _inject_missing_h3_dialogue(result: str, prompt: str, *, ref2va: bool) -> st
             count=1,
         )
     return f"{result or ''}\n{field}: {additions}".strip()
+
+
+def _apply_creative_supporting_dialogue(
+    result: str,
+    prompt: str,
+    *,
+    planning_style: str,
+    duration_seconds: Optional[float],
+    is_h3_ref2va: bool,
+    effective_max_tokens: int,
+    temperature: float,
+) -> str:
+    """Ask the LLM for a supporting line. Never invent a canned sentence."""
+    from services.h3_prompt_policy import planning_style as normalize_style
+    from services.h3_story_contract import (
+        extract_locked_lines,
+        requests_only_supplied_lines,
+        requests_silence,
+    )
+
+    if normalize_style(planning_style) != "creative":
+        return result
+    if not _h3_requests_extra_speech(prompt):
+        return result
+    if requests_only_supplied_lines(prompt):
+        return result
+    locked_lines = extract_locked_lines(prompt)
+    if requests_silence(prompt) and not locked_lines:
+        return result
+    locked = {line["text"] for line in locked_lines}
+    extras = [
+        block for block in _extract_h3_dialogue_blocks(result) if block not in locked
+    ]
+    if extras:
+        return result
+    word_budget = max(4, int(duration_seconds or 8))
+    print("[Enhance] Creative extra line missing; requesting a supporting line from the LLM.")
+    fragment = generate(
+        prompt=(
+            f"Duration: {duration_seconds or 8} seconds. Total additional dialogue budget: "
+            f"at most {word_budget} spoken words. Request: {prompt}"
+        ),
+        system_prompt=(
+            "Write only the additional spoken line the user asked for. Output one line in the "
+            "form 'Speaker description (S2): <d>[Language] Literal words.</d>'. Match the "
+            "language of the spoken words. Do not repeat the already supplied quoted lines. "
+            "No narration."
+        ),
+        max_new_tokens=min(240, effective_max_tokens),
+        temperature=min(float(temperature), 0.5),
+        image_paths=None,
+        enable_thinking=False,
+        thinking_budget=2048,
+        frequency_penalty=0.4,
+        presence_penalty=0.1,
+    )
+    fragment = _clean_enhance_output(fragment, preserve_structure=True) if fragment else ""
+    extra_blocks = [
+        block for block in _extract_h3_dialogue_blocks(fragment) if block not in locked
+    ]
+    if not extra_blocks:
+        print("[Enhance] Creative extra-line pass returned no new <d> block.")
+        return result
+    return _inject_h3_generated_dialogue(result, fragment, ref2va=is_h3_ref2va)
 
 
 def _inject_h3_generated_dialogue(result: str, fragment: str, *, ref2va: bool) -> str:
