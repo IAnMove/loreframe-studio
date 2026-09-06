@@ -112,7 +112,7 @@ def test_story_lab_hands_backend_jobs_to_the_durable_registry():
 def test_story_lab_refresh_recovers_the_backend_job_without_opening_a_client_root():
     source = STORY.read_text(encoding="utf-8")
     refresh = source.split("const savedJobId = window.localStorage.getItem", 1)[1].split(
-        "useEffect(() => {\n    if (project.projectType === 'quick_video')", 1,
+        "const openStorySection", 1,
     )[0]
 
     assert "api.getStoryGenerationStatus(savedJobId)" in refresh
