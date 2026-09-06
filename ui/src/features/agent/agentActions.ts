@@ -2053,6 +2053,10 @@ export async function reconcileAgentTurnWithRequest(
   turn: AgentTurn,
   history: ExampleConversation[] = [],
 ): Promise<AgentTurn> {
+  const { reconcileStoryVisualRequest, isComicVisualContext } = await import('./storyVisualRequest')
+  if (isComicVisualContext(request)) turn = { ...turn, actions: turn.actions.filter(action => action.type !== 'generate_story_visuals') }
+  const storyVisualTurn = reconcileStoryVisualRequest(request, turn)
+  if (storyVisualTurn) return storyVisualTurn
   const programmaticTurn = reconcileProgrammaticVideoRequest(request, turn)
   if (programmaticTurn) return programmaticTurn
   const { maybeExampleTurn } = await import('./agentExamples')
