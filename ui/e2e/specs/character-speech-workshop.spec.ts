@@ -45,6 +45,8 @@ test('Character Creator opens the manual speech workshop and saves reviewed draf
   await drawer.click()
   await expect(workshop.getByText(/Unsaved changes/)).toBeVisible()
   await page.getByRole('tab', { name: 'Story Lab', exact: true }).click()
+  await expect(page.getByRole('navigation', { name: 'Story Lab sections' })).toBeVisible()
+  await expect(workshop).toHaveCount(0)
   await page.getByRole('tab', { name: 'Character Creator', exact: true }).click()
   await drawer.click()
   await expect(workshop.getByText(/Unsaved changes/)).toBeVisible()
