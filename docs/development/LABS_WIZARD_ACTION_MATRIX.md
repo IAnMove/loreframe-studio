@@ -24,15 +24,15 @@ Status: freeze of current contracts. This document does not implement the later 
 
 | Id | Phase | Summary |
 |---|---|---|
-| `fused_dropped_by_model_for_manifest` | L1 | model_for_manifest keeps legacy and _full but maps fused IDs to minimax_h3 / minimax_h3_ref2va. |
-| `partial_global_profile_guard` | L2 | SeriesLabPanel global-profile equality omits writingBaseUrl, flowShift, audioShift, modelProfile. |
-| `approve_all_replaces_chosen_takes` | L3 | Approve all / review_series_attempts all_latest can replace an already chosen take with a newer attempt. |
-| `script_shots_dialogue_desync` | L4 | update_series_episode can change script dialogue while shots.dialogueBeats stay old; shot_generation_prompt uses the old line. |
+| `fused_dropped_by_model_for_manifest` | L1 | Addressed: fused IDs stay fused; references use minimax_h3_ref2va_fused_turbo; frames use minimax_h3_fused_turbo. |
+| `partial_global_profile_guard` | L2 | Addressed: seriesProviderMatchesGlobal includes writingBaseUrl, flowShift, audioShift and modelProfile. |
+| `approve_all_replaces_chosen_takes` | L3 | Addressed: pending takes / all_latest keep valid finals; replace_latest and explicit selected_latest remain replace paths. |
+| `script_shots_dialogue_desync` | L4 | Addressed: script edits annotate stale shots; render refuses them; sync is an explicit operation. |
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
 | `wizard_auto_approves_canon` | L7 | Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series. |
 | `false_success_invisible_tab` | L8 | Addressed: open_story_section resolves a visible tab or explains incompatibility; it never claims an invisible tab opened. |
-| `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
+| `t2v_double_mode_and_image_requirements` | L9 | Addressed: exclusive visual modes; T2V does not require identity images. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
 | `ace_labelled_as_minimax` | L11 | Addressed: StoryMusicSettingsBar names ACE, MiniMax Music 3 local and MiniMax API from the effective model. |
 | `runtime_calls_omit_explicit_policy` | H-A | Addressed: runtime adapt_clip_plans_for_h3 now passes effective policy; ref2va quote path uses models-safe language tags. Default remains native when omitted. |
