@@ -140,7 +140,8 @@ def _dialogue_sentence(item: Any, speaker_ids: dict[str, str]) -> str:
     lead = f"{speaker} ({stable_id}) {delivery}"
     if action:
         lead += f" while {action}"
-    return f"{lead}: <d>[{language}] {text}</d>. Immediately after the line, the speaker closes their mouth."
+    from .h3_prompt_policy import tagged_dialogue
+    return f"{lead}: {tagged_dialogue(language, text)}. Immediately after the line, the speaker closes their mouth."
 
 
 def _window_audio_fields(plan):

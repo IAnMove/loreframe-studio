@@ -17,6 +17,13 @@ import math
 import re
 from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 
+from ..h3_prompt_policy import (
+    CONTEXT_IR_FIELDS as _H3_BASE_FIELDS,
+    REF2VA_FIELDS as _H3_REF2VA_FIELDS,
+    h3_field_structure_errors,
+    tagged_dialogue,
+)
+
 
 class H3DialogueContractError(ValueError):
     """Raised when an H3 prompt cannot be made safe for native speech."""
@@ -161,19 +168,6 @@ _H3_NEGATED_VOCAL_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
-_H3_BASE_FIELDS = (
-    "integrated_multimodal_description",
-    "overall_soundscape",
-    "non_diegetic_music",
-)
-_H3_REF2VA_FIELDS = (
-    "subject_definitions",
-    "summary",
-    "retention_analysis",
-    "detailed_description",
-    "overall_soundscape",
-    "non_diegetic_music",
-)
 _H3_ALL_FIELDS = tuple(dict.fromkeys((*_H3_REF2VA_FIELDS, *_H3_BASE_FIELDS)))
 _H3_CUSTOM_SECTION_RE = re.compile(
     r"\s+(?:OPENING CONTINUITY|FINAL BLOCKING|"
@@ -296,7 +290,7 @@ def h3_dialogue_tag(spoken_text: Any, forced_language: str = "") -> str:
     language, words = _dialogue_payload(spoken_text)
     if forced_language:
         language = forced_language
-    return f"<d>[{language}] {words}</d>"
+    return tagged_dialogue(language, words)
 
 
 def _replace_first_outside_dialogue(
@@ -1819,17 +1813,7 @@ def validate_h3_prompt_contract(
     mode = str(mode or "t2va").strip().lower()
     expected = _H3_REF2VA_FIELDS if mode == "ref2va" else _H3_BASE_FIELDS
     errors = validate_h3_vocal_contract(text, dialogue_beats)
-    positions: list[int] = []
-    for field in expected:
-        matches = list(re.finditer(
-            rf"(?mi)^\s*{re.escape(field)}\s*:", text,
-        ))
-        if len(matches) != 1:
-            errors.append(f"expected one {field} field, found {len(matches)}")
-        elif matches:
-            positions.append(matches[0].start())
-    if len(positions) == len(expected) and positions != sorted(positions):
-        errors.append("Context-IR fields are out of order")
+    errors.extend(h3_field_structure_errors(text, "ref2va" if mode == "ref2va" else "context"))
     unexpected = set(_H3_ALL_FIELDS) - set(expected)
     for field in unexpected:
         if re.search(rf"(?mi)^\s*{re.escape(field)}\s*:", text):
