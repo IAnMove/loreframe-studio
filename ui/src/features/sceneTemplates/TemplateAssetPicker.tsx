@@ -18,11 +18,14 @@ export interface TemplateAssetPickerProps {
 
 function previewUrlFor(asset: AssetCatalogItem, workspace: string): string | null {
   if (asset.kind !== 'image') return null
-  const location = asset.locations.find(item => item.workspace_id === workspace)
+  const locations = asset.locations.filter(item => item.workspace_id === workspace)
+  if (locations.length !== 1) return null
+  const location = locations[0]
   const raw = location?.url
   // Only an API-relative file URL from the active workspace may enter an img tag.
   // In particular, never use asset.url as a cross-workspace or remote fallback.
-  if (!raw || !raw.startsWith('/api/v1/file/')) return null
+  if (!raw || /[\\/]/.test(location.filename)
+    || raw !== `/api/v1/file/${encodeURIComponent(location.filename)}?workspace=${encodeURIComponent(workspace)}`) return null
   try {
     const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
     const parsed = new URL(raw, origin)

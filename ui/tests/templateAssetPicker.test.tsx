@@ -176,3 +176,15 @@ test('rechaza URLs remotas, blob y ubicaciones de otro workspace para previews',
     globalThis.fetch = originalFetch
   }
 })
+
+test('no carga una preview cuyo query apunta a otro workspace aunque la ubicación diga el activo', { concurrency: false }, async () => {
+  const originalFetch = globalThis.fetch
+  const mismatched = asset({ locations: [{ workspace_id: 'default', filename: 'hero.png', url: '/api/v1/file/hero.png?workspace=other' }] })
+  globalThis.fetch = (async () => new Response(JSON.stringify({ assets: [mismatched], total: 1 }))) as typeof fetch
+  try {
+    const view = await renderPicker({ onPick: () => undefined })
+    await view.screen.findByRole('button', { name: 'Seleccionar hero.png' })
+    assert.equal(view.screen.queryByRole('img'), null)
+    view.cleanup()
+  } finally { globalThis.fetch = originalFetch }
+})
