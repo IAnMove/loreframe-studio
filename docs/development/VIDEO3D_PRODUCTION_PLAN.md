@@ -323,3 +323,16 @@ humana breve de funcionamiento/creatividad, no una revisión de código imaginar
   desde ese merge. Core revisado por el agente principal; UI/DOM delegados a Luna
   y sujetos a revisión del principal. No equivale a autorización global de Wizard.
 - PR 02b–13: diseñados, no implementados por este checkpoint.
+- PR 02a: [#165](https://github.com/IAnMove/hocuspocus/pull/165) mezclado en
+  `development` como `353a1225c63e0c1ffc3fed8459bc280bbe883ba3`; CI obligatorio y
+  Cursor completados sobre `de99a61b67ee6a3a4237ef4a8c88930c604d2b4e`.
+- 2026-09-06, comprobación visual solicitada por el usuario: rama aislada
+  `fix/video3d-facial-playback-contract`. Detectados dos defectos de reproducción:
+  la normalización descartaba `eyes/open` al importar y el reposo sin diálogo
+  inventaba una frase de fallback. Corregidos localmente con pruebas de contrato.
+  La demo «La noche es nuestra» usa personajes SVG originales, compositor real
+  del navegador, música procedural y voces españolas CPU eSpeak NG con eventos
+  de fonemas. El ensamblado de planos/audio es orquestación externa de la demo,
+  NO implementación de las fases 06–10 ni validación de canto natural.
+  Los medios permanecen fuera del repositorio. No se llaman los backends vivos
+  ni se descarga o ejecuta ningún generador neuronal de vídeo.
