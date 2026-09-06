@@ -88,6 +88,28 @@ const autoMultiShotGlbRecipe = () => {
   }
 }
 
+const suppliedCacheRecipe = (name: string, source: string) => {
+  const layersFor = (id: string) => [
+    { id: `${id}-camera`, type: 'camera', cameraPreset: 'camera-locked' },
+    { id: `${id}-hero`, type: 'model3d', asset: 'hero' },
+  ]
+  const firstLayers = layersFor(`${name}-first`)
+  const secondLayers = layersFor(`${name}-second`)
+  return {
+    version: 1,
+    name: `${name}-recipe`,
+    generationPolicy: 'auto',
+    record: false,
+    save: false,
+    assets: [{ id: 'hero', kind: 'model3d', source }],
+    shots: [
+      { name: `${name}-first`, duration: 2, layers: firstLayers },
+      { name: `${name}-second`, duration: 2, layers: secondLayers },
+    ],
+    scene: { width: 1280, height: 720, fps: 30, duration: 2, layers: firstLayers },
+  }
+}
+
 async function panelModules() {
   const [{ render, screen, fireEvent, waitFor, cleanup }, { ensureUiI18n, setUiLanguage }, { SceneRecipePanel }] = await Promise.all([
     import('@testing-library/react'),
@@ -273,6 +295,87 @@ test('mountShot persists a stricter caller policy after the checkbox is cleared'
     await waitFor(() => assert.equal(appliedPolicies.length, 3))
     assert.deepEqual(appliedPolicies, ['auto', 'no_video_generation', 'no_video_generation'])
     assert.equal(JSON.parse(recipeJson.value).generationPolicy, 'no_video_generation')
+  } finally {
+    globalThis.fetch = originalFetch
+    cleanup()
+  }
+})
+
+test('planning a new recipe invalidates the previous mounted recipe cache', async () => {
+  const { render, screen, fireEvent, waitFor, cleanup, setUiLanguage, SceneRecipePanel } = await panelModules()
+  await setUiLanguage('en')
+  const originalFetch = globalThis.fetch
+  const applied: Array<{ name: string; source: string | undefined }> = []
+  const compiledSources: string[] = []
+  let llmCalls = 0
+  const recipeB = suppliedCacheRecipe('B', 'b.glb')
+  globalThis.fetch = async (input, init) => {
+    const url = String(input)
+    if (!url.includes('/api/v1/llm/generate')) throw new Error(`unexpected request: ${url}`)
+    llmCalls += 1
+    assert.equal(typeof init?.body, 'string')
+    return new Response(JSON.stringify({ text: JSON.stringify(recipeB) }), { status: 200 })
+  }
+  try {
+    render(<SceneRecipePanel
+      outputs={[]}
+      onApply={async (recipe, scene) => {
+        applied.push({ name: recipe.name, source: recipe.assets[0]?.source })
+        compiledSources.push(scene.layers.find(layer => layer.type === 'model3d')?.source || '')
+      }}
+    />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recipe JSON' }), {
+      target: { value: JSON.stringify(suppliedCacheRecipe('A', 'a.glb')) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate + compose' }))
+    await waitFor(() => assert.deepEqual(applied, [{ name: 'A-recipe', source: 'a.glb' }]))
+    fireEvent.click(screen.getByRole('button', { name: 'Plan scene' }))
+    await waitFor(() => assert.ok(screen.getByRole('button', { name: 'B-second' })))
+    assert.equal(llmCalls, 1)
+    fireEvent.click(screen.getByRole('button', { name: 'B-second' }))
+    await waitFor(() => assert.equal(applied.length, 2))
+    assert.deepEqual(applied[1], { name: 'B-recipe', source: 'b.glb' })
+    assert.match(compiledSources[1], /\/b\.glb(?:\?|$)/)
+    const recipeJson = screen.getByRole('textbox', { name: 'Recipe JSON' }) as HTMLTextAreaElement
+    assert.equal(JSON.parse(recipeJson.value).name, 'B-recipe')
+    assert.equal(JSON.parse(recipeJson.value).assets[0].source, 'b.glb')
+    fireEvent.change(recipeJson, { target: { value: '{incomplete editing' } })
+    assert.equal(screen.queryByRole('button', { name: 'B-second' }), null)
+    assert.equal(screen.queryByRole('button', { name: 'A-second' }), null)
+  } finally {
+    globalThis.fetch = originalFetch
+    cleanup()
+  }
+})
+
+test('Example cannot restore the previous mounted recipe', async () => {
+  const { render, screen, fireEvent, waitFor, cleanup, setUiLanguage, SceneRecipePanel } = await panelModules()
+  await setUiLanguage('en')
+  const originalFetch = globalThis.fetch
+  let fetchCalls = 0
+  const applied: string[] = []
+  globalThis.fetch = async () => {
+    fetchCalls += 1
+    throw new Error('unexpected network request')
+  }
+  try {
+    render(<SceneRecipePanel
+      outputs={[]}
+      onApply={async recipe => { applied.push(recipe.name) }}
+    />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recipe JSON' }), {
+      target: { value: JSON.stringify(suppliedCacheRecipe('A', 'a.glb')) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate + compose' }))
+    await waitFor(() => assert.deepEqual(applied, ['A-recipe']))
+    fireEvent.click(screen.getByRole('button', { name: 'Example' }))
+    assert.equal(JSON.parse((screen.getByRole('textbox', { name: 'Recipe JSON' }) as HTMLTextAreaElement).value).name, 'saucer-cruise')
+    fireEvent.click(screen.getByRole('button', { name: 'cruise' }))
+    const error = await waitFor(() => screen.getByText(/has no source/))
+    assert.match(error.textContent || '', /stars|saucer/)
+    assert.deepEqual(applied, ['A-recipe'])
+    assert.equal(fetchCalls, 0)
+    assert.equal(JSON.parse((screen.getByRole('textbox', { name: 'Recipe JSON' }) as HTMLTextAreaElement).value).name, 'saucer-cruise')
   } finally {
     globalThis.fetch = originalFetch
     cleanup()

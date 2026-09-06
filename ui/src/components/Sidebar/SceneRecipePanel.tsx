@@ -232,8 +232,6 @@ export function SceneRecipePanel({
   const [plannedRecipe, setPlannedRecipe] = useState<SceneRecipe | null>(null)
   const [activeShot, setActiveShot] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
-  const recipeRef = useRef<SceneRecipe | null>(null)
-  const resolvedRef = useRef<Record<string, string>>({})
   const imageInputRef = useRef<HTMLInputElement>(null)
   const modelInputRef = useRef<HTMLInputElement>(null)
 
@@ -392,8 +390,7 @@ export function SceneRecipePanel({
       })
       const stored = withSceneGenerationPolicy(withResolvedSources(recipe, resolved), callerPolicy)
       setRecipeText(JSON.stringify(stored, null, 2))
-      recipeRef.current = stored
-      resolvedRef.current = resolved
+      setPlannedRecipe(stored)
       const nextShots = listRecipeShots(stored)
       setShots(nextShots)
       setActiveShot(0)
@@ -412,20 +409,18 @@ export function SceneRecipePanel({
     setBusy('run')
     setError(null)
     try {
-      const recipe = withSceneGenerationPolicy(recipeRef.current || parseSceneRecipeText(recipeText), callerPolicy)
-      const resolved = Object.keys(resolvedRef.current).length
-        ? resolvedRef.current
-        : Object.fromEntries(recipe.assets.filter(asset => asset.source).map(asset => [asset.id, asset.source as string]))
+      // Resolved sources already live in the editable JSON. Keeping a second
+      // cached recipe/map can restore an earlier run after planning or editing.
+      const recipe = withSceneGenerationPolicy(parseSceneRecipeText(recipeText), callerPolicy)
+      const resolved = Object.fromEntries(recipe.assets.filter(asset => asset.source).map(asset => [asset.id, asset.source as string]))
       const nextShots = listRecipeShots(recipe)
       const shot = nextShots[index]
       if (!shot) return
       setActiveShot(index)
-      const stored = withSceneGenerationPolicy(recipe, callerPolicy)
-      await applyShot(stored, shot, resolved)
-      recipeRef.current = stored
-      setRecipeText(JSON.stringify(stored, null, 2))
-      setPlannedRecipe(stored)
-      setShots(listRecipeShots(stored))
+      await applyShot(recipe, shot, resolved)
+      setRecipeText(JSON.stringify(recipe, null, 2))
+      setPlannedRecipe(recipe)
+      setShots(nextShots)
       setStatus(t('recipe.mountedEdit', { name: shot.name }))
     } catch (reason) {
       setError(recipeErrorMessage(reason, t))
@@ -627,6 +622,7 @@ export function SceneRecipePanel({
             setRecipeText(JSON.stringify(EXAMPLE_SAUCER_CRUISE_RECIPE, null, 2))
             setShots(listRecipeShots(EXAMPLE_SAUCER_CRUISE_RECIPE))
             setPlannedRecipe(EXAMPLE_SAUCER_CRUISE_RECIPE)
+            setActiveShot(0)
           }}
           className="flex items-center justify-center gap-1 rounded border border-border bg-bg-primary px-2 py-1.5 text-[10px] disabled:opacity-40"
         >
@@ -655,7 +651,7 @@ export function SceneRecipePanel({
           rows={8}
           value={recipeText}
           disabled={locked}
-          onChange={event => { setRecipeText(event.target.value); setPlannedRecipe(null) }}
+          onChange={event => { setRecipeText(event.target.value); setPlannedRecipe(null); setShots([]); setActiveShot(0) }}
           spellCheck={false}
           className="mt-1 w-full resize-y rounded border border-border bg-bg-primary px-2 py-1.5 font-mono text-[9px] text-text-primary"
         />
