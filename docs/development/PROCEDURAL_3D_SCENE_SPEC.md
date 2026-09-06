@@ -16,7 +16,7 @@ a 3D world editor.
 
 | Capability | Current behaviour | Not implied |
 |---|---|---|
-| GLB in a composition | One `model-viewer` per `model3d` layer. `src` is the gallery/file URL. | Shared scene graph, collisions, shadows between layers |
+| GLB in a composition | Isolated `model-viewer` instances; `src` is the gallery/file URL. Orbit/strip may duplicate a layer (cap 4). | Shared scene graph, collisions, shadows between layers |
 | Clip playback | `animation.clip` is an **exact** `animation-name` string. Time comes from `getSceneClipTime` (`sceneClip.ts`) and `viewer.currentTime` while paused. | Clip identity by index; semantic idle/run/dance mapping |
 | Viewer orientation | `camera-orbit` from `transform.rotationY` / `rotationX` (default X=75). Extra yaw via `orientation`. | A scene camera with a world-space eye/look |
 | Camera layer | 2D pan/zoom/roll/shake applied to the frame. Parallax is a 2.5D multiplier. | Perspective camera, depth of field, occlusion |
@@ -60,10 +60,15 @@ Prove **one** rehydratable shot before a catalog:
 - Two mesh objects (`subject_1`, `subject_2` or `subject_1` + `prop`)
 - One camera
 - One light
-- One **synthetic** animated GLB (the G1 test builder, not the private Meshy file)
-- Deterministic clock: `t_scene` in seconds, integer frame `round(t * fps)`
+- One **synthetic** animated GLB built in tests the same way G1 does
+  (`pack_glb` / `two_clip_scene` in `tests/test_procedural_glb_inspector.py`).
+  G1 does not export a builder. The private Meshy file is not a fixture.
+- Deterministic clock matching compositor export: `frame_count = round(duration * fps)`,
+  frame `i` is `t = min(duration, i / fps)` for `i = 0 .. frame_count-1`.
+  Specify the same rounding in Python and JS (do not mix Python half-even
+  `round` with JS `Math.round` at `*.5` without an explicit rule).
 - Preview + CPU/software export used by tests (no GPU, no model-viewer required in CI)
-- Save and reopen: same asset IDs, clip indices, camera, light, frames 0 and N
+- Save and reopen: same asset IDs, clip indices, camera, light, first and last encoded frames
 
 Units: metres, Y-up, right-handed, camera looks down −Z unless stored
 otherwise. Do not mix frame-percent compositor space into this graph.
@@ -106,7 +111,7 @@ When a capability cannot apply, it is visible and disabled with a reason from
 the G1 report or the resolver, for example:
 
 - no skins → skeletal clip UI disabled
-- `extensionsRequired` → unsupported
+- G1 `extensions_required` (copy of glTF `extensionsRequired`) → unsupported
 - external buffers → blocked
 - `name_collision` → picker must show index, not a single name
 - kind not GLB → 409 from G2, not a silent image fallback
@@ -116,10 +121,11 @@ clip name.
 
 ## 6. Time, persistence, languages
 
-- Scene time is deterministic. Clip local time follows the same rules as
-  `getSceneClipTime` (offset, speed, trim, loop, reverse) but is computed
-  against G1 `duration_seconds` when `duration_status=verified`. If duration
-  is `unknown`/`invalid`, playback is disabled, not guessed as 0.
+- Scene time is deterministic. Reuse offset/speed/trim/loop/reverse from
+  `getSceneClipTime`, but only when G1 `duration_status=verified` and
+  `duration_seconds` is a finite number. If duration is `unknown`/`invalid`,
+  disable playback. Do not call `getSceneClipTime` with 0 or `undefined`
+  (that helper treats missing duration as 0.001s and returns 0).
 - Persistence uses opaque IDs (project, workspace, asset, run). Filenames are
   display. See [domain model](DOMAIN_MODEL_AND_ASSET_PROVENANCE.md).
 - Languages stay separate: UI chrome, conversation, technical prompt, lyrics /
@@ -131,7 +137,7 @@ Cheap tests (no GPU, no private GLB):
 
 - Camera/orbit interval maths
 - Missing clip index/name pair
-- Deterministic frame 0 and frame N for the synthetic GLB
+- Deterministic first and last encoded frames for the synthetic GLB
 - Save → reopen equality of IDs and clip bindings
 - Cancellation of export
 - Simulated CPU export (software frames, hashed)
@@ -147,9 +153,9 @@ Local smoke (manual, after G2 + engine ownership):
 |---|---|---|
 | GROK-API-001 answer | G2 unmounted router + ASGI tests | No `_launch_runtime.py` |
 | G2 + principal owns mount | Wire router in launch | **Yes** — `_launch_runtime.py` |
-| Vertical approved | Scene-graph types + persistence | **Yes** — `ui/src/types/index.ts` |
+| Vertical approved | New scene-graph types + persistence (sibling of compositor `Scene`, not fields mixed into it) | Only if the principal transfers `ui/src/types/index.ts`; otherwise a new module |
 | Types landed | CPU preview/export test harness | No compositor UI |
-| Harness green | Scene-mode UI | **Yes** — `SceneAnimatorPanel.tsx` |
+| Harness green | Scene-mode UI in a **new** panel/module | Do not land world-space editing in `SceneAnimatorPanel.tsx` unless the principal owns that PR |
 | Never in this track | Omarchy videoclip, 2D Character Kit speech, 42003/42004 | Principal |
 
 G3 stops here: this file. No second renderer, no buttons, no private GLB in
