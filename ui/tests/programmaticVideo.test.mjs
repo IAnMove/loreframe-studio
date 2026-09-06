@@ -21,6 +21,13 @@ test('programmatic generation policy is conservative in Spanish and English', ()
     ['Build a programmatic Video3D scene; you may generate images for missing backgrounds.', 'no_video_generation'],
     ['Monta un Video3D sólo con mis assets; puedes generar imágenes si falta algo.', 'provided_only'],
     ['Construye una escena Video3D con tus recursos, sin vídeo generativo.', 'provided_only'],
+    ['Monta Video3D. No puedes generar imágenes.', 'provided_only'],
+    ['Monta Video3D. No permito generar imágenes. Puedes generar música.', 'provided_only'],
+    ['Make a compositor scene. Do not allow generating images.', 'provided_only'],
+    ['Monta Video3D con el diálogo literal «puedes generar imágenes».', 'provided_only'],
+    ['Build Video3D with lyrics "you may generate images".', 'provided_only'],
+    ["Monta Video3D con el diálogo literal 'puedes generar imágenes'.", 'provided_only'],
+    ['Create a video using only my existing assets. You may generate images.', 'provided_only'],
   ]
   for (const [request, expected] of cases) assert.equal(requestedProgrammaticPolicy(request), expected, request)
 })
@@ -28,6 +35,7 @@ test('programmatic generation policy is conservative in Spanish and English', ()
 test('reconciliation preserves literal intent and quoted dialogue while replacing generic generation', async () => {
   const requests = [
     'Crea un vídeo 3D programático con mis recursos y conserva literalmente «No mires atrás» en español.',
+    'Crea un vídeo 3D sin vídeo generativo y conserva literalmente «No mires atrás».',
     'Build a programmatic Video3D scene using my assets and preserve the literal dialogue "Stay with me" in English.',
   ]
   const { reconcileAgentTurnWithRequest } = await import('../src/features/agent/agentActions.ts')
@@ -52,12 +60,28 @@ test('reconciliation answers explanatory questions without actions', () => {
   const questions = [
     '¿Cómo funciona Video3D sin vídeo generativo?',
     'How does the programmatic Video3D compositor work?',
+    'I want to know how the Video3D compositor works',
+    'Quiero saber cómo crear un vídeo en el compositor.',
+    'Explain how to create a Video3D scene.',
+    'No quiero crear nada en Video3D.',
   ]
   for (const request of questions) {
     const result = reconcileProgrammaticVideoRequest(request, blankTurn)
     assert.ok(result)
     assert.deepEqual(result.actions, [])
     assert.match(result.reply, /Video3D/i)
+  }
+})
+
+test('existing-only English inventory beats both Studio and proposed music generation', () => {
+  for (const actions of [
+    [{ type: 'prepare_video', prompt: 'invented' }, { type: 'start_generation', confirm: true }],
+    [{ type: 'create_rhythmic_3d_video', audioOutputName: '', musicPrompt: 'invented', confirm: true }],
+  ]) {
+    const turn = reconcileProgrammaticVideoRequest('Create a video using only my existing assets.', { reply: 'Generate.', actions })
+    assert.equal(turn.actions.length, 1)
+    assert.equal(turn.actions[0].type, 'prepare_programmatic_video')
+    assert.equal(turn.actions[0].generationPolicy, 'provided_only')
   }
 })
 

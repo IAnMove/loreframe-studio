@@ -13,30 +13,41 @@ export interface AgentPrepareProgrammaticVideoAction {
 const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const VIDEO_CONTEXT = /\b(video|videos|videoclip|videoclips|escena|escenas|scene|scenes|clip|clips|compositor|video3d)\b/
 const PROGRAMMATIC = /\b(video\s*3d|compositor|programmatic|programatico|programatica|sin video (?:ia|generativo)|without (?:ai|generative) video|no generative video)\b|\b(?:sin|no uses?|no utilices?|without)\s+(?:generadores? de video|minimax|wan|kling|video generation)\b/
-const PROVIDED = /\b(?:solo|solamente|only)\s+(?:(?:con|use|using)\s+)?(?:mis|los|my|existing|provided)\s+(?:assets|recursos|imagenes|modelos)\b|\b(?:sin generar (?:nada|recursos|assets)|provided.only)\b/
+const PROVIDED = /\b(?:solo|solamente|unicamente)\s+(?:con\s+)?(?:(?:mis|los|tus)\s+)?(?:assets|recursos|imagenes|modelos)\b|\b(?:only|just)\s+(?:(?:use|using|with)\s+)?(?:(?:my|the|our)\s+)?(?:(?:existing|provided|supplied|current|available)\s+)?(?:assets|resources|images|models)\b|\b(?:sin generar (?:nada|recursos|assets)|provided.only)\b/
 const REQUEST = /\b(?:crea|creame|haz|hazme|monta|montame|comp[oó]n|componme|prepara|generame|genera|quiero|necesito|create|make|compose|prepare|build|i want)\b/
-const QUESTION = /^(?:[¿?\s]*)(?:como|que|puedo|podria|can i|how|what)\b/
+const QUESTION = /^(?:[¿?\s]*)(?:como|que|puedo|podria|can i|how|what)\b|\b(?:quiero|necesito|me gustaria)\s+(?:saber|entender|aprender)\b|\b(?:i want|i would like|i'd like)\s+to\s+(?:know|learn|understand)\b|\b(?:explicame|explain|tell me how|dime como|ensename como)\b/
 const NEGATED = /\b(?:no (?:quiero|uses?|utilices?)|don't use|do not use)\s+(?:el\s+)?(?:video\s*3d|compositor|programmatic)\b/
+const NEGATION = /\b(?:no|not|never|don't|dont|sin|without|nunca|jamas)\b/
+const NEGATED_COMMAND = /^\s*(?:no|not|never|don't|dont|nunca|jamas)\b/
+const PERMISSION = /\b(?:puedes|permite|permito|autoriza|autorizo)\s+generar\s+(?:imagenes|modelos|assets|audio|musica)\b|\b(?:allow|you may)\s+(?:generate|generating|generation of)\s+(?:images|models|assets|audio|music)\b/
+const ASSET_CREATION = /\b(?:generar|generes|generate|generating|generation)\b[^.!?;\n]{0,35}\b(?:imagenes|modelos|assets|recursos|audio|musica|images|models|music)\b/
+
+function instructionText(request: string) {
+  // Dialogue, lyrics and code examples are payload, never generation authority.
+  return normalize(request.replace(/```[\s\S]*?```|"[^"]*"|“[^”]*”|«[^»]*»|`[^`]*`|(?<!\w)'[^'\n]+'(?!\w)/g, ''))
+}
+const clauses = (value: string) => value.split(/[.!?;,\n]+/)
 
 export function requestedProgrammaticPolicy(request: string): AgentPrepareProgrammaticVideoAction['generationPolicy'] {
-  const value = normalize(request)
-  if (PROVIDED.test(value)) return 'provided_only'
+  const value = instructionText(request)
+  const parts = clauses(value)
+  if (PROVIDED.test(value) || parts.some(part => NEGATION.test(part) && ASSET_CREATION.test(part))) return 'provided_only'
   // This grants non-video asset creation only when explicitly allowed. Merely
   // mentioning a spaceship or a song never grants a model/audio generation job.
-  return /\b(?:puedes|permite|permito|autoriza|autorizo)\s+generar\s+(?:imagenes|modelos|assets|audio|musica)\b|\b(?:allow|you may)\s+(?:generate|generating|generation of)\s+(?:images|models|assets|audio|music)\b/.test(value)
+  return parts.some(part => !NEGATION.test(part) && PERMISSION.test(part))
     ? 'no_video_generation' : 'provided_only'
 }
 
 /** Run before the legacy generic "generate a video" repair. Never execute a
  * guessed Studio/Director fallback when the user requested the compositor. */
 export function reconcileProgrammaticVideoRequest(request: string, turn: AgentTurn): AgentTurn | null {
-  const value = normalize(request)
+  const value = instructionText(request)
   if (!VIDEO_CONTEXT.test(value) || !(PROGRAMMATIC.test(value) || PROVIDED.test(value)) || NEGATED.test(value)) return null
-  if (QUESTION.test(value) || !REQUEST.test(value)) {
+  if (QUESTION.test(value) || !clauses(value).some(part => !NEGATED_COMMAND.test(part) && REQUEST.test(part))) {
     return { ...turn, reply: 'Puedes pedir: «Monta una escena con Video3D, sólo con mis assets, sin vídeo generativo». El Wizard prepara el formulario visible; desde allí revisas los recursos, montas la escena y la exportas. No se lanza ningún generador al preparar.', actions: [] }
   }
   const rhythmic = turn.actions.find(action => action.type === 'create_rhythmic_3d_video')
-  const asksForSong = /\b(?:crea|genera|haz|create|generate|make)\s+(?:una?\s+|a\s+)?(?:cancion|musica|song|music)\b/.test(value)
+  const asksForSong = clauses(value).some(part => !NEGATED_COMMAND.test(part) && /\b(?:crea|genera|haz|create|generate|make)\s+(?:una?\s+|a\s+)?(?:cancion|musica|song|music)\b/.test(part))
   if (rhythmic?.type === 'create_rhythmic_3d_video' && (rhythmic.audioOutputName || (asksForSong && !PROVIDED.test(value)))) {
     // Preserve the existing compositor workflow only when its possible music
     // generation was requested, or an exact existing audio source is used.
