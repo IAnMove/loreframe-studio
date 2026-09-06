@@ -17,6 +17,7 @@ test('a Hunyuan installation cannot enable Pixal3D and text cannot replace its i
   const state = model3dInputState(input)
   assert.equal(state.installed, false)
   assert.equal(state.hasInput, false)
+  assert.equal(state.canRun, false)
   assert.equal(state.isMultiview, false)
 })
 
@@ -25,6 +26,15 @@ test('an external runtime can be configured without Hunyuan installed', () => {
     model: { ...model, runtime: { installed: true, install_hint: null } } })
   assert.equal(state.installed, true)
   assert.equal(state.hasInput, true)
+  assert.equal(state.canRun, true)
+})
+
+test('a loaded Hunyuan image cannot enable generate when the runtime is missing', () => {
+  const hunyuan = { ...model, id: 'hunyuan3d-2-turbo', engine: 'v2' as const, label: 'Hunyuan3D 2 Turbo' }
+  const state = model3dInputState({ ...input, model: hunyuan, runtimeInstalled: false, hasFront: true, hasPrompt: false })
+  assert.equal(state.installed, false)
+  assert.equal(state.hasInput, true)
+  assert.equal(state.canRun, false)
 })
 
 test('Hunyuan multiview and retexture retain their input requirements', () => {

@@ -156,10 +156,69 @@ test('Hunyuan3D keeps disk upload and can use a HocusPocus image in the active w
 
     const generate = screen.getByRole('button', { name: 'Generate 3D asset' }) as HTMLButtonElement
     assert.equal(generate.disabled, false)
+    assert.ok(generate.className.includes('bg-cta'))
     fireEvent.click(generate)
     await waitFor(() => assert.ok(submitted))
     assert.deepEqual(submitted?.images, { front: 'bronze_robot_reference.png' })
     assert.equal(submitted?.workspace, 'gallery-workspace')
+  } finally {
+    globalThis.fetch = originalFetch
+    cleanup()
+  }
+})
+
+test('a missing Hunyuan runtime keeps generate disabled after a reference image is loaded', { concurrency: false }, async () => {
+  const { render, screen, fireEvent, cleanup } = await import('@testing-library/react')
+  const { Hunyuan3DPanel } = await import('../src/components/Sidebar/Hunyuan3DPanel.tsx')
+  const { useStore } = await import('../src/stores/useStore.ts')
+  const originalFetch = globalThis.fetch
+  let generatePosted = false
+  useStore.setState(state => ({
+    activeWorkspace: 'gallery-workspace',
+    params: { ...state.params, model_type: 'hunyuan3d-2-turbo', prompt: '' },
+    enabledModels: new Set<string>(),
+    maybeRefreshGallery: async () => undefined,
+  }))
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/api/v1/model3d/capabilities')) {
+      return new Response(JSON.stringify({
+        ...capabilities,
+        runtime: { ...capabilities.runtime, installed: false, install_hint: 'Install the Hunyuan3D runtime' },
+      }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/outputs')) {
+      return new Response(JSON.stringify({
+        outputs: [{
+          name: 'bronze_robot_reference.png', type: 'image', mode: 'image', size: 42, created_at: 1,
+          url: '/api/v1/file/bronze_robot_reference.png?workspace=gallery-workspace',
+          thumbnail_url: '/api/v1/outputs/thumbnail/bronze_robot_reference.png?workspace=gallery-workspace',
+        }],
+        total: 1,
+      }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/model3d/generate') && init?.method === 'POST') {
+      generatePosted = true
+      return new Response(JSON.stringify({ job_id: 'should-not-run' }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/model-visibility')) {
+      return new Response('{}', { headers: { 'content-type': 'application/json' } })
+    }
+    throw new Error(`Unexpected request: ${url}`)
+  }) as typeof fetch
+
+  try {
+    render(<Hunyuan3DPanel />)
+    await screen.findByRole('status')
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose Front image from HocusPocus' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'bronze_robot_reference.png' }))
+    assert.ok(screen.getByText('bronze_robot_reference.png'))
+    const generate = screen.getByRole('button', { name: 'Generate 3D asset' }) as HTMLButtonElement
+    assert.equal(generate.disabled, true)
+    assert.equal(generate.className.includes('bg-cta'), false)
+    assert.ok(generate.className.includes('cursor-not-allowed'))
+    fireEvent.click(generate)
+    assert.equal(generatePosted, false)
   } finally {
     globalThis.fetch = originalFetch
     cleanup()

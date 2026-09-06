@@ -131,7 +131,7 @@ export function Hunyuan3DPanel() {
 
   const selectedModel = useMemo(() => capabilities?.models.find(model => model.id === modelId), [capabilities, modelId])
   const isRunning = !!job && ACTIVE_3D_JOB_STATUSES.has(job.status)
-  const { external3d, isMultiview, remote3d, installed, hasInput } = model3dInputState({
+  const { external3d, isMultiview, remote3d, installed, canRun } = model3dInputState({
     model: selectedModel, provider: model3dProvider, operation,
     runtimeInstalled: capabilities?.runtime.installed,
     hasSource: !!sourceModel, hasFront: !!views.front, hasPrompt: !!prompt.trim(), textureMode,
@@ -524,7 +524,7 @@ export function Hunyuan3DPanel() {
           {isRunning ? (
             <button onClick={() => void cancel()} className="w-full px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 text-xs font-medium"><Square size={13} /> {operation === 'retexture' ? t('hunyuan.cancelRetexture') : t('hunyuan.cancelGeneration')}</button>
           ) : (
-            <button disabled={!hasInput || !installed} onClick={() => void run()} className={`w-full px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-medium transition-all ${hasInput ? 'bg-cta hover:brightness-110 shadow-accent-glow text-white' : 'bg-bg-tertiary border border-border text-text-muted cursor-not-allowed'}`}><Play size={13} fill={hasInput ? 'currentColor' : 'none'} /> {operation === 'retexture' ? t('hunyuan.createCopy') : t('hunyuan.generateAsset')}</button>
+            <button disabled={!canRun} onClick={() => void run()} className={`w-full px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-medium transition-all ${canRun ? 'bg-cta hover:brightness-110 shadow-accent-glow text-white' : 'bg-bg-tertiary border border-border text-text-muted cursor-not-allowed'}`}><Play size={13} fill={canRun ? 'currentColor' : 'none'} /> {operation === 'retexture' ? t('hunyuan.createCopy') : t('hunyuan.generateAsset')}</button>
           )}
           <p className="text-[9px] text-text-muted text-center">{t('hunyuan.firstUse')}</p>
         </>

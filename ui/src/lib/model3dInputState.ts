@@ -24,6 +24,6 @@ export function model3dInputState(input: Inputs) {
   const remote3d = input.provider === 'meshy' || input.provider === 'hi3d'
   const isMultiview = input.operation === 'generate' && !!input.model?.multiview
   const installed = remote3d || (external3d ? !!input.model?.runtime?.installed : !!input.runtimeInstalled)
-  return { external3d, remote3d, isMultiview, installed,
-    hasInput: hasRequiredInput(input, external3d, isMultiview) }
+  const hasInput = hasRequiredInput(input, external3d, isMultiview)
+  return { external3d, remote3d, isMultiview, installed, hasInput, canRun: hasInput && installed }
 }
