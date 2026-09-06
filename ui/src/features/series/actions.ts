@@ -23,7 +23,12 @@ import type {
   UpdateSeriesEpisodeCommand,
 } from './commands'
 import { shouldApproveCanonForExplicitEpisodeCreate } from './canonPolicy'
-import { bulkApproveSelections, missingAssemblyShotOrders } from './shotReviewPolicy'
+import {
+  bulkApproveSelections,
+  explicitAttemptSelection,
+  missingAssemblyShotOrders,
+  requireSingleShotForAttempt,
+} from './shotReviewPolicy'
 
 function seriesEpisodeResult(
   workspaceId: string,
@@ -644,19 +649,9 @@ export async function reviewSeriesAttempts(action: ReviewSeriesAttemptsCommand):
       : bulkApproveSelections(selectedShots, hasAsset, {
         replaceFinals: action.scope === 'replace_latest' || action.scope === 'selected_latest',
       })
-    const selections = bulk
-      ? bulk.selections
-      : selectedShots.flatMap(shot => {
-        const attempt = shot.attempts.find(item => item.id === action.attemptId)
-        if (!attempt) throw new Error(`El intento ${action.attemptId} no pertenece al shot ${shot.order}.`)
-        if (attempt.status !== 'completed' || attempt.reviewDecision === 'rejected') {
-          throw new Error(`El intento ${attempt.id} del shot ${shot.order} no es aprobable.`)
-        }
-        if (!attempt.outputAssetIds.some(id => Boolean(series.assets[id]))) {
-          throw new Error(`El intento ${attempt.id} del shot ${shot.order} no tiene un asset reproducible.`)
-        }
-        return attempt.id === shot.approvedAttemptId ? [] : [{ shotId: shot.id, attemptId: attempt.id }]
-      })
+    const selections = action.attemptId
+      ? explicitAttemptSelection(selectedShots, action.attemptId, hasAsset)
+      : bulk?.selections ?? []
     if (action.scope === 'selected_latest' && action.attemptId === '' && bulk) {
       const missing = selectedShots.filter(shot => !bulk.selections.some(item => item.shotId === shot.id)
         && !shot.approvedAttemptId)
@@ -680,7 +675,9 @@ export async function reviewSeriesAttempts(action: ReviewSeriesAttemptsCommand):
     )
   }
 
-  const shot = selectedShots[0]
+  const shot = action.attemptId
+    ? requireSingleShotForAttempt(selectedShots, action.attemptId)
+    : selectedShots[0]
   const attempt = action.attemptId
     ? shot.attempts.find(item => item.id === action.attemptId)
     : [...shot.attempts].reverse().find(item => item.status === 'completed' && item.reviewDecision !== 'rejected')

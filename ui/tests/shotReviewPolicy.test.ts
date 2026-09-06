@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { bulkApproveSelections, missingAssemblyShotOrders } from '../src/features/series/shotReviewPolicy.ts'
+import { bulkApproveSelections, explicitAttemptSelection, missingAssemblyShotOrders } from '../src/features/series/shotReviewPolicy.ts'
 
 const assets = new Set(['ok-a', 'ok-b', 'ok-new'])
 const hasAsset = (id: string) => assets.has(id)
@@ -74,4 +74,29 @@ test('explicit later attempt can still replace a final when replaceFinals is set
   }]
   const result = bulkApproveSelections(shots, hasAsset, { replaceFinals: true })
   assert.deepEqual(result.selections, [{ shotId: 'shot-1', attemptId: 'newer' }])
+})
+
+test('a concrete attemptId selects that historical take, not the latest take of shot 2', () => {
+  const shot2 = {
+    id: 'shot-2',
+    order: 2,
+    attempts: [
+      { id: 'take-1', status: 'completed', outputAssetIds: ['ok-a'] },
+      { id: 'take-2', status: 'completed', outputAssetIds: ['ok-b'] },
+    ],
+  }
+  const latest = bulkApproveSelections([shot2], hasAsset, { replaceFinals: true })
+  assert.deepEqual(latest.selections, [{ shotId: 'shot-2', attemptId: 'take-2' }])
+  assert.deepEqual(
+    explicitAttemptSelection([shot2], 'take-1', hasAsset),
+    [{ shotId: 'shot-2', attemptId: 'take-1' }],
+  )
+  assert.throws(
+    () => explicitAttemptSelection([shot2, { id: 'shot-1', attempts: shot2.attempts }], 'take-1', hasAsset),
+    /exactamente un shot/,
+  )
+  assert.throws(
+    () => explicitAttemptSelection([shot2], 'take-missing', hasAsset),
+    /no pertenece al shot 2/,
+  )
 })

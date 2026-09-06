@@ -791,8 +791,10 @@ defineCapability<AgentReviewSeriesAttemptsAction>({
     if (raw.confirm !== true) return null
     const decision = text(raw.review_decision, 30); const scope = text(raw.review_scope, 30)
     const shotNumbers = [...new Set(Array.isArray(raw.shot_numbers) ? raw.shot_numbers.slice(0, 200).flatMap(value => typeof value === 'number' && Number.isInteger(value) && value > 0 ? [value] : []) : [])]
+    const attemptId = text(raw.attempt_id, 160)
     if (!seriesReviewDecisions.has(decision) || !seriesReviewScopes.has(scope) || (scope === 'selected_latest' && !shotNumbers.length) || ((scope === 'all_latest' || scope === 'replace_latest') && decision !== 'approve')) return null
-    return { type: 'review_series_attempts', seriesTitle: text(raw.series_title, 300), targetEpisodeTitle: text(raw.target_episode_title, 300), decision: decision as AgentReviewSeriesAttemptsAction['decision'], scope: scope as AgentReviewSeriesAttemptsAction['scope'], shotNumbers, attemptId: text(raw.attempt_id, 160), confirm: true }
+    if (attemptId && (scope !== 'selected_latest' || shotNumbers.length !== 1)) return null
+    return { type: 'review_series_attempts', seriesTitle: text(raw.series_title, 300), targetEpisodeTitle: text(raw.target_episode_title, 300), decision: decision as AgentReviewSeriesAttemptsAction['decision'], scope: scope as AgentReviewSeriesAttemptsAction['scope'], shotNumbers, attemptId, confirm: true }
   },
   validate(action) { return action.confirm === true ? [] : ['confirmation is required'] }, async prepare(action) { return action }, async execute(action, context) { return context.adapters.seriesLab.reviewAttempts(action) }, correlate(_action, outcome) { return outcome.target }, async track(_action, outcome) { return outcome }, report: { targetKind: 'series_episode', successState: 'completed' }, summarize(_action, outcome) { return outcome.message }, presentation: { destination: 'series_lab', anchors: ['review'], replay: 'atomic' },
 })
