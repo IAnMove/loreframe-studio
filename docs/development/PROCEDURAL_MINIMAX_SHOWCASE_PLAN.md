@@ -1,9 +1,12 @@
 # Showcase con MiniMax/Wizard y tres canciones reales
 
 Encargo del usuario: 2026-09-06, después de P00-C2 y P00D/primer selector.
-Estado: tres audios preservados y analizados por CPU; primeros retratos MiniMax
-reales generados mediante Wizard y primer matte con Tools. Galería nueva y
-videoclips finales todavía pendientes; originales coral siguen intactos.
+Estado local: tres videoclips completos exportados, 36 planos editables, 16 tipos
+de escena MiniMax y 24 referencias coral preservadas. La galería de sesión ha
+sido sustituida en 43873; aprobación artística de los nuevos resultados pendiente.
+Wizard #180 mezclado en development por IAnMove (e465a56e), CI required verde.
+Checkpoint previo al PR del visor: código implementado y pruebas locales verdes.
+Consultar GitHub para el estado posterior de PR/CI/merge, no inferirlo de este MD.
 
 ## Alcance y límites
 
@@ -38,34 +41,38 @@ videoclips finales todavía pendientes; originales coral siguen intactos.
   de los dos últimos ya estaban en las fuentes; se conservan literalmente.
 - [x] Inspeccionar interfaz/API real de Wizard y MiniMax. Guardar conversación
   y decisiones auténticas, sin fabricar mensajes como si procedieran del Wizard.
-- [ ] Brief del Wizard por canción: ritmo, secciones, narrativa visual, personaje,
-  fondos, encuadres y efectos compatibles. Prompts técnicos pueden estar en inglés;
-  letras/texto citado no cambian de idioma ni se corrigen silenciosamente.
-- [ ] Probar primero un personaje y un fondo mediante HocusPocus/MiniMax; evaluar
+- [x] Brief de personajes/inventarios por canción mediante Wizard y prompts
+  técnicos de fondos. El operador dirigió cortes/encuadres a partir del análisis
+  CPU; no atribuir al Wizard la dirección íntegra de los montajes. Letras y texto
+  original permanecen en su idioma; no se regeneró ninguna canción.
+- [x] Probar primero un personaje y un fondo mediante HocusPocus/MiniMax; evaluar
   calidad, resolución, padding, rostro y alpha. Si no hay transparencia real,
   declarar el límite y usar una extracción explícita compatible con la carga actual.
-- [ ] Generar assets restantes con referencias coherentes. Límite operativo:
+- [x] Generar assets restantes con referencias coherentes. Límite operativo:
   máximo dos reintentos razonados por asset, no bucles de gasto por fallo repetido.
-- [ ] Conservar assetId/provider/model/task/prompt/reference/hash de cada salida.
+- [x] Conservar assetId/provider/model/task/prompt/reference/hash de cada salida.
   El cliente reutilizable recibe URL/workspace/IDs como argumentos, nunca claves.
-- [ ] Crear escenas editables con encuadres de cintura hacia arriba o close-ups,
+- [x] Crear escenas editables con encuadres de cintura hacia arriba o close-ups,
   sin pies deslizándose ni labios/ojos añadidos sobre rasgos ya pintados.
-- [ ] Rehacer galería con nueva variante identificada y acceso a originales.
+- [x] Rehacer galería con nueva variante identificada y acceso a originales.
   Snapshot exacto por clip, no recompilar la versión actual y llamarla original.
-- [ ] Renderizar piloto corto antes de escalar; verificar ffprobe y frames.
-- [ ] Montar tres videoclips de duración completa respetando las canciones fuente,
+- [x] Renderizar piloto corto antes de escalar; verificar ffprobe y frames.
+- [x] Montar tres videoclips de duración completa respetando las canciones fuente,
   ritmo y legibilidad. Repartir los efectos con intención, no apilarlos todos a la vez.
-- [ ] Guardar configuración de planos/montaje y lineage hacia audio e imágenes;
+- [x] Guardar configuración de planos/montaje y lineage hacia audio e imágenes;
   ofrecer abrir/ajustar los planos y preservar outputs fuera de Git.
-- [ ] Validar duración/FPS/dimensiones/audio, cortes, frames negros, encuadre,
+- [x] Validar duración/FPS/dimensiones/audio, cortes, frames negros, encuadre,
   clipping, repetición excesiva y consistencia del personaje a lo largo de cada clip.
-- [ ] Entregar URLs de galería + tres MP4, listado de límites observados y
+  Comprobación técnica automatizada y revisión de frames representativos;
+  revisión artística completa por el usuario pendiente, no certificación de calidad.
+- [x] Entregar URLs de galería + tres MP4, listado de límites observados y
   evidencia; aprobación visual de nuevos resultados pendiente del usuario.
 
 ## Reanudación de esta sesión
 
 Worktree aislado: /tmp/hocus-minimax-showcase.z35rpR, rama
-work/procedural-minimax-showcase. Estas rutas son evidencia de sesión, no scripts
+work/procedural-showcase-gallery (anterior: work/procedural-minimax-showcase).
+Estas rutas son evidencia de sesión, no scripts
 portables. Leer primero AGENTS y el roadmap. La herramienta de app existente está
 en pinokio_agent/skills/api/Maestro-next.git; su cliente CDP es genérico.
 Usar Pinokio para descubrir base URL actual antes de API, no asumir puertos.
@@ -116,3 +123,35 @@ portable está en `pinokio_agent/skills/api/Maestro-next.git/clients/asset_snaps
   No se movió ningún audio. Análisis público con transcribe=false y
   extract_vocals=false: 117.5, 86.1 y 99.4 BPM estimados. Downbeats heurísticos,
   no compases garantizados ni alineación fonética.
+
+### Resultados locales de composición
+
+- Audio fuente: 90 / 104.083447 / 120 s. MP4 H.264 final: 90.023 / 104.133 /
+  120.027 s, 1280×720, 30 FPS, soundtrack AAC. Los WAV/copias conservan SHA;
+  el audio del contenedor MP4 está recodificado, no es byte-idéntico al WAV.
+- El mixer instalado normaliza dos pistas (una muda). Se compensó con volumen
+  de soundtrack 2, dentro del contrato público, sin modificar backend ni WAV.
+  Diferencias RMS observadas frente a fuente: −0.074 / −0.058 / −0.043 dB.
+  Blackdetect no encontró intervalos negros de al menos 150 ms al umbral usado;
+  esto no sustituye ver la película ni aprobar dirección/arte.
+- Nara, Orin y Vega usan un retrato fuente cada uno. Se mantienen idénticos por
+  reutilización de la imagen, no por un character kit multivista/articulado.
+  Primeros planos y recortes ocultan el borde inferior; no hay walking ni lip-sync.
+- 16 tipos de plano de cine/videoclip, 14 atmósferas existentes, cámara/paralaje,
+  keyframes sobre beats estimados, color y un overlay procedural de final.
+  No son las 50 escenas/filtros ni los 30 AN propuestos en el roadmap.
+- Paquete de sesión fuera de Git: `showcase-package-HOLHdy` dentro del directorio
+  de evidencia, con 3 montajes, 36 snapshots de planos, 16 previews representativas,
+  7 inputs raster, hashes y provenance. `edit-plan.json` conserva el montaje;
+  el botón del visor abre planos individuales, no un proyecto final de timeline.
+- URL de revisión: http://192.168.1.87:43873/scene-template-review.
+  LAN es sólo lectura; para verificar SHA en navegador y guardar ajustes usar
+  http://127.0.0.1:43873/scene-template-review en la máquina anfitriona.
+  La galería es un servicio de sesión temporal, no persistencia tras reinicio.
+- Sólo se detuvo el proceso anterior de esta galería; apps 42003/42004 y medios
+  originales permanecieron intactos. El script portable `--showcase-dir` permite
+  volver a servir el paquete en un directorio temporal nuevo.
+- Prueba de navegador real: reproducción de los 3 montajes, Range HTTP de las
+  24 referencias, apertura exacta del plano de Nara, cambio de bokeh a lluvia y
+  guardado de la escena editada en el sandbox. Cero errores JavaScript en ese
+  recorrido. La URL LAN rechaza POST (403); ningún generador se invocó en él.

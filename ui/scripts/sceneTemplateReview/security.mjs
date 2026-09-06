@@ -2,6 +2,11 @@ import { parseSceneFile } from '../../src/lib/sceneFile.ts'
 
 export const MAX_OUTPUTS = 128
 export const MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+const PROCEDURAL_EFFECT_KINDS = new Set([
+  'rain', 'snow', 'dust', 'embers', 'fog', 'smoke', 'ash',
+  'fireflies', 'confetti', 'bokeh', 'sparkles', 'bubbles', 'speedlines', 'leaves',
+])
+const PROCEDURAL_EFFECT_SOURCE = /^maestro-effect:([a-z]+)$/
 export const REVIEW_HEADERS = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
@@ -39,6 +44,12 @@ function validateSource(source, isIndexedSource) {
   throw new Error('Review assets must be inline or indexed in this sandbox; external, blob and disk sources are blocked.')
 }
 
+function isValidatedProceduralEffect(layer) {
+  if (layer.type !== 'effect' || typeof layer.source !== 'string') return false
+  const match = PROCEDURAL_EFFECT_SOURCE.exec(layer.source)
+  return Boolean(match && PROCEDURAL_EFFECT_KINDS.has(match[1]) && layer.atmosphere?.kind === match[1])
+}
+
 /** Validate, but do not normalize/change the exact recording snapshot. */
 export function validateReviewSnapshot(scene, isIndexedSource = () => false) {
   parseSceneFile(JSON.stringify(scene))
@@ -50,7 +61,7 @@ export function validateReviewSnapshot(scene, isIndexedSource = () => false) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(scene.narrative?.templateId || '')) throw new Error('Review scene needs a safe template ID.')
   if (scene.audioTracks?.length) throw new Error('This reference sandbox accepts silent scenes only.')
   for (const layer of scene.layers) {
-    if (!(['camera', 'effect', 'overlay'].includes(layer.type) && layer.source === '')) validateSource(layer.source, isIndexedSource)
+    if (!(['camera', 'effect', 'overlay'].includes(layer.type) && layer.source === '') && !isValidatedProceduralEffect(layer)) validateSource(layer.source, isIndexedSource)
     if (layer.thumbnail) validateSource(layer.thumbnail, isIndexedSource)
   }
   for (const asset of scene.narrative?.assets || []) validateSource(asset.source, isIndexedSource)

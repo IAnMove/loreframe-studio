@@ -8,8 +8,12 @@ import { createWriteBudget, REVIEW_HEADERS, validateReviewSnapshot } from './sec
 
 const MAX_REQUEST_BYTES = 40 * 1024 * 1024
 const MAX_BLOCKED_REQUESTS = 128
+const MAX_INPUTS = 64
+const MAX_INPUT_FILE_BYTES = 4 * 1024 * 1024
+const MAX_INPUT_BYTES = 128 * 1024 * 1024
 const LOOPBACK_HOST = '127.0.0.1'
 const PREVIEW_PATH = /^\/scene-template-previews\/([a-z0-9][a-z0-9-]*(?:\.failure-[0-9a-f-]+)?)\.(mp4|png|json)$/
+const SAFE_INPUT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}\.(?:jpe?g|png|webp)$/i
 class RequestTooLargeError extends Error {}
 
 const json = (response, value, status = 200) => {
@@ -66,12 +70,21 @@ async function readBody(request) {
 }
 
 const MIME_TYPES = {
-  '.mp4': 'video/mp4', '.png': 'image/png', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.wasm': 'application/wasm',
 }
-const contentType = filename => MIME_TYPES[path.extname(filename)] || 'application/octet-stream'
+const contentType = filename => MIME_TYPES[path.extname(filename).toLowerCase()] || 'application/octet-stream'
+
+function validateInputName(name) {
+  if (typeof name !== 'string' || !SAFE_INPUT_NAME.test(name)
+    || name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+    throw new Error('Input name must be a safe JPG, JPEG, PNG or WebP basename.')
+  }
+  return name
+}
 
 async function indexStaticUi(root) {
   const files = new Map()
@@ -153,21 +166,27 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
   const listenHost = validateListenHost(host)
   const requestedPort = parsePort(port)
   const exportsDir = path.join(outputDir, 'exports')
+  const inputsDir = path.join(outputDir, 'inputs')
   const previewsDir = path.join(outputDir, 'previews')
   await fs.mkdir(exportsDir, { recursive: true })
+  await fs.mkdir(inputsDir, { recursive: true })
   await fs.mkdir(previewsDir, { recursive: true })
 
   const uiFiles = await indexStaticUi(uiDist)
   const outputs = []
   const files = new Map()
+  const inputs = new Map()
   const metadata = new Map()
   const blocked = []
   const previewFiles = new Set()
+  const pendingInputs = new Set()
   let closed = false
   let writing = false
+  let inputBytes = 0
   const budget = createWriteBudget(limits)
 
   const remember = ({ name, type, size, params, filename }) => {
+    if (files.has(name)) throw new Error(`Review file name is already indexed: ${name}`)
     const item = {
       name,
       type,
@@ -253,6 +272,8 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
           writeScope: 'loopback-only',
           quota: budget.snapshot(),
           outputCount: outputs.length,
+          inputCount: inputs.size,
+          inputBytes,
           blocked: [...blocked],
         })
         return
@@ -377,19 +398,83 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
     if (!PREVIEW_PATH.test(`/scene-template-previews/${name}`)) throw new Error(`Unsafe preview name “${name}”.`)
     previewFiles.add(name)
   }
+  const registerInput = async name => {
+    const safeName = validateInputName(name)
+    if (files.has(safeName) || pendingInputs.has(safeName)) throw new Error(`Review input name is already indexed: ${safeName}`)
+    if (inputs.size >= MAX_INPUTS) throw new Error(`Review input limit exceeded (${MAX_INPUTS} files).`)
+    pendingInputs.add(safeName)
+    try {
+      const filename = path.join(inputsDir, safeName)
+      let stat
+      try {
+        stat = await fs.lstat(filename)
+      } catch (error) {
+        if (error?.code === 'ENOENT') throw new Error(`Review input is missing: ${safeName}`)
+        throw error
+      }
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Review input must be a regular non-symlink file: ${safeName}`)
+      if (stat.size === 0) throw new Error(`Review input must not be empty: ${safeName}`)
+      if (stat.size > MAX_INPUT_FILE_BYTES) throw new Error(`Review input exceeds the ${MAX_INPUT_FILE_BYTES} byte file limit: ${safeName}`)
+
+      // A registered input is resolved from this fresh directory only. The
+      // realpath check also rejects a path that was swapped for a link between
+      // the lstat above and indexing.
+      const rootStat = await fs.lstat(inputsDir)
+      if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+        throw new Error(`Review input directory must not be a symlink: ${safeName}`)
+      }
+      // Resolve legitimate platform aliases in ancestors (e.g. macOS /var),
+      // while forbidding replacement of the actual input directory itself.
+      const inputRoot = await fs.realpath(inputsDir)
+      const realFilename = await fs.realpath(filename)
+      const relative = path.relative(inputRoot, realFilename)
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`Review input is outside the input directory: ${safeName}`)
+      }
+
+      // Keep the final checks immediately adjacent to the synchronous Map/set
+      // operations. There is no await between this check and commit, so
+      // concurrent registrations cannot overwrite one another or exceed the
+      // finite input budget.
+      if (files.has(safeName)) throw new Error(`Review input name is already indexed: ${safeName}`)
+      if (inputs.size >= MAX_INPUTS) throw new Error(`Review input limit exceeded (${MAX_INPUTS} files).`)
+      if (inputBytes + stat.size > MAX_INPUT_BYTES) throw new Error(`Review input byte limit exceeded (${MAX_INPUT_BYTES} bytes).`)
+
+      const item = {
+        name: safeName,
+        size: stat.size,
+        url: `/api/v1/file/${encodeURIComponent(safeName)}?workspace=default`,
+      }
+      inputs.set(safeName, { ...item, filename })
+      files.set(safeName, filename)
+      inputBytes += stat.size
+      return item
+    } finally {
+      pendingInputs.delete(safeName)
+    }
+  }
   const localOrigin = publicOrigin(LOOPBACK_HOST, actualPort)
   return {
     close,
     outputDir,
     exportsDir,
+    inputsDir,
     previewsDir,
     localOrigin,
     lanOrigin: listenHost === LOOPBACK_HOST ? null : publicOrigin(listenHost, actualPort),
     port: actualPort,
     blocked,
     registerPreview,
+    registerInput,
     snapshot: () => ({ outputs: outputs.map(item => ({ ...item })), blocked: [...blocked] }),
   }
 }
 
-export { MAX_BLOCKED_REQUESTS, MAX_REQUEST_BYTES, LOOPBACK_HOST }
+export {
+  MAX_BLOCKED_REQUESTS,
+  MAX_INPUTS,
+  MAX_INPUT_FILE_BYTES,
+  MAX_INPUT_BYTES,
+  MAX_REQUEST_BYTES,
+  LOOPBACK_HOST,
+}

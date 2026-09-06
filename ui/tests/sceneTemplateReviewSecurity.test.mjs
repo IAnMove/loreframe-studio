@@ -10,6 +10,9 @@ import {
 
 const inlineImage = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>'
 const inlineGlb = 'data:model/gltf-binary;base64,AA=='
+const atmosphereKinds = ['rain', 'snow', 'dust', 'embers', 'fog', 'smoke', 'ash', 'fireflies', 'confetti', 'bokeh', 'sparkles', 'bubbles', 'speedlines', 'leaves']
+
+const atmosphere = kind => ({ kind, density: 24, speed: 0.5, size: 1, wind: 0, color: '#ffffff' })
 
 const makeScene = (overrides = {}) => ({
   version: 1,
@@ -75,6 +78,44 @@ test('accepts the canonical silent scene and returns the original object unchang
     }],
   })
   assert.strictEqual(validateReviewSnapshot(modelScene), modelScene)
+})
+
+test('accepts each editor atmosphere only when its procedural source and kind agree', () => {
+  assert.equal(atmosphereKinds.length, 14)
+  for (const kind of atmosphereKinds) {
+    const scene = makeScene({
+      layers: [{
+        id: `atmosphere-${kind}`,
+        name: kind,
+        type: 'effect',
+        source: `maestro-effect:${kind}`,
+        atmosphere: atmosphere(kind),
+        visible: true,
+        z: 30,
+      }],
+    })
+    const persisted = JSON.parse(JSON.stringify(scene))
+    assert.strictEqual(validateReviewSnapshot(persisted), persisted, kind)
+  }
+})
+
+test('rejects procedural effect sources in other layer fields, mismatched kinds and unknown effects', () => {
+  const valid = atmosphere('rain')
+  for (const type of ['image', 'camera', 'overlay']) {
+    const scene = makeScene({ layers: [{ id: type, name: type, type, source: 'maestro-effect:rain', atmosphere: valid, visible: true, z: 1 }] })
+    assert.throws(() => validateReviewSnapshot(scene), /inline or indexed|external/i, type)
+  }
+  for (const layer of [
+    { id: 'missing-atmosphere', name: 'missing-atmosphere', type: 'effect', source: 'maestro-effect:rain', visible: true, z: 1 },
+    { id: 'wrong-kind', name: 'wrong-kind', type: 'effect', source: 'maestro-effect:rain', atmosphere: atmosphere('snow'), visible: true, z: 1 },
+    { id: 'unknown-kind', name: 'unknown-kind', type: 'effect', source: 'maestro-effect:laser', atmosphere: atmosphere('laser'), visible: true, z: 1 },
+  ]) {
+    assert.throws(() => validateReviewSnapshot(makeScene({ layers: [layer] })), /inline or indexed|external/i, layer.id)
+  }
+  const narrativeSource = makeScene({
+    narrative: { templateId: 'security-fixture', assets: [{ type: 'image', source: 'maestro-effect:rain' }] },
+  })
+  assert.throws(() => validateReviewSnapshot(narrativeSource), /inline or indexed|external/i)
 })
 
 test('accepts only an indexed same-application source through the explicit callback', () => {
