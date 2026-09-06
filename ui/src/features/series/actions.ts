@@ -586,7 +586,7 @@ export async function renderSeriesShots(action: RenderSeriesShotsCommand): Promi
     workspace,
     episode,
     'review',
-    `He encolado ${eligible.length} shots de “${episode.title}” (${job.jobId}) en modo ${action.mode}. El progreso recuperable está abierto en Series Lab → Render & review.`,
+    `He encolado ${eligible.length} shots de “${episode.title}” (${job.jobId}) en modo ${action.mode}. El progreso recuperable está abierto en Series Lab → Resultados.`,
     { taskIds: [job.jobId], channel: 'series_render', job: job as unknown as Record<string, unknown> },
   )
 }
