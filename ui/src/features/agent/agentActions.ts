@@ -825,7 +825,8 @@ const SERIES_CANON_DECISIONS = new Set<AgentCommitSeriesCanonAction['decision']>
   'accept_all', 'reject_all', 'accept_selected', 'reject_selected',
 ])
 const STORY_SECTIONS = new Set<AgentStorySection>([
-  'overview', 'world', 'characters', 'relationships', 'structure', 'productions',
+  'overview', 'assets', 'world', 'characters', 'relationships', 'structure',
+  'music', 'trailer', 'productions', 'assembly',
 ])
 const SERIES_SECTIONS = new Set<AgentSeriesSection>([
   'setup', 'canon', 'episode', 'shots', 'review',

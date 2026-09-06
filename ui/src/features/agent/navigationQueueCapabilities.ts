@@ -15,11 +15,21 @@ import type {
   CapabilityDefinition,
   CapabilityExecutionOutcome,
 } from './capabilityRegistry'
-import type { AgentSeriesSection, AgentStorySection } from './agentUiBus'
 import {
   openAgentSeriesSection,
   openAgentStorySection,
 } from './agentUiBus'
+import {
+  canonicalizeSeriesLabSection,
+  canonicalizeStoryLabSection,
+  describeSeriesLabNavigation,
+  describeStoryLabNavigation,
+  resolveSeriesLabNavigation,
+  resolveStoryLabNavigation,
+  SERIES_LAB_SECTIONS,
+  STORY_LAB_SECTIONS,
+} from '../stories/labNavigation'
+import { replayWizardPresentation } from './wizardPresentation'
 
 /**
  * The registry owns the concrete implementation of defineCapability. Keeping
@@ -30,15 +40,8 @@ export type NavigationQueueCapabilityRegistrar = <TAction extends AgentAction>(
   definition: CapabilityDefinition<TAction>,
 ) => CapabilityDefinition<TAction>
 
-const STORY_SECTIONS: readonly AgentStorySection[] = [
-  'overview', 'assets', 'world', 'characters', 'relationships', 'structure',
-  'music', 'trailer', 'productions', 'assembly',
-]
-const SERIES_SECTIONS: readonly AgentSeriesSection[] = [
-  'setup', 'canon', 'episode', 'shots', 'review',
-]
-const storySectionSet = new Set<string>(STORY_SECTIONS)
-const seriesSectionSet = new Set<string>(SERIES_SECTIONS)
+const storySectionSet = new Set<string>(STORY_LAB_SECTIONS)
+const seriesSectionSet = new Set<string>(SERIES_LAB_SECTIONS)
 const registeredRegistrars = new WeakSet<NavigationQueueCapabilityRegistrar>()
 
 const ACTIVITY_TARGET = {
@@ -52,17 +55,13 @@ function text(value: unknown, maxLength: number): string {
 }
 
 function storySection(raw: Record<string, unknown>): AgentOpenStorySectionAction | null {
-  const section = text(raw.story_section, 40)
-  return storySectionSet.has(section)
-    ? { type: 'open_story_section', section: section as AgentStorySection }
-    : null
+  const section = canonicalizeStoryLabSection(text(raw.story_section, 40))
+  return section ? { type: 'open_story_section', section } : null
 }
 
 function seriesSection(raw: Record<string, unknown>): AgentOpenSeriesSectionAction | null {
-  const section = text(raw.series_section, 40)
-  return seriesSectionSet.has(section)
-    ? { type: 'open_series_section', section: section as AgentSeriesSection }
-    : null
+  const section = canonicalizeSeriesLabSection(text(raw.series_section, 40))
+  return section ? { type: 'open_series_section', section } : null
 }
 
 function queueScope(raw: Record<string, unknown>): AgentInspectQueueAction {
@@ -160,7 +159,7 @@ export function registerNavigationQueueCapabilities(
       additionalProperties: false,
       properties: {
         type: { const: 'open_story_section' },
-        story_section: { type: 'string', enum: STORY_SECTIONS },
+        story_section: { type: 'string', enum: STORY_LAB_SECTIONS },
       },
       required: ['type', 'story_section'],
     },
@@ -174,8 +173,16 @@ export function registerNavigationQueueCapabilities(
     async prepare(action) { return action },
     async execute(action, context) {
       const outcome = await context.adapters.storyLab.open()
-      openAgentStorySection(action.section)
-      return navigationOutcome(outcome, `He abierto Story Lab → ${action.section}.`)
+      const { useStoryStore } = await import('../stories/store')
+      const resolved = resolveStoryLabNavigation(action.section, useStoryStore.getState().project.projectType)
+      if (!resolved.ok) throw new Error(resolved.reason)
+      openAgentStorySection(resolved.tab)
+      await replayWizardPresentation({
+        anchors: [resolved.anchor],
+        speed: 'instant',
+        replay: 'atomic',
+      })
+      return navigationOutcome(outcome, describeStoryLabNavigation(resolved))
     },
     correlate(_action, outcome) { return outcome.target },
     async track(_action, outcome) { return outcome },
@@ -195,7 +202,7 @@ export function registerNavigationQueueCapabilities(
       additionalProperties: false,
       properties: {
         type: { const: 'open_series_section' },
-        series_section: { type: 'string', enum: SERIES_SECTIONS },
+        series_section: { type: 'string', enum: SERIES_LAB_SECTIONS },
       },
       required: ['type', 'series_section'],
     },
@@ -209,8 +216,10 @@ export function registerNavigationQueueCapabilities(
     async prepare(action) { return action },
     async execute(action, context) {
       const outcome = await context.adapters.seriesLab.open()
-      openAgentSeriesSection(action.section)
-      return navigationOutcome(outcome, `He abierto Series Lab → ${action.section}.`)
+      const resolved = resolveSeriesLabNavigation(action.section)
+      if (!resolved.ok) throw new Error(resolved.reason)
+      openAgentSeriesSection(resolved.tab)
+      return navigationOutcome(outcome, describeSeriesLabNavigation(resolved))
     },
     correlate(_action, outcome) { return outcome.target },
     async track(_action, outcome) { return outcome },

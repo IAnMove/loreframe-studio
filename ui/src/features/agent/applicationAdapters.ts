@@ -959,16 +959,11 @@ async function presentStorySliceResult(result: CommandResult): Promise<AdapterOu
     openAgentStorySection,
   } = await import('./agentUiBus')
   const section = result.navigationTarget?.section
-  if (
-    section === 'overview'
-    || section === 'world'
-    || section === 'characters'
-    || section === 'relationships'
-    || section === 'structure'
-    || section === 'assets'
-    || section === 'music'
-  ) {
-    openAgentStorySection(section)
+  if (section) {
+    const { resolveStoryLabNavigation } = await import('../stories/labNavigation')
+    const { useStoryStore } = await import('../stories/store')
+    const resolved = resolveStoryLabNavigation(section, useStoryStore.getState().project.projectType)
+    if (resolved.ok) openAgentStorySection(resolved.tab)
   }
   const meta = result.artifacts[0]?.metadata || {}
   if (meta.notifyDraft === true && result.entities[0]?.id) notifyAgentStoryDraft(result.entities[0].id)

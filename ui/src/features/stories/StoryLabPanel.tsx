@@ -21,6 +21,7 @@ import { StoryOverviewTab } from './StoryOverviewTab'
 import { StoryAssetsTab } from './StoryAssetsTab'
 import { StoryAssemblyTab } from './StoryAssemblyTab'
 import { StoryLabLibraryChrome } from './StoryLabLibraryChrome'
+import { resolveStoryLabNavigation } from './labNavigation'
 import { storyLabTabs } from './storyLabTabs'
 import type { PendingSmartAsset } from './storyLabAssets'
 import { StoryLabVisualsProvider } from './StoryLabVisualsProvider'
@@ -357,7 +358,12 @@ export function StoryLabPanel() {
   const [tab, setTab] = useState<StoryTab>(() => (
     readDirectorClipReplacementResult() ? 'assembly' : 'overview'
   ))
-  useEffect(() => listenForAgentStorySection(setTab), [])
+  const projectTypeRef = useRef(project.projectType)
+  projectTypeRef.current = project.projectType
+  useEffect(() => listenForAgentStorySection(section => {
+    const resolved = resolveStoryLabNavigation(section, projectTypeRef.current)
+    if (resolved.ok) setTab(resolved.tab)
+  }), [])
   const [busy, setBusy] = useState<StoryGenerationScope | null>(null)
   const [agentDraftRevision, setAgentDraftRevision] = useState(0)
   useEffect(() => listenForAgentStoryDraft(projectId => {
@@ -828,9 +834,8 @@ export function StoryLabPanel() {
   }, [project.creativeBrief.durationSeconds, project.projectType, trailerTouched])
 
   const openStorySection = (target: StoryTab) => {
-    const compactSection = project.projectType !== 'full_story'
-      && ['world', 'characters', 'relationships', 'structure'].includes(target)
-    setTab(compactSection ? 'overview' : target)
+    const resolved = resolveStoryLabNavigation(target, project.projectType)
+    if (resolved.ok) setTab(resolved.tab)
   }
 
   const openProductionReviewIssue = (issue: ProductionReviewIssue) => {
@@ -3833,19 +3838,25 @@ export function StoryLabPanel() {
     }
     const issues: ProductionReviewIssue[] = required
       .filter(section => section !== 'characters' && !isApproved(section))
-      .map(section => ({
-        id: `section:${section}`,
-        label: sectionLabels[section],
-        detail: t('issues.openSectionDetail'),
-        tab: section as StoryTab,
-        anchorId: `story-review-${section}`,
-      }))
+      .map(section => {
+        const resolved = resolveStoryLabNavigation(section, project.projectType)
+        return {
+          id: `section:${section}`,
+          label: sectionLabels[section],
+          detail: t('issues.openSectionDetail'),
+          tab: resolved.ok ? resolved.tab : 'overview',
+          anchorId: resolved.ok ? resolved.anchor : `story-review-${section}`,
+        }
+      })
     const incompleteCharacters = project.characters.filter(character =>
       character.approval !== 'approved'
       || (requiresVisualIdentities && (
         !character.primaryReferenceAssetId
         || project.assets[character.primaryReferenceAssetId]?.approval !== 'approved'
       )))
+    const charactersNav = resolveStoryLabNavigation('characters', project.projectType)
+    const charactersTab = charactersNav.ok ? charactersNav.tab : 'overview'
+    const charactersAnchor = charactersNav.ok ? charactersNav.anchor : 'story-review-characters'
     if (incompleteCharacters.length) {
       const names = incompleteCharacters.map(character => character.name || t('issues.unnamed')).join(', ')
       issues.push({
@@ -3856,7 +3867,7 @@ export function StoryLabPanel() {
         detail: requiresVisualIdentities
           ? t('issues.identitiesDetail')
           : t('issues.descriptionsDetail'),
-        tab: 'characters',
+        tab: charactersTab,
         anchorId: `story-review-character-${incompleteCharacters[0].id}`,
       })
     } else if (!isApproved('characters')) {
@@ -3864,8 +3875,8 @@ export function StoryLabPanel() {
         id: 'section:characters',
         label: sectionLabels.characters,
         detail: t('issues.confirmSetDetail'),
-        tab: 'characters',
-        anchorId: 'story-review-characters',
+        tab: charactersTab,
+        anchorId: charactersAnchor,
       })
     }
     return issues
