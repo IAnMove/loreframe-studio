@@ -9,7 +9,13 @@ description: Automate Maestro workflows through its HTTP API and browser-based 3
 
 Use `clients/series_episode.py` for the recover-plan-apply-render workflow. Pass the reachable base URL discovered at runtime with `--base-url`; pass workspace, series, episode, and job IDs per invocation.
 
-Use `clients/browser_cdp.mjs` when a workflow begins in the browser, notably Scene Animator canvas recording. Pass a separately launched Chromium debugging URL and the selected Maestro page URL at runtime. Use `--expression` or `--script` for page operations and `--screenshot` for visual verification. Scene Animator captures WebM internally, then `/api/v1/scenes/recordings` finalizes H.264 MP4 and publishes it in Videos with prompt, recipe, scene, and asset metadata.
+Use `clients/browser_cdp.mjs` when a workflow begins in the browser, notably Scene Animator canvas recording. Pass a separately launched Chromium debugging URL and the selected Maestro page URL at runtime. Use `--expression` or `--script` for page operations and `--screenshot` for visual verification. Scene Animator uses WebCodecs MP4 when available and MediaRecorder WebM as a fallback; `/api/v1/scenes/recordings` finalizes H.264 MP4 and publishes it in Videos with prompt, recipe, scene, and asset metadata.
+
+Use `clients/asset_snapshot.mjs --base-url <reachable-url> --workspace <name> --asset-id <id> [--asset-id <id> ...] --output-dir <directory>` to download existing canonical audio/image assets and their exact catalog manifests. It verifies identity, workspace, file location and byte count, records SHA-256 and literal prompts, and refuses to overwrite snapshots. This client never starts a generation.
+
+The SHA-256 is an observation of the downloaded bytes, not proof that the server
+froze the file between catalog lookup and download. Preserve the manifest and
+observed hash together; do not claim a server-provided content-addressed identity.
 
 ## Operations
 
@@ -19,7 +25,9 @@ Use `clients/browser_cdp.mjs` when a workflow begins in the browser, notably Sce
 - `start-render` / `render-status`: queue unapproved Series shots and inspect the durable render job.
 - `episode` / `project`: inspect the current authoritative saved state.
 - `set-status`: persist a verified episode lifecycle state after an external recovery or audit.
-- Browser CDP evaluation and screenshots for Scene Animator preview/recording. Browser `MediaRecorder` performs the capture; the scene-recordings API converts and publishes the final MP4.
+- Browser CDP evaluation and screenshots for Scene Animator preview/recording. The scene-recordings API finalizes and publishes the browser capture.
+- `GET /api/v1/assets/{asset_id}` resolves canonical metadata and workspace locations. Use the returned scoped file URL; do not guess filenames from prompts.
+- Story Lab can generate MiniMax Image-01 images through `POST /api/v1/comics/generate/minimax/jobs` with `prompt`, `aspect_ratio`, explicit `workspace`, and optionally one `subject_reference`. Poll the returned job ID. This is distinct from the global MiniMax chat provider and from local MiniMax video/music models.
 
 ## Runtime Inputs
 
@@ -35,3 +43,7 @@ Every operation prints one JSON response to stdout. Planning and render starts r
 ## Notes
 
 The server keeps canon snapshots immutable when an episode is saved. Applying a planning job performs its own stale-episode guard, so do not edit the episode between `start-plan` and `apply-plan`.
+
+The active output workspace is a server-global default: `PUT /api/v1/workspaces/active` affects other clients. Creating a workspace does not activate it. Prefer explicitly scoped API requests during concurrent work; the stock Wizard UI does not yet offer per-tab workspace selection. Never clear someone else's Wizard conversation to isolate a run.
+
+MiniMax Image-01 returns opaque images. Its current canonical manifest does not retain reference-image parent IDs; preserve the request and source identity in separate run evidence instead of claiming complete built-in lineage. Provider keys stay in server settings; clients must not print them or embed them in saved scripts.

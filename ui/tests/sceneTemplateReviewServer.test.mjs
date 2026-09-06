@@ -6,6 +6,9 @@ import path from 'node:path'
 import { after, before, test } from 'node:test'
 import {
   MAX_BLOCKED_REQUESTS,
+  MAX_INPUT_BYTES,
+  MAX_INPUT_FILE_BYTES,
+  MAX_INPUTS,
   startReviewServer,
 } from '../scripts/sceneTemplateReview/server.mjs'
 
@@ -330,4 +333,99 @@ test('records the MP4 transport contract and supports range and HEAD reads', asy
   assert.equal(head.status, 200)
   assert.equal(Number(head.headers.get('content-length')), mp4TransportBytes.length)
   assert.equal((await head.arrayBuffer()).byteLength, 0)
+})
+
+test('registers raster inputs without publishing them as generated outputs', async () => {
+  const sandbox = await createSandbox()
+  const inputBytes = Buffer.from('sandbox raster input')
+  try {
+    const inputName = 'hero.JPG'
+    await fs.writeFile(path.join(sandbox.server.inputsDir, inputName), inputBytes, { flag: 'wx' })
+    const registered = await sandbox.server.registerInput(inputName)
+    assert.deepEqual(registered, {
+      name: inputName,
+      size: inputBytes.length,
+      url: `/api/v1/file/${encodeURIComponent(inputName)}?workspace=default`,
+    })
+
+    const status = await fetch(`${sandbox.server.localOrigin}/api/v1/scene-template-review/status`)
+    const statusBody = await status.json()
+    assert.equal(statusBody.inputCount, 1)
+    assert.equal(statusBody.inputBytes, inputBytes.length)
+    assert.equal((await outputCount(sandbox.server)), 0)
+
+    const file = await fetch(`${sandbox.server.localOrigin}${registered.url}`)
+    assert.equal(file.status, 200)
+    assert.equal(file.headers.get('content-type'), 'image/jpeg')
+    assert.deepEqual(Buffer.from(await file.arrayBuffer()), inputBytes)
+
+    const indexed = {
+      ...scene,
+      layers: [{ ...scene.layers[0], source: registered.url }],
+    }
+    const saved = await postScene(sandbox.server, { scene: indexed, preview })
+    assert.equal(saved.status, 200)
+  } finally {
+    await sandbox.server.close()
+    await fs.rm(sandbox.directory, { recursive: true, force: true })
+  }
+})
+
+test('rejects unsafe, non-raster, symlinked, oversized and duplicate inputs', async () => {
+  const sandbox = await createSandbox()
+  try {
+    for (const unsafe of ['', '.', '..', '../hero.png', 'nested/hero.png', '..\\hero.png', 'hero.svg', '.hidden.png', 'hero.png/../x']) {
+      await assert.rejects(() => sandbox.server.registerInput(unsafe), /safe JPG|basename/i, unsafe)
+    }
+
+    const directory = path.join(sandbox.server.inputsDir, 'directory.png')
+    await fs.mkdir(directory)
+    await assert.rejects(() => sandbox.server.registerInput('directory.png'), /regular|symlink/i)
+
+    const target = path.join(sandbox.server.inputsDir, 'target.png')
+    const symlink = path.join(sandbox.server.inputsDir, 'linked.png')
+    await fs.writeFile(target, Buffer.from('target'), { flag: 'wx' })
+    await fs.symlink(target, symlink)
+    await assert.rejects(() => sandbox.server.registerInput('linked.png'), /regular|symlink/i)
+
+    const emptyName = 'empty.jpg'
+    await fs.writeFile(path.join(sandbox.server.inputsDir, emptyName), Buffer.alloc(0), { flag: 'wx' })
+    await assert.rejects(() => sandbox.server.registerInput(emptyName), /empty/i)
+
+    const oversizedName = 'oversized.webp'
+    await fs.writeFile(path.join(sandbox.server.inputsDir, oversizedName), Buffer.alloc(MAX_INPUT_FILE_BYTES + 1), { flag: 'wx' })
+    await assert.rejects(() => sandbox.server.registerInput(oversizedName), /limit/i)
+
+    const validName = 'valid.png'
+    await fs.writeFile(path.join(sandbox.server.inputsDir, validName), Buffer.from('valid'), { flag: 'wx' })
+    await sandbox.server.registerInput(validName)
+    await assert.rejects(() => sandbox.server.registerInput(validName), /already indexed/i)
+    assert.equal(MAX_INPUTS, 64)
+    assert.equal(MAX_INPUT_FILE_BYTES, 4 * 1024 * 1024)
+    assert.equal(MAX_INPUT_BYTES, 128 * 1024 * 1024)
+  } finally {
+    await sandbox.server.close()
+    await fs.rm(sandbox.directory, { recursive: true, force: true })
+  }
+})
+
+test('keeps concurrent raster registration within the finite input count', async () => {
+  const sandbox = await createSandbox()
+  try {
+    const names = Array.from({ length: MAX_INPUTS + 1 }, (_, index) => `concurrent-${index}.png`)
+    await Promise.all(names.map(name => fs.writeFile(
+      path.join(sandbox.server.inputsDir, name), Buffer.from('x'), { flag: 'wx' },
+    )))
+    const results = await Promise.allSettled(names.map(name => sandbox.server.registerInput(name)))
+    assert.equal(results.filter(result => result.status === 'fulfilled').length, MAX_INPUTS)
+    assert.equal(results.filter(result => result.status === 'rejected').length, 1)
+
+    const status = await fetch(`${sandbox.server.localOrigin}/api/v1/scene-template-review/status`)
+    const statusBody = await status.json()
+    assert.equal(statusBody.inputCount, MAX_INPUTS)
+    assert.equal(statusBody.inputBytes, MAX_INPUTS)
+  } finally {
+    await sandbox.server.close()
+    await fs.rm(sandbox.directory, { recursive: true, force: true })
+  }
 })
