@@ -122,11 +122,10 @@ CI / Cursor / development / render real / aprobado visualmente / main.
 |---|---|---|---|
 | P00 | #168, piloto B, C1, C2 | #166 | Wizard seguro, 24 candidatas editables y evidencia |
 | P00D | referencias + selector de assets | B, C1, C2 | 24 acciones con vídeo de referencia y bindings durables de Library |
-| P01 | contrato procedural | P00 | documento de escena/capacidades compatible |
+| P01 | contrato procedural | P00; referencia mínima de assets de P00D | documento de escena/capacidades compatible |
 | P02 | evaluación determinista | P01 | misma evaluación temporal en preview/export |
 | P03 | cámaras 2D | P02 | movimientos y encuadres reutilizables |
 | P04 | composición 2,5D | P03 | grupos, máscaras y profundidad por capas |
-| AN0–AN4 | animación limitada tipo anime | P01/P02/P03/P04; montaje P07; poses P14 | 30 técnicas/recetas con requisitos R0–R3, priorizando personajes fijos en plano medio |
 | P05 | catálogo 2D A–E | P04 | 5 lotes de 10 propuestas distintas |
 | P06 | Wizard declarativo | P05-A; resto aditivo | crea/abre/edita con permisos y IDs |
 | P07 | montaje durable | P06 | escenas → secuencia → vídeo recuperable |
@@ -139,6 +138,17 @@ CI / Cursor / development / render real / aprobado visualmente / main.
 | P14 | personajes A–C | P13 | kit multivista, movimiento y diálogo consistente |
 | P15 | endurecimiento/release | fases aceptadas | release explícito, reversible y probado |
 
+Rama de trabajo AN, **no es un gate para continuar P05–P15**:
+
+| Subfase | Depende de | Corte inicial verificable |
+|---|---|---|
+| AN0 | P01/P02/P03; máscaras de P04 | contrato R0–R3, encuadres y acentos |
+| AN1 | AN0/P04 | una receta de velocidad; después AN-01…08 |
+| AN2 | AN1; efectos con buffers esperan P11 | una receta de energía; después AN-09…16 |
+| AN3 | AN0/P04; receta de audio/montaje espera P07 | una reacción; después AN-17…24 |
+| AN4a | AN3/P07 | montaje/paneles AN-25…29 |
+| AN4b | P14 kit de poses | AN-30, sin bloquear las recetas de imagen única |
+
 P05/P10/P12 son fases con sub-PRs A–E para evitar PRs gigantes: cada lote tiene
 su contrato de aceptación. Mezclar un lote antes de abrir el siguiente. No abrir
 los quince simultáneamente. El número objetivo no justifica rebajar calidad.
@@ -150,9 +160,9 @@ Riesgo medio. Owner principal en integración; Luna en arte/tests/galería acota
 
 - [x] Resolver cómo continuar: #168 mezclado; excepción de Cursor autorizada,
   revisión independiente + CI siguen siendo obligatorios.
-- [ ] PR piloto B: `features/sceneTemplates/{catalog,compile,sceneBuilders,
+- [x] PR piloto B (#169, merge `39c7fd4f` por IAnMove): `features/sceneTemplates/{catalog,compile,sceneBuilders,
   cinemaScenes,musicScenes,spaceScenes,demoScenes,demoArtwork,demoShips}` y tests.
-- [ ] PR piloto C1: galería/ruta/editor-handoff, decisiones versionadas y E2E
+- [x] PR piloto C1 (#173): galería/ruta/editor-handoff, decisiones versionadas y E2E
   en `ui/e2e/specs`, no una carpeta que CI no descubre.
 - [ ] PR piloto C2: tooling local reproducible, API cerrada y tests HTTP. Depende
   de C1; separado para no unir servidor de QA y UI en un PR demasiado grande.
@@ -197,6 +207,8 @@ referencias y PR de bindings/selector; después abordar la generación explícit
   plantillas para inflar el catálogo. Mostrar zona segura y límites en preview.
 - [ ] Para personajes estáticos, recomendar plano medio/medio corto. Los planos
   generales siguen disponibles, con aviso visible: no hay locomoción articulada.
+- [ ] Fijar contrato: `medium = waist-up` y predeterminado para personajes
+  estáticos. Cuerpo entero sólo por selección explícita/pose sostenida/flotación.
 - [ ] Encuadrar con anclas de cabeza/cintura y margen del asset, no un recorte fijo
   que decapite personajes de distintas proporciones. Anclas ajustables en editor.
 - [ ] No desplazar horizontalmente un humano de cuerpo entero como si caminase:

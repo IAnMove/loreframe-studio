@@ -5,8 +5,8 @@
 
 ## Estado exacto
 
-No todos los pasos están terminados. #168 está mezclado en development, el catálogo
-está en PR #169; galería y tooling tienen commits de checkpoint. No se ha publicado
+No todos los pasos están terminados. #168 y el catálogo #169 están mezclados en
+development; #173 galería también está mezclado. C2 sigue en preparación. No se ha publicado
 main. P01 y posteriores están diseñadas, **no implementadas**.
 
 - PR #168: `feat/wizard-programmatic-video`, base development, HEAD
@@ -18,9 +18,13 @@ main. P01 y posteriores están diseñadas, **no implementadas**.
   continuar con revisión independiente de agente + tests locales + CI. No cambiar
   protecciones ni gasto. No usar admin/force bypass. Retomar Cursor cuando vuelva.
 - #168: mezclado por IAnMove, development `8542bf74`.
-- #169: HEAD `7615a9e929e8b3193e68fb7475c22909018b4259`, 22 tests enfocados locales,
-  lint/tipos/build pasan; 5 hallazgos independientes corregidos. Consultar estado
-  remoto actual antes de afirmar CI verde o merge.
+- #169: HEAD revisado `7615a9e929e8b3193e68fb7475c22909018b4259`, 22 tests,
+  lint/tipos/build y CI required verdes; 5 hallazgos corregidos, revisión
+  independiente final sin hallazgos. Merge por IAnMove `39c7fd4f`.
+- #170 H3 fue mezclado externamente (`b879ac7c`); preservar esos cambios.
+- #173: HEAD revisado `ab55bd9bdc65e827695c0e6081a7dd02e037ed0e`, 36 tests,
+  5 E2E, lint/tipos/build/CI y revisión independiente pasan; merge normal realizado.
+  Cursor NO completado; la excepción temporal sigue separada de estos hechos.
 - 24 coral: aprobación visual explícita del usuario y publicación independiente
   [referencias v1](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1).
   74 assets remotos cotejados con hashes, sin medios en Git. No es release de app.
@@ -99,7 +103,8 @@ galería viven en localStorage del navegador y se exportan con «Exportar revisi
 Servidor local de sesión no es persistencia de producción; el puerto puede dejar
 de existir al apagar el proceso/equipo. No prometemos continuidad de esa URL.
 
-Reproducible en otra sesión después de instalar las dependencias normales:
+La herramienta del checkpoint C2 (todavía no entregada en development) será
+reproducible después de instalar las dependencias normales:
 `npm --prefix ui run scene:review -- --render`. Lee SCENE_TEMPLATE_REVIEW.md para
 prerrequisitos y LAN. Usa puerto efímero por defecto, no reserves 42003/42004.
 
@@ -119,6 +124,10 @@ publicación externa v1; no sobrescribirlas al volver a ejecutar recetas.
   `docs/procedural-video-phases`. No mezclar una pila entera del checkpoint.
 - Prueba pintada: `/tmp/hocus-painted-trial.628k1j`, MP4 en
   `http://192.168.1.87:41353/scene-template-previews/painted-establishing-v1.mp4`.
+- Comparación más cerrada: `/tmp/hocus-painted-medium.LZhJqF`, MP4 en
+  `http://192.168.1.87:41605/scene-template-previews/painted-medium-v1.mp4`.
+- Son URLs históricas de sesión: comprobar que el proceso sigue vivo antes de
+  ofrecerlas. No representan servicios publicados ni disponibilidad garantizada.
 - PNG originales + prompts en el directorio ignorado
   `app/outputs/procedural-style-trials-v1/` del worktree del catálogo.
 - Dos imágenes generadas con image_gen integrado, no modelos GPU locales;

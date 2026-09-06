@@ -99,7 +99,8 @@ No construir otro editor ni escribir JS generado por el Wizard. Las recetas
 declarativas se compilan al documento procedural y usan el evaluador compartido.
 
 - [ ] Declarar capacidades R0/R1/R2/R3 y `characterMotion: held | float | poses | rigged`.
-- [ ] `framing: full | medium | medium-close | close` con anclas de cabeza/cintura.
+- [ ] `framing: full | medium | medium-close | close` con anclas de cabeza/cintura;
+  `medium = waist-up`, predeterminado para personajes estáticos. `full` explícito.
 - [ ] Timeline de acentos: anticipación → énfasis → hold → salida, en frames.
 - [ ] Semilla explícita para líneas/partículas/rayos; evaluación fuera de orden.
 - [ ] Pila por grupos: fondo → FX traseros → personaje → FX delanteros → acabado.
@@ -129,6 +130,12 @@ mezclado, con ownership distinto. No modificar a la vez SceneAnimatorPanel,
 evaluador, schema o pila de efectos. Un PR dependiente se abre después del merge
 de su base, no apilar todos los bloques. Luna: fixtures/recetas ya especificadas;
 principal: contratos, cámaras, composición, seguridad y revisión de integración.
+
+Estos bloques no son gates para P05–P15. Empezar cada familia con una sola receta
+representativa renderizada y revisada; ampliar a su lote sólo después. Separar
+AN4 en AN4a (25–29, montaje) y AN4b (30, después de P14) para no posponer las
+técnicas de imagen única por el kit de poses. Las técnicas que requieran buffers
+de P11 quedan pendientes explícitas y no bloquean las que usan capas existentes.
 
 El objetivo de AN4 no bloquea los primeros 24 recursos, que no necesitan un rig
 articulado. Si el kit de poses no está listo, separar AN-30 en otro PR posterior;
