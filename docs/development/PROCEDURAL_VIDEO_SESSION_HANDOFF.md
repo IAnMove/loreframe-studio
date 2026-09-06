@@ -62,6 +62,27 @@ no se abre una cadena de PRs que incluya repetidamente los commits anteriores.
 8. Continuar fases sólo con dependencias mezcladas y aceptación cumplida. Ante
    dudas complejas, principal; Luna sólo tarea delimitada y resultados revisados.
 
+### Continuación P00D — primer corte de selector, PR #177
+
+- Rama `feat/procedural-template-assets`, worktree aislado
+  `/tmp/hocus-procedural-selector.JAoGuJ`. No confundirlo con el checkout compartido.
+- Selector implementado localmente/commits/PR abierto. Leer el estado remoto de
+  #177 antes de continuar: al escribir esta nota CI/merge finales están pendientes.
+- `SCENE_TEMPLATE_LIBRARY.md` describe contrato, instrucciones y límites.
+  Library canónica → slots visibles → editor → guardar/reabrir conserva IDs.
+  Referencias MP4 originales opt-in; JSON original importado tras tamaño/SHA-256.
+- 6 E2E pasan con editor real y API simulada, incluidos nombres `hero(1).svg`.
+  Revisión independiente corrigió incompatibilidad Python quote/encodeURIComponent;
+  preview y compile ahora comparten `catalogLocation.ts`. No quedan hallazgos
+  de esa revisión; no equivale a revisión Cursor ni render nuevo con modelos.
+- Todos los 24 sidecars originales publicados pasan verificación/import local.
+  No se añadieron esos outputs a Git; sólo índice de tamaños/hashes.
+- Tras mezclar #177, completar únicamente los checkboxes P00D cubiertos por su
+  aceptación. No marcar generación explícita de imágenes, anclas/encuadre automático,
+  identidad durable de scene/shot/run o técnicas AN: todavía no implementadas.
+- Próximo corte: encuadre/contratos P01–P03 y preparación explícita de assets según
+  dependencias del roadmap. No añadir decenas de recetas antes del evaluador común.
+
 No ejecutar inferencia de vídeo, descargar modelos ni tocar las apps 42003/42004.
 No hacer release a main sin autorización de esa operación.
 
