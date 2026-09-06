@@ -4073,17 +4073,6 @@ def _strip_h3_untagged_dialogue_duplicates(result: str, prompt: str) -> str:
     return text
 
 
-def _enforce_h3_soundscape_silence(result: str, prompt: str) -> str:
-    """Weaker soundscape blanker. Live enhance uses finalize_h3_prompt / legacy policy."""
-    import re
-    return re.sub(
-        r"(?ms)^\s*overall_soundscape\s*:.*?(?=^\s*non_diegetic_music\s*:)",
-        "overall_soundscape: N/A\n",
-        str(result or ""),
-        count=1,
-    )
-
-
 def _enforce_h3_music_request(
     result: str,
     prompt: str,

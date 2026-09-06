@@ -241,8 +241,8 @@
         "h3_audio_policy": "native",
         "duration_seconds": 8
       },
-      "result": "integrated_multimodal_description: [Shot 1] Ana (S1) <d>[English] Qué silencio.</d>\noverall_soundscape: N/A\nnon_diegetic_music: N/A",
-      "sha256": "2d0bb675f60a071638a60ba247a7730c9a5bee3b295749f7dcaaa43f0ec3d55b"
+      "result": "integrated_multimodal_description: [Shot 1] Ana (S1) <d>[Spanish] Qué silencio.</d>\noverall_soundscape: N/A\nnon_diegetic_music: N/A",
+      "sha256": "c91ca48ba1deae3681867f048fb044d54484aec6435f9919d030db4dc23160a1"
     },
     {
       "id": "studio-silent-scene",

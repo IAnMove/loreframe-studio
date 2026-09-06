@@ -3,7 +3,17 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, MutableMapping, Sequence
+
+
+def _fold_marks(text: str) -> str:
+    """Drop combining marks so 'qué' matches the Spanish function word 'que'."""
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFD", text)
+        if unicodedata.category(character) != "Mn"
+    )
 
 
 _SPANISH_RE = re.compile(r"\b(?:español|spanish|castellano)\b", re.IGNORECASE)
@@ -65,26 +75,30 @@ def infer_h3_spoken_language(text: Any) -> str:
     if re.search(r"[\u3400-\u9fff]", source):
         return "Chinese"
 
-    folded = source.casefold()
-    words = set(re.findall(r"[^\W_]+", folded, flags=re.UNICODE))
+    raw = source.casefold()
+    words = set(re.findall(r"[^\W_]+", _fold_marks(raw), flags=re.UNICODE))
+
+    def folded_words(candidates: set[str]) -> set[str]:
+        return {_fold_marks(item) for item in candidates}
+
     scores = {
         "Spanish": (
-            3 * len(re.findall(r"[¿¡ñ]", folded))
-            + len(words & {"que", "por", "para", "una", "está", "nadie", "aquí", "pero"})
+            3 * len(re.findall(r"[¿¡ñ]", raw))
+            + len(words & folded_words({"que", "por", "para", "una", "está", "nadie", "aquí", "pero"}))
         ),
         "French": (
-            3 * len(re.findall(r"[œêëÿ]", folded))
-            + len(words & {"je", "vous", "avec", "une", "est", "pas", "mais", "ici"})
+            3 * len(re.findall(r"[œêëÿ]", raw))
+            + len(words & folded_words({"je", "vous", "avec", "une", "est", "pas", "mais", "ici"}))
         ),
         "Portuguese": (
-            3 * len(re.findall(r"[ãõ]", folded))
-            + len(words & {"você", "não", "uma", "está", "mas", "aqui"})
+            3 * len(re.findall(r"[ãõ]", raw))
+            + len(words & folded_words({"você", "não", "uma", "está", "mas", "aqui"}))
         ),
         "German": (
-            3 * len(re.findall(r"[äöß]", folded))
-            + len(words & {"ich", "nicht", "und", "ist", "aber", "hier"})
+            3 * len(re.findall(r"[äöß]", raw))
+            + len(words & folded_words({"ich", "nicht", "und", "ist", "aber", "hier"}))
         ),
-        "Italian": len(words & {"io", "non", "una", "sono", "che", "ma", "qui"}),
+        "Italian": len(words & folded_words({"io", "non", "una", "sono", "che", "ma", "qui"})),
     }
     language, score = max(scores.items(), key=lambda item: item[1])
     if score:
