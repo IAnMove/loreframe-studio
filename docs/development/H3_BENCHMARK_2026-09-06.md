@@ -122,12 +122,12 @@ in Modelos remain available.
 The catalog exposes observed per-variant process RAM/VRAM maxima with resolution,
 clip duration, hardware, profile, swap caveat, and the anomalous cold Fused RAM
 exclusion. These benchmark values are descriptive and never gate generation.
-The main selector shows only a short variant explanation; memory details are
-expandable in Modelos. No blanket “best quality” or “gibberish-free” label is used.
+The main selector keeps a compact name with a hover explanation; descriptions
+and expandable memory details live in Modelos. No blanket “best quality” or “gibberish-free” label is used.
 
 
 Catalog follow-up validation: TypeScript build, scoped ESLint, en/es catalog
-parity, entry bundle budget (312,490 / 327,680 gzip bytes), and code-health
+parity, entry bundle budget (312,473 / 327,680 gzip bytes), and code-health
 ratchet against base `43f75b9` pass. The full UI run passed 653/654 tests;
 the sole failure was a stale recovery-dialog wording expectation. After
 updating that expectation, all 10 tests in the affected recovery/H3 files

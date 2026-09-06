@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useStore, getFamiliesForMode, getModelsForFamily } from '../../stores/useStore'
 import { useUiTranslation } from '../../i18n'
 import { InfoTooltip } from './InfoTooltip'
-import { H3ModelInfo, H3ModelName } from './H3ModelInfo'
+import { H3ModelName } from './H3ModelInfo'
 import { modelRequirementsText } from '../../lib/minimaxMusicCatalog'
 
 export function ModelSelector() {
@@ -77,8 +77,6 @@ export function ModelSelector() {
         </span>
         <ChevronDown size={14} className={`shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-
-      <H3ModelInfo modelType={currentModelType} compact />
 
       {/* Dropdown (opens upward) */}
       {open && (
