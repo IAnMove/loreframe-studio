@@ -888,6 +888,9 @@
   },
   "stage": {
     "badge": "3D stage",
+    "modeTitle": "Stage mode",
+    "modeHelp": "2.5D keeps plates and layers on the frame. 3D stage is a real world in metres (Y-up).",
+    "fromApp": "From HocusPocus…",
     "compositor": "2.5D compositor",
     "world": "3D stage",
     "play": "Play",

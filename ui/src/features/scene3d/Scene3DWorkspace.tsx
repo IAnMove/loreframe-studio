@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fetchOutputs, type ApiOutput } from '../../api/client'
+import { AssetExplorerDialog } from '../../components/common/AssetExplorerDialog'
 import { useUiTranslation } from '../../i18n'
+import { useStore } from '../../stores/useStore'
 import { cameraEyeAtTime } from './camera.ts'
 import { clipBindingError, resolveScene3DClip } from './clips.ts'
 import { scene3dFrameCount, scene3dFrameTime } from './clock.ts'
@@ -27,6 +30,9 @@ export function Scene3DWorkspace({ width, height }: Props) {
   const frameRef = useRef(0)
   const sceneDocRef = useRef(sceneDoc)
   const [catalogs, setCatalogs] = useState<Record<string, Scene3DClipCatalogEntry[]>>({})
+  const [explorerSlot, setExplorerSlot] = useState<string | null>(null)
+  const [explorerItems, setExplorerItems] = useState<ApiOutput[]>([])
+  const workspace = useStore(s => s.activeWorkspace)
   const fps = sceneDoc.fps
   const count = scene3dFrameCount(sceneDoc.duration, fps)
   const seconds = scene3dFrameTime(frame, sceneDoc.duration, fps)
@@ -69,9 +75,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
     return () => cancelAnimationFrame(raf)
   }, [playing, sceneDoc.duration, fps, count])
 
-  const assignFile = (slotId: string, file: File | undefined) => {
-    if (!file) return
-    const url = URL.createObjectURL(file)
+  const assignSource = (slotId: string, url: string) => {
     setSceneDoc(current => ({
       ...current,
       slots: current.slots.map(slot => {
@@ -85,6 +89,21 @@ export function Scene3DWorkspace({ width, height }: Props) {
       delete next[slotId]
       return next
     })
+  }
+
+  const openExplorer = async (slotId: string) => {
+    setExplorerSlot(slotId)
+    try {
+      const data = await fetchOutputs(0, 0, { mediaType: 'model3d', workspace })
+      setExplorerItems(data.outputs.filter(item => /\.glb$/i.test(item.name)))
+    } catch {
+      setExplorerItems([])
+    }
+  }
+
+  const assignFile = (slotId: string, file: File | undefined) => {
+    if (!file) return
+    assignSource(slotId, URL.createObjectURL(file))
   }
 
   const setFamily = (family: StageFamily) => {
@@ -139,8 +158,11 @@ export function Scene3DWorkspace({ width, height }: Props) {
         {sceneDoc.slots.map(slot => {
           const clips = catalogs[slot.id] ?? []
           return (
-            <label key={slot.id} className="rounded border border-border bg-bg-primary p-1.5 text-[9px] text-text-secondary">
+            <div key={slot.id} className="rounded border border-border bg-bg-primary p-1.5 text-[9px] text-text-secondary">
               <span className="block font-medium text-text-primary">{t(`stage.slot.${slot.slot}`)}</span>
+              <button type="button" onClick={() => void openExplorer(slot.id)} className="mt-1 w-full rounded border border-cyan-400/40 bg-cyan-400/10 px-1.5 py-1 text-[9px] text-cyan-100">
+                {t('stage.fromApp')}
+              </button>
               <input
                 type="file"
                 accept=".glb,model/gltf-binary"
@@ -186,13 +208,23 @@ export function Scene3DWorkspace({ width, height }: Props) {
                   className="min-w-0 flex-1 rounded border border-border bg-bg-tertiary px-1 py-0.5"
                 />
               </span>
-            </label>
+            </div>
           )
         })}
       </div>
       {clipIssue && <p className="text-[8px] text-red-300">{clipIssue}</p>}
       <p className="text-[8px] text-text-muted">{t('stage.help')}</p>
       <span data-testid="scene3d-roundtrip" className="hidden">{roundtrip ? 'ok' : 'bad'}</span>
+      <AssetExplorerDialog
+        open={Boolean(explorerSlot)}
+        title={t('stage.fromApp')}
+        items={explorerItems}
+        onClose={() => setExplorerSlot(null)}
+        onChoose={item => {
+          if (item && explorerSlot) assignSource(explorerSlot, item.url)
+          setExplorerSlot(null)
+        }}
+      />
     </div>
   )
 }

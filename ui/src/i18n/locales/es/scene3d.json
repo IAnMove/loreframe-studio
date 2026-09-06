@@ -888,6 +888,9 @@
   },
   "stage": {
     "badge": "Escenario 3D",
+    "modeTitle": "Modo de escenario",
+    "modeHelp": "El 2,5D mantiene placas y capas en el encuadre. El escenario 3D es un mundo en metros (Y-up).",
+    "fromApp": "Desde HocusPocus…",
     "compositor": "Compositor 2,5D",
     "world": "Escenario 3D",
     "play": "Reproducir",
