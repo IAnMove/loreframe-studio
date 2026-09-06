@@ -1,6 +1,6 @@
 # Estado de desarrollo y punto de entrada
 
-Verificado el 7 de septiembre de 2026 contra `origin/development` **`26580375`**.
+Verificado el 7 de septiembre de 2026 contra `origin/development` **`eb14a2c7`**.
 Es una fotografía con evidencia, no un sustituto de Git. Antes de reservar trabajo:
 `git fetch origin development`, consultar PR abiertos y comprobar sus archivos.
 
@@ -28,19 +28,17 @@ no autorizan acciones ni representan el estado actual.
 | Vídeo procedural y galería/plantillas | #168, #169, #173, #175, #177, #180, #181, #184 | No equivale a completar toda la hoja de ruta procedural |
 | Inspección GLB y parches faciales | #190, #193, #195 | Router de inspección de #195 todavía sin montar; parches tienen límites de piloto |
 | Taller de habla 2D (preparación manual) | #200 | Panel, borrador, recarga y e2e simulado. El test del panel evita aserciones HTMLElement-vs-null (~260 MiB RSS). No es validación artística de un personaje hablando ni cierra R2–R4 |
+| Series attemptId vs número de plano | #201 | `attempt_id` en un único shot selecciona esa toma histórica. `shot_numbers: [2]` sin `attempt_id` sigue siendo el último eligible del plano 2. No cubre móvil real ni GPU |
 
 La integración es en **development**. No implica que el servidor local esté usando
 esa revisión ni que exista una publicación de aplicación en main.
 
 ## En curso al comprobarlo
 
-Al cerrar esta revisión el taller de habla ya está integrado (#200) y la
-limpieza documental también (#199, merge `26580375`). Escenas 3D sigue en un
-PR abierto, no integrado. Estado por dominio:
+Al cerrar esta revisión el taller de habla (#200), la limpieza documental
+(#199) y el contrato attemptId (#201, merge `eb14a2c7`) ya están integrados.
+Escenas 3D sigue en un PR abierto, no integrado. Estado por dominio:
 
-- **QA attemptId Labs**: PR [#201](https://github.com/IAnMove/hocuspocus/pull/201),
-  rama `fix/labs-qa-attemptid`. Distingue número de plano y toma histórica.
-  No cubre móvil real ni GPU.
 - **Escenas 3D reales**: PR [#198](https://github.com/IAnMove/hocuspocus/pull/198),
   rama `feat/video3d-real-scene-mode`, cambios en
   `PROCEDURAL_3D_SCENE_SPEC.md`, SceneAnimator, `features/scene3d`, dependencias e i18n.
@@ -72,10 +70,10 @@ local y sus rutas de máquina se mantienen fuera de Git en `ESTADO_LOCAL.md`.
 6. **H3 desde Studio**: comprobar propagación de policy desde cada petición UI;
    el contrato API acepta la policy, pero la inspección del store dejó caminos
    pendientes de comprobación. No inferir envío por existir el campo en el schema.
-7. **Labs, cierre de validación**: el contrato `attemptId` vs número de plano
-   está en #201 (no darlo por integrado hasta el merge). Siguen navegación
-   móvil real, prueba audiovisual acotada y equivalencia UI/Wizard más amplia.
-   #196 no repitió GPU. Sus checks verdes no cubren esas ausencias.
+7. **Labs, cierre de validación**: `attemptId` vs número de plano está en #201.
+   Siguen navegación móvil real, prueba audiovisual acotada y equivalencia
+   UI/Wizard más amplia. #196 no repitió GPU. La UI de review ya envía
+   `shotId`+`attemptId` explícitos; no se montó el panel completo aquí por RAM.
 8. **Producto separado del refactor**: fidelidad de letras/idioma y evaluación real
    de Creative/audio H3. Sin repetir matrices masivas ni inventar resultados.
 9. **Entrega**: reconsultar estado de protecciones y preparar una release a main

@@ -1,6 +1,6 @@
 # Cola vigente de refactor
 
-Base verificada: `origin/development` `26580375`, 2026-09-07.
+Base verificada: `origin/development` `eb14a2c7`, 2026-09-07.
 Lee primero [CURRENT_WORK](CURRENT_WORK.md): integrado, en curso y límites de QA.
 No uses la ola F1–F12 como cola actual; es distinta de Labs L0–L12.
 
@@ -21,7 +21,7 @@ No uses la ola F1–F12 como cola actual; es distinta de Labs L0–L12.
 
 | Paquete | Propiedad prevista | Dependencia / alcance |
 |---|---|---|
-| Cierre de QA Labs | Tests UI/Wizard, browser y pruebas reales acotadas | L0–L12 integrados; attemptId en #201. Quedan móvil real, equivalencia amplia y GPU |
+| Cierre de QA Labs | Tests UI/Wizard, browser y pruebas reales acotadas | L0–L12 y attemptId (#201) integrados. Quedan móvil real, equivalencia amplia y GPU |
 | Router Story Music | Nuevo router + cableado mínimo runtime | Finalización/spec/rehidratación ya integrados (#158–#163); reservar runtime en exclusiva |
 | Sesión Story | Controller/hooks de carga, draft, guardado y recuperación | Las pestañas ya se reorganizaron; preservar workspace fuente y CAS |
 | Slice musical Studio | `useStore` y slice musical | Reutilizar catálogo/spec existente; no extraer todo startGeneration |
