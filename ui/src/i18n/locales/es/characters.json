@@ -1,7 +1,58 @@
 {
+  "speechWorkshop": {
+    "alternatives": "Métodos y limitaciones",
+    "title": "Preparar habla 2D",
+    "intro": "Prepara un personaje reutilizable una vez: elige base, coloca bocas, previsualiza, revisa y guarda. No necesitas generar un giro 3D.",
+    "methods": {
+      "sprites": {
+        "title": "Bocas superpuestas",
+        "detail": "Usa un pack de bocas del editor inferior. Tapa antes la boca original; unos labios genéricos pueden no encajar con dibujos detallados. También puedes asignar sprites propios desde las capas de la escena."
+      },
+      "patches": {
+        "title": "Parches del rostro",
+        "detail": "Importa una variante alineada. Su piel/barba tapa la boca original. Misma identidad no garantiza alineación. No le quites el fondo."
+      },
+      "software": {
+        "title": "Software externo de lip-sync",
+        "detail": "Rhubarb calcula tiempos de boca, no dibuja las piezas. MuseTalk modifica el rostro con un modelo. Ninguno está conectado aquí todavía."
+      }
+    },
+    "manualOnly": "Taller manual: aquí no se genera imagen, voz ni se quita el fondo con modelos. Esos botones están deshabilitados. Prepara variantes fuera e impórtalas; Face Rig en escenas conserva sus herramientas asistidas.",
+    "character": "Personaje guardado",
+    "choose": "Elige un personaje",
+    "newCharacter": "Nuevo personaje desde una imagen",
+    "name": "Nombre del nuevo personaje",
+    "baseImage": "Imagen base",
+    "importBase": "Subir base y crear borrador",
+    "importHint": "PNG, JPEG o WebP, hasta 20 MiB. Elegir archivo no lo sube. La subida crea una base pendiente, no un personaje aprobado. Los archivos se conservan aunque descartes el borrador.",
+    "pose": "Pose en edición",
+    "approvePose": "He revisado esta imagen base",
+    "singlePack": "Límite actual: un pack de bocas por personaje. Los parches corresponden a su pose y fuente exactas; no sobrescribas un pack válido para preparar otra vista.",
+    "checklist": "Estado de preparación de las bocas",
+    "states": {
+      "missing": "falta",
+      "pending": "pendiente de revisión",
+      "rejected": "rechazada",
+      "incompatible": "otra pose/fuente",
+      "approved": "aprobada"
+    },
+    "previewReady": "Hay una boca cerrada y otra abierta revisadas. Puedes probar el intercambio; esto no certifica calidad visual ni lip-sync fonético.",
+    "previewNotReady": "Revisa la base y al menos una boca cerrada y otra abierta antes de juzgar la animación. La vista previa por texto es heurística, no lip-sync fonético.",
+    "save": "Guardar personaje para habla",
+    "discardReload": "Descartar borrador y recargar biblioteca",
+    "reload": "Recargar biblioteca",
+    "unsaved": "Cambios sin guardar. Esta pestaña conserva un borrador por workspace al navegar. Guarda para conservarlo en el servidor; la recuperación no está garantizada si falla el almacenamiento del navegador. Descartar y recargar elimina el borrador.",
+    "busy": "Cargando o guardando personaje…",
+    "errorHint": "No hay reintento ni sobrescritura automática. Si falla el guardado, conservas el borrador; si otro editor guardó antes, resuélvelo antes de descartar y recargar.",
+    "invalidImport": "Escribe un nombre y elige un PNG, JPEG o WebP no vacío de hasta 20 MiB.",
+    "invalidUpload": "La subida no devolvió una URL de imagen persistente.",
+    "invalidSave": "El servidor no devolvió el personaje guardado.",
+    "imported": "Base subida. Revísala en la vista previa y guarda el personaje explícitamente.",
+    "saved": "Personaje guardado en este workspace. La validación visual y de audio es independiente."
+  },
   "library": {
     "title": "Personajes recortables",
-    "subtitle": "Un personaje es un cuerpo + bocas que se colocan encima. No es Character Creator (eso es el turnaround 3D).",
+    "subtitle": "Un personaje es un cuerpo + bocas que se colocan encima. También puedes prepararlo en Character Creator → Preparar habla 2D.",
     "savedCount_zero": "vacío",
     "savedCount_one": "{{count}} guardado",
     "savedCount_other": "{{count}} guardados",
@@ -274,7 +325,7 @@
   },
   "creator": {
     "title": "Character Creator",
-    "subtitle": "Turnaround 3D: sube una foto. MiniMax o el LLM interno describen el sujeto si dejas el A Prompt vacío. Sale un vídeo 360 y, si quieres, un mesh Hunyuan. No es el puppet 2D de Face Rig.",
+    "subtitle": "Turnaround 3D: sube una foto. MiniMax o el LLM interno describen el sujeto si dejas el A Prompt vacío. Sale un vídeo 360 y, si quieres, un mesh Hunyuan. Para un personaje 2D, abre Preparar habla 2D más abajo; no requiere un vídeo 360.",
     "openFaceRig": "Crear / abrir CharacterKit Face Rig",
     "history": "Historial de este Workspace",
     "kind": {

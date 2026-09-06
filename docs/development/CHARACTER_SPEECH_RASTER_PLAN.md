@@ -52,9 +52,11 @@ Son referencias de diseño; no son dependencias instaladas ni integraciones hech
 - [x] Revalidación `validate_local.sh --full` en `4f8028df`, contra development
   `f9fbeb8a`: Python 2155 aprobados/1 omitido, UI 940, E2E 17; ratchet y demás
   controles aprobados. i18n también aprobado por separado.
-- [ ] CI de GitHub sobre el HEAD exacto del PR: pendiente al escribir esta nota.
-  Cursor dispensado temporalmente por cuota; no desactivar checks requeridos.
-- [ ] Merge normal a development. No publicar main ni reiniciar apps compartidas.
+- [x] CI requerido sobre HEAD `56bea596` aprobado; Cursor Automation
+  InternalBugBot aprobado. Independent QA neutral no es una aprobación.
+- [x] PR #193 mezclado normalmente en development, merge `426cc006`.
+  Sin publicar main ni reiniciar apps compartidas. Estado remoto releído al
+  preparar [el taller manual](CHARACTER_SPEECH_WORKSHOP.md).
 - [ ] Validación artística de un pack hablante real: **no conseguida** en este
   ensayo. El control cerrado de una misma imagen no demuestra interpretación.
 
@@ -112,8 +114,9 @@ Este plan no declara completado el programa general de vídeo procedural.
 - Imagen maestra: job `minimax-image-2e17260ab573`, Image-01, 1024×1024.
 - Variante AH: job `minimax-image-f56ab6eb3383`. Cambia ángulo, encuadre y estilo;
   **no apta para recorte directo alineado**.
-- Segundo intento frontal: job `minimax-image-32937bfedb04`. Sigue cambiando
-  textura, proporciones y posición de la boca; **no aprobado para animación**.
+- Segundo intento frontal: job `minimax-image-32937bfedb04`. El usuario aprueba
+  la identidad y la referencia: es el mismo personaje. Esto no valida todavía
+  la alineación para intercambiar parches, las expresiones ni una actuación.
 - Sólo tres imágenes; no se ejecutó generación de vídeo, separación vocal ni
   inferencia local. Prompts, respuestas y imágenes conservados fuera de Git.
 - Conclusión limitada a esta prueba: el endpoint de referencia de identidad no
