@@ -29,7 +29,8 @@ not proof that its defect is still present after the linked fixes.
 |---|---|---|
 | `fused_dropped_by_model_for_manifest` | L1 | Addressed in #183/#197: fused IDs stay fused; references use minimax_h3_ref2va_fused_turbo; frames use minimax_h3_fused_turbo. Real GPU verification was not repeated by L12. |
 | `partial_global_profile_guard` | L2 | Addressed in #183/#197: seriesProviderMatchesGlobal includes writingBaseUrl, flowShift, audioShift and modelProfile. Frozen episode snapshots stay. |
-| `approve_all_replaces_chosen_takes` | L3 | Addressed in #183/#197: pending takes / all_latest keep valid finals; replace_latest and explicit selected_latest remain replace paths. L12 does not prove selection of a specific attemptId. |
+| `approve_all_replaces_chosen_takes` | L3 | Addressed in #183/#197: pending takes / all_latest keep valid finals; replace_latest and explicit selected_latest remain replace paths. |
+| `shot_number_is_not_attempt_id` | QA | Addressed in #201: `attempt_id` on `selected_latest` with exactly one shot selects that historical take; `shot_numbers: [2]` without `attempt_id` remains latest of shot 2. |
 | `script_shots_dialogue_desync` | L4 | Addressed in #183/#197: script edits annotate stale shots; render refuses them; sync is explicit. Full UI-to-real-render validation is separate. |
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
@@ -1298,7 +1299,7 @@ Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L1
 | «He descubierto ChatGPT» | `syncShotsFromScript` keeps the literal and marks the speaking shot stale. |
 | Generate pending shots in quick mode | Wizard parses `render_series_shots` `missing`. Fused 4-step payload is covered by `tests/test_series_render.py`. This PR did **not** run a GPU generation. |
 | Choose latest pending takes | `bulkApproveSelections({ replaceFinals: false })` keeps existing finals. |
-| Use take 2 for this shot | Partial coverage only: this selects the latest attempt of shot 2, not a specific take 2. Add explicit attemptId coverage. |
+| Use take 2 for this shot | `shot_numbers: [2]` + `selected_latest` is latest of shot 2. A concrete take uses `attempt_id` on exactly one shot (`ui/tests/labsWizardQaAttemptId.test.mjs`). |
 | Make a comic of this episode | `stage_series_comic` remains the existing operation. |
 | Assemble without enough takes | `missingAssemblyShotOrders` lists missing shot numbers; assemble throws `Faltan`. |
 | Workspace change in flight | Covered by `ui/tests/storyAsyncOwnership.test.mjs`. |
@@ -1306,4 +1307,4 @@ Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L1
 | Reload with live generation | `reusableInFlightSongCandidate` reuses the pending job candidate. |
 | Invalid provider action/fields | Unknown types and invalid `render_mode` parse to no actions. |
 
-Historical gap IDs above have fixes in #183; they are not all open defects. Remaining validation: a specific attemptId, real mobile browser navigation and bounded audiovisual/UI-to-Wizard checks. No real audiovisual generation was repeated here.
+Historical gap IDs above have fixes in #183/#197/#201; they are not all open defects. Remaining validation: real mobile browser navigation and bounded audiovisual/UI-to-Wizard checks. No real audiovisual generation was repeated here.
