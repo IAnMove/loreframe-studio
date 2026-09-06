@@ -97,6 +97,8 @@
     "auto": "Auto · generate missing",
     "manualHelp": "Add plates and GLBs with previews, then ask the LLM to compose. Edit the scene, then Record.",
     "autoHelp": "Describe the scene normally. HocusPocus plans reusable 3D subjects, plates, camera and effects; review the plan before generation.",
+    "noVideoGeneration": "Do not generate video clips",
+    "noVideoGenerationHelp": "Images, audio and 3D assets may still be generated when needed. Existing video clips are allowed and will be reused.",
     "howTitle": "How to describe a scene",
     "howBody": "Mention subjects that must keep their identity, actions in order, the setting, and optionally camera, duration or format. Moving characters, vehicles and objects become separate reusable 3D assets; a fixed environment becomes one plate; fog, snow and rain become effects.",
     "images": "Images",
@@ -148,6 +150,11 @@
     "resolving": "Resolving assets and audio (generate only what is missing)…",
     "mounted": "Mounted shot “{{name}}”. Tweak it in the inspector, then Record.",
     "mountedEdit": "Mounted shot “{{name}}”. Edit freely, then Record.",
+    "policyError": {
+      "generationForbidden": "{{kind}} “{{assetId}}” cannot be generated under {{policy}}. Supply an existing source.",
+      "unknown": "This scene uses an unknown generation policy and was blocked."
+    },
+    "typeAudio": "Audio",
     "embeddedClips": "Embedded skeletal clips: {{clips}}."
   },
   "hunyuan": {

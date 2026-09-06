@@ -116,7 +116,7 @@ No tocar producción, workflows, launchers, store ni runtime.
 - [x] Probar aislamiento de bocas/texto español e inglés y rechazo de fuentes ausentes.
 - [x] Reproducir baseline con suite focalizada y checks locales sin modelos.
 - [x] Registrar mediciones disponibles; render/memoria no medidos siguen pendientes.
-- [ ] Commit, PR, CI/revisión actual y merge comprobados por separado.
+- [x] Commit, PR, CI/revisión actual y merge comprobados por separado (#164).
 
 Aceptación: otra máquina con dependencias de desarrollo reproduce los contratos
 sin modelos, archivos personales ni backend en ejecución. No afirmar película hecha.
@@ -125,6 +125,19 @@ sin modelos, archivos personales ni backend en ejecución. No afirmar película 
 
 Archivos: tipos/validadores de producción, `sceneRecipeAssets`, contratos de receta.
 Dividir en 02a/02b si identidad/migración y política no caben en un PR cohesivo.
+
+División aplicada: **02a** limita los trabajos del resolver de recetas y conserva
+la política en UI/JSON; **02b** aborda identidad/revisión y migración. No se da
+por completado 02 al terminar 02a. El valor se llama `no_video_generation`, no
+`procedural_only`: permite clips ya existentes, pero no generarlos. El piloto
+totalmente programático tendrá además fixtures sin capas de vídeo. Contrato y
+consumidores todavía pendientes: [VIDEO3D_GENERATION_POLICY.md](VIDEO3D_GENERATION_POLICY.md).
+
+- [x] 02a: preflight completo antes de trabajos, opciones legacy y snapshot de entrada.
+- [x] 02a: persistencia en receta/escena y validación de políticas desconocidas.
+- [x] 02a: checkbox, errores EN/ES y tests de integración del formulario revisados.
+- [ ] 02a: checks locales, commit, PR, CI, Cursor y merge verificables.
+- [ ] 02b: contrato de identidad/revisión y compatibilidad con escenas existentes.
 
 - [ ] Inventariar contratos actuales y reutilizar identidades de dominio existentes.
 - [ ] Definir ID/revisión, referencias durables y tiempo/fotogramas sin ambigüedad.
@@ -301,4 +314,12 @@ humana breve de funcionamiento/creatividad, no una revisión de código imaginar
 - El worktree se actualizó por fast-forward a
   `ac5d3bc5dc30fb38c5aa0ad327186a06b1f5cdd1` tras los merges ajenos #161 y #163,
   sin modificar esos cambios. La inspección arquitectónica anterior conserva su SHA.
-- PR 02–13: diseñados, no implementados por este checkpoint.
+- PR 01: [#164](https://github.com/IAnMove/hocuspocus/pull/164) mezclado en
+  `development` como `a52c5680ad3079ddec07681521a1a3b9c1644e2b`. CI obligatorio y
+  Cursor completados sobre HEAD `5e1b15e0262967eed27949973ffcabd0f8cb0b22` antes
+  del merge. Independent QA neutral no se considera aprobación. No hay piloto
+  audiovisual validado ni inferencia real.
+- PR 02a: implementación local iniciada en `feat/video3d-recipe-generation-policy`
+  desde ese merge. Core revisado por el agente principal; UI/DOM delegados a Luna
+  y sujetos a revisión del principal. No equivale a autorización global de Wizard.
+- PR 02b–13: diseñados, no implementados por este checkpoint.

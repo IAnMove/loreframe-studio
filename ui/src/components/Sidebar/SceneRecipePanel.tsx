@@ -22,6 +22,12 @@ import {
   type SceneRecipeShot,
 } from '../../lib/sceneRecipe'
 import { resolveRecipeAssets } from '../../lib/sceneRecipeAssets'
+import {
+  effectiveSceneGenerationPolicy,
+  SceneGenerationPolicyError,
+  withSceneGenerationPolicy,
+  type SceneGenerationPolicy,
+} from '../../lib/sceneGenerationPolicy'
 import { characterKitRecipeInventory, type CharacterKitLibrary } from '../../lib/characterKit'
 import type { Scene } from '../../types'
 
@@ -72,6 +78,44 @@ function shotPlanLabel(shot: SceneRecipeShot, t: TFunction<'scene3d'>): string {
     .map(layer => layer.motion || layer.asset || layer.id)
     .join(' · ')
   return `${camera}${action ? ` · ${action}` : ''}`
+}
+
+function callerGenerationPolicy(mode: 'manual' | 'auto', noVideoGeneration: boolean): SceneGenerationPolicy {
+  return effectiveSceneGenerationPolicy(
+    mode === 'manual' ? 'provided_only' : noVideoGeneration ? 'no_video_generation' : 'auto',
+  )
+}
+
+function generationPolicyInstructions(policy: SceneGenerationPolicy): string {
+  if (policy === 'provided_only') {
+    return `TRUSTED CALLER GENERATION POLICY: provided_only.
+- Use every supplied image, video, 3D model and audio source exactly as provided.
+- Never emit a prompt-only asset or audio track, and never request an image, audio, video, model or rig generation job.
+- Preserve the user's requested story and shot order; change only unsupported generated resources into a clear missing-source validation failure.`
+  }
+  if (policy === 'no_video_generation') {
+    return `TRUSTED CALLER GENERATION POLICY: no_video_generation.
+- Never request or create a generated video asset. An existing supplied video source is allowed and must be copied exactly.
+- Images, audio and 3D assets may still be generated when they are missing and the normal mode permits it.
+- Preserve the user's requested story and shot order; do not translate or rewrite the user's intent.`
+  }
+  return `TRUSTED CALLER GENERATION POLICY: auto.
+- Missing assets may be generated according to the normal mode rules.
+- Do not weaken or override a more restrictive policy that may already be present in the recipe JSON.`
+}
+
+function recipeErrorMessage(reason: unknown, t: TFunction<'scene3d'>): string {
+  if (reason instanceof SceneGenerationPolicyError) {
+    if (reason.code === 'generation_forbidden') {
+      return t('recipe.policyError.generationForbidden', {
+        policy: reason.policy,
+        assetId: reason.assetId,
+        kind: reason.kind === 'audio' ? t('recipe.typeAudio') : assetKindLabel(reason.kind as RecipeAssetKind, t),
+      })
+    }
+    return t('recipe.policyError.unknown')
+  }
+  return reason instanceof Error ? reason.message : String(reason)
 }
 
 function previewForOutput(item: ApiOutput): string {
@@ -176,6 +220,7 @@ export function SceneRecipePanel({
   // A natural-language request should work without first understanding the
   // asset picker. Manual remains available for deterministic compositions.
   const [mode, setMode] = useState<'manual' | 'auto'>('auto')
+  const [noVideoGeneration, setNoVideoGeneration] = useState(false)
   const [intent, setIntent] = useState('Same saucer: first it rises behind the ridge, then it cruises left to right.')
   const [recipeText, setRecipeText] = useState(JSON.stringify(EXAMPLE_SAUCER_CRUISE_RECIPE, null, 2))
   const [selected, setSelected] = useState<LoadedAsset[]>([])
@@ -200,8 +245,9 @@ export function SceneRecipePanel({
   const pickerItems = picker === 'model3d' ? gallery.models : picker === 'image' ? gallery.images : []
 
   const applyShot = async (recipe: SceneRecipe, shot: SceneRecipeShot, resolved: Record<string, string>) => {
-    const scene = compileRecipeShot(recipe, shot, resolved, filename => getFileUrl(filename, workspace))
-    await onApply({ ...recipe, record: false, save: false }, scene, setStatus, intent.trim())
+    const storedRecipe = withSceneGenerationPolicy(recipe, recipe.generationPolicy)
+    const scene = compileRecipeShot(storedRecipe, shot, resolved, filename => getFileUrl(filename, workspace))
+    await onApply({ ...storedRecipe, record: false, save: false }, scene, setStatus, intent.trim())
   }
 
   const addOutput = async (item: ApiOutput) => {
@@ -265,6 +311,8 @@ export function SceneRecipePanel({
 
   const writeRecipe = async () => {
     if (!intent.trim()) return
+    const callerPolicy = callerGenerationPolicy(mode, noVideoGeneration)
+    const policyInstructions = generationPolicyInstructions(callerPolicy)
     setBusy('write')
     setError(null)
     setStatus(t('recipe.interpreting'))
@@ -280,7 +328,7 @@ export function SceneRecipePanel({
       }))
       const kitInventory = characterKits ? characterKitRecipeInventory(characterKits) : []
       const fullInventory = [...loaded, ...kitInventory.filter(item => !loaded.some(selectedItem => selectedItem.source === item.source))]
-      const systemPrompt = buildRecipeSystemPrompt({ mode, inventory: fullInventory })
+      const systemPrompt = `${buildRecipeSystemPrompt({ mode, inventory: fullInventory })}\n\n${policyInstructions}`
       let text = await generateLlmText({
         prompt: intent.trim(),
         system_prompt: systemPrompt,
@@ -299,7 +347,7 @@ export function SceneRecipePanel({
           const validationMessage = validationError instanceof Error ? validationError.message : String(validationError)
           setStatus(t('recipe.repairing', { attempt: attempt + 1, message: validationMessage }))
           text = await generateLlmText({
-            prompt: `Repair your previous recipe without changing the user's intent. Preserve every valid requested subject and action, fix the validation error, and return one complete replacement JSON object.\n\nUSER INTENT:\n${intent.trim()}\n\nVALIDATION ERROR:\n${validationMessage}\n\nPREVIOUS RECIPE:\n${text.slice(0, 16_000)}`,
+            prompt: `Repair your previous recipe without changing the user's intent. Preserve every valid requested subject and action, fix the validation error, and return one complete replacement JSON object.\n\n${policyInstructions}\n\nUSER INTENT:\n${intent.trim()}\n\nVALIDATION ERROR:\n${validationMessage}\n\nPREVIOUS RECIPE:\n${text.slice(0, 16_000)}`,
             system_prompt: systemPrompt,
             max_new_tokens: 4000,
             temperature: 0.05,
@@ -312,34 +360,37 @@ export function SceneRecipePanel({
       if (mode === 'manual') {
         recipe = constrainManualRecipeToInventory(recipe, fullInventory)
       }
+      recipe = withSceneGenerationPolicy(recipe, callerPolicy)
       setRecipeText(JSON.stringify(recipe, null, 2))
       setPlannedRecipe(recipe)
       setShots(listRecipeShots(recipe))
       setActiveShot(0)
       setStatus(t('recipe.ready', { name: recipe.name, count: listRecipeShots(recipe).length }))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(recipeErrorMessage(reason, t))
     } finally {
       setBusy(null)
     }
   }
 
   const runRecipe = async () => {
+    const callerPolicy = callerGenerationPolicy(mode, noVideoGeneration)
     abortRef.current?.abort()
     const abort = new AbortController()
     abortRef.current = abort
     setBusy('run')
     setError(null)
     try {
-      const recipe = parseSceneRecipeText(recipeText)
+      const recipe = withSceneGenerationPolicy(parseSceneRecipeText(recipeText), callerPolicy)
       setStatus(mode === 'manual' ? t('recipe.usingLoaded') : t('recipe.resolving'))
       const resolved = await resolveRecipeAssets(recipe, {
         workspace,
         onStatus: setStatus,
         signal: abort.signal,
         generateMissing: mode === 'auto',
+        policy: callerPolicy,
       })
-      const stored = withResolvedSources(recipe, resolved)
+      const stored = withSceneGenerationPolicy(withResolvedSources(recipe, resolved), callerPolicy)
       setRecipeText(JSON.stringify(stored, null, 2))
       recipeRef.current = stored
       resolvedRef.current = resolved
@@ -349,7 +400,7 @@ export function SceneRecipePanel({
       await applyShot(stored, nextShots[0], resolved)
       setStatus(t('recipe.mounted', { name: nextShots[0].name }))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(recipeErrorMessage(reason, t))
     } finally {
       if (abortRef.current === abort) abortRef.current = null
       setBusy(null)
@@ -357,21 +408,27 @@ export function SceneRecipePanel({
   }
 
   const mountShot = async (index: number) => {
-    const recipe = recipeRef.current || parseSceneRecipeText(recipeText)
-    const resolved = Object.keys(resolvedRef.current).length
-      ? resolvedRef.current
-      : Object.fromEntries(recipe.assets.filter(asset => asset.source).map(asset => [asset.id, asset.source as string]))
-    const nextShots = listRecipeShots(recipe)
-    const shot = nextShots[index]
-    if (!shot) return
-    setActiveShot(index)
+    const callerPolicy = callerGenerationPolicy(mode, noVideoGeneration)
     setBusy('run')
     setError(null)
     try {
-      await applyShot(recipe, shot, resolved)
+      const recipe = withSceneGenerationPolicy(recipeRef.current || parseSceneRecipeText(recipeText), callerPolicy)
+      const resolved = Object.keys(resolvedRef.current).length
+        ? resolvedRef.current
+        : Object.fromEntries(recipe.assets.filter(asset => asset.source).map(asset => [asset.id, asset.source as string]))
+      const nextShots = listRecipeShots(recipe)
+      const shot = nextShots[index]
+      if (!shot) return
+      setActiveShot(index)
+      const stored = withSceneGenerationPolicy(recipe, callerPolicy)
+      await applyShot(stored, shot, resolved)
+      recipeRef.current = stored
+      setRecipeText(JSON.stringify(stored, null, 2))
+      setPlannedRecipe(stored)
+      setShots(listRecipeShots(stored))
       setStatus(t('recipe.mountedEdit', { name: shot.name }))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(recipeErrorMessage(reason, t))
     } finally {
       setBusy(null)
     }
@@ -402,6 +459,21 @@ export function SceneRecipePanel({
       <p className="text-[8px] text-text-muted">
         {mode === 'manual' ? t('recipe.manualHelp') : t('recipe.autoHelp')}
       </p>
+      {mode === 'auto' && (
+        <div className="rounded border border-border bg-bg-primary/30 px-2 py-1.5">
+          <label className="flex items-start gap-1.5 text-[10px] text-text-secondary">
+            <input
+              type="checkbox"
+              checked={noVideoGeneration}
+              disabled={locked}
+              onChange={event => setNoVideoGeneration(event.currentTarget.checked)}
+              className="mt-0.5 accent-cyan-400"
+            />
+            <span>{t('recipe.noVideoGeneration')}</span>
+          </label>
+          <p className="mt-1 pl-5 text-[8px] leading-relaxed text-text-muted">{t('recipe.noVideoGenerationHelp')}</p>
+        </div>
+      )}
 
       <details className="rounded border border-border bg-bg-primary/45 px-2 py-1.5 text-[9px] text-text-muted">
         <summary className="cursor-pointer font-medium text-text-secondary">{t('recipe.howTitle')}</summary>
