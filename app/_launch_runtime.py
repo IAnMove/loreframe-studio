@@ -9517,11 +9517,15 @@ async def director_plan_prompts_and_images(request: Request):
             music_video_treatment=body.get("music_video_treatment"),
         )
         if _is_minimax_h3_model(body.get("video_model")):
-            from services.director.minimax_h3_prompting import adapt_clip_plans_for_h3
+            from services.director.minimax_h3_prompting import (
+                adapt_clip_plans_for_h3,
+                h3_audio_policy_from_payload,
+            )
             clip_plans = adapt_clip_plans_for_h3(
                 clip_plans,
                 reference_mode=body.get("h3_reference_mode", "first_frame"),
                 audio_direction=body.get("h3_audio_prompt", ""),
+                h3_audio_policy=h3_audio_policy_from_payload(body),
             )
         return {"clip_plans": clip_plans}
     except Exception as e:
@@ -9588,11 +9592,15 @@ async def director_plan_short_film_prompts(request: Request):
             existing_image_prompts=body.get("existing_image_prompts"),
         )
         if _is_minimax_h3_model(body.get("video_model")):
-            from services.director.minimax_h3_prompting import adapt_clip_plans_for_h3
+            from services.director.minimax_h3_prompting import (
+                adapt_clip_plans_for_h3,
+                h3_audio_policy_from_payload,
+            )
             clip_plans = adapt_clip_plans_for_h3(
                 clip_plans,
                 reference_mode=body.get("h3_reference_mode", "first_frame"),
                 audio_direction=body.get("h3_audio_prompt", ""),
+                h3_audio_policy=h3_audio_policy_from_payload(body),
             )
         return {"clip_plans": clip_plans}
     except Exception as e:
@@ -10450,13 +10458,17 @@ async def _director_v2_plan_body(body: dict):
                 allow_clip_text=body.get("allow_clip_text") is True,
             )
         elif _is_minimax_h3_model(video_model):
-            from services.director.minimax_h3_prompting import adapt_clip_plans_for_h3
+            from services.director.minimax_h3_prompting import (
+                adapt_clip_plans_for_h3,
+                h3_audio_policy_from_payload,
+            )
             serialized_plan = plan.to_dict()
             clip_plans = adapt_clip_plans_for_h3(
                 clip_plans,
                 serialized_plan.get("shots") or [],
                 reference_mode=body.get("h3_reference_mode", "first_frame"),
                 audio_direction=body.get("h3_audio_prompt", ""),
+                h3_audio_policy=h3_audio_policy_from_payload(body),
             )
             clip_plans = enforce_visual_style_on_clip_plans(
                 clip_plans,

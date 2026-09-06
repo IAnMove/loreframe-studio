@@ -45,6 +45,7 @@ from .reference_manifest import (
     MINIMAX_H3_MAX_REFERENCES,
     validate_reference_manifest,
 )
+from .spoken_language import language_for_quoted_speech, tagged_dialogue as h3_tagged_dialogue
 
 
 MINIMAX_H3_REFERENCE_IMAGE_SHORT_EDGE = 2048
@@ -1170,6 +1171,63 @@ class MiniMaxH3PreparedReference:
         return self.num_audio_latents * MINIMAX_H3_AUDIO_CHANNELS
 
 
+_VISIBLE_TEXT_NOUN_RE = re.compile(
+    r"(?i)\b(?:sign|banner|label|subtitle|caption|marquee|poster|billboard|"
+    r"screen|monitor|display|neon|placard|headline|logo|shirt|door|wall)\b"
+)
+_VISIBLE_TEXT_CUE_RE = re.compile(
+    r"(?i)\b(?:reads?|reading|shows?|showing|displays?|displaying|bears?|"
+    r"bearing|marked|printed|written|spells?|saying|with(?:\s+the)?\s+"
+    r"(?:text|words?|lettering))\b"
+)
+
+
+def _is_visible_text_quote(text: str, match: re.Match[str]) -> bool:
+    before = text[max(0, match.start() - 150):match.start()]
+    after = text[match.end():match.end() + 100]
+    if re.search(
+        r"(?i)\b(?:titled|entitled|called|named|captioned)\s*[:,-]?\s*$",
+        before,
+    ):
+        return True
+    nouns = list(_VISIBLE_TEXT_NOUN_RE.finditer(before))
+    cues = list(_VISIBLE_TEXT_CUE_RE.finditer(before))
+    speech = list(_SPEECH_VERB_RE.finditer(before))
+    last_visible = max([item.start() for item in nouns + cues], default=-1)
+    last_speech = max((item.start() for item in speech), default=-1)
+    if last_visible >= 0 and last_visible >= last_speech:
+        return True
+    return bool(re.match(
+        r"(?i)^\s*(?:appears?|is\s+(?:visible|written|printed|displayed)|glows?)"
+        r"\b[^.!?\r\n]{0,70}\b(?:on|across|above|below|behind|over)\b",
+        after,
+    ))
+
+
+def _tag_raw_quoted_dialogue(text: str) -> str:
+    """Compile raw quotes to tagged speech without treating signs as dialogue."""
+
+    def compile_dialogue(match: re.Match[str]) -> str:
+        if _is_visible_text_quote(text, match):
+            return match.group(0)
+        words = (match.group(1) or match.group(2) or "").strip()
+        # Speaker/Subject ownership is compiled in one place below. Inserting
+        # ``(S{subject})`` here used the immutable Subject number as if it were
+        # event order and could silently bind an unreferenced actor to the only
+        # saved character.
+        language = language_for_quoted_speech(
+            words,
+            text[max(0, match.start() - 240):match.start()],
+        )
+        return h3_tagged_dialogue(language, words)
+
+    return re.sub(
+        r'"([^"\r\n]{1,500})"|“([^”\r\n]{1,500})”',
+        compile_dialogue,
+        text,
+    )
+
+
 def ensure_ref2va_prompt_relationships(
     prompt: str,
     references,
@@ -1363,53 +1421,7 @@ def ensure_ref2va_prompt_relationships(
                 "without copying the source signal, words, timing, or recording-room acoustics."
             )
 
-    dialogue_counter = 0
-    dialogue_word_count = 0
-    def is_visible_text_quote(match) -> bool:
-        before = text[max(0, match.start() - 150):match.start()]
-        after = text[match.end():match.end() + 100]
-        if re.search(
-            r"(?i)\b(?:titled|entitled|called|named|captioned)\s*[:,-]?\s*$",
-            before,
-        ):
-            return True
-        visible_noun = re.search(
-            r"(?i)\b(?:sign|banner|label|subtitle|caption|marquee|poster|billboard|"
-            r"screen|monitor|display|neon|placard|headline|logo|shirt|door|wall)\b",
-            before,
-        )
-        visible_cue = re.search(
-            r"(?i)\b(?:reads?|reading|shows?|showing|displays?|displaying|bears?|"
-            r"bearing|marked|printed|written|spells?|saying|with(?:\s+the)?\s+"
-            r"(?:text|words?|lettering))\s*[:,-]?\s*$",
-            before,
-        )
-        if visible_noun and visible_cue:
-            return True
-        return bool(re.match(
-            r"(?i)^\s*(?:appears?|is\s+(?:visible|written|printed|displayed)|glows?)"
-            r"\b[^.!?\r\n]{0,70}\b(?:on|across|above|below|behind|over)\b",
-            after,
-        ))
-
-    def compile_dialogue(match):
-        nonlocal dialogue_counter, dialogue_word_count
-        if is_visible_text_quote(match):
-            return match.group(0)
-        dialogue_counter += 1
-        words = (match.group(1) or match.group(2) or "").strip()
-        dialogue_word_count += len(words.split())
-        # Speaker/Subject ownership is compiled in one place below. Inserting
-        # ``(S{subject})`` here used the immutable Subject number as if it were
-        # event order and could silently bind an unreferenced actor to the only
-        # saved character.
-        return f"<d>[English] {words}</d>"
-
-    compiled_target = re.sub(
-        r'"([^"\r\n]{1,500})"|“([^”\r\n]{1,500})”',
-        compile_dialogue,
-        text,
-    )
+    compiled_target = _tag_raw_quoted_dialogue(text)
     compiled_target = _canonicalize_ref2va_tagged_dialogue(
         compiled_target,
         speaker_aliases,

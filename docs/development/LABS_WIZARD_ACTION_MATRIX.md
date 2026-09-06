@@ -35,9 +35,9 @@ Status: freeze of current contracts. This document does not implement the later 
 | `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
 | `ace_labelled_as_minimax` | L11 | StoryMusicSettingsBar uses isLocalMusicModel, so ACE-Step is labelled MiniMax Music 3 local. |
-| `runtime_calls_omit_explicit_policy` | H-A | Runtime calls adapt_clip_plans_for_h3 without explicit policy; default native. Quote path in ref2va still English-hardcoded. |
-| `audio_policy_contradictions` | H-B | System-generated audio instructions can contradict; need structured capture of plan vs send. |
-| `creative_does_not_add_dialogue_in_cited_tests` | H-C | Creative instructions exist in h3_prompt_policy; cited tests did not show an extra spoken line. Eight fused videos used a manually added line. |
+| `runtime_calls_omit_explicit_policy` | H-A | Addressed: runtime adapt_clip_plans_for_h3 now passes effective policy; ref2va quote path uses models-safe language tags. Default remains native when omitted. |
+| `audio_policy_contradictions` | H-B | Addressed: plan vs send recorded on existing Director provenance fields; quoted 'Qué silencio' is dialogue, not a mute order. |
+| `creative_does_not_add_dialogue_in_cited_tests` | H-C | Addressed: Creative extra lines come from the LLM transport, not a canned post-LLM sentence. Faithful and 'only these lines' keep extras out. |
 
 ## Story, Series, Wizard, and H3 operations
 
@@ -99,9 +99,9 @@ Status: freeze of current contracts. This document does not implement the later 
 | `series.recovery.plan_render` | series | operativa | L6 | `resume_task` | registrada_fuera_de_contexto | `resumeSeriesRenderJob` | `tests/test_series_jobs.py` |
 | `series.review.i18n` | series | solo_informacion | L11 | `—` | ninguna | `—` | `ui/tests/i18nFoundation.test.tsx` |
 | `h3.prompt.finalization_fixture` | shared | operativa | L0 | `—` | dominio_sin_capacidad | `finalize_h3_prompt` | `tests/test_h3_prompt_finalization.py` |
-| `h3.policy.e2e` | shared | condicional | H-A | `—` | dominio_sin_capacidad | `adapt_clip_plans_for_h3` | `tests/test_h3_prompt_finalization.py` |
-| `h3.audio.contradictions` | shared | condicional | H-B | `—` | dominio_sin_capacidad | `apply_h3_audio_policy` | `tests/test_h3_prompt_finalization.py` |
-| `h3.creative.extra_line` | shared | condicional | H-C | `—` | dominio_sin_capacidad | `writing_contract` | `tests/test_h3_prompt_finalization.py` |
+| `h3.policy.e2e` | shared | condicional | H-A | `—` | dominio_sin_capacidad | `adapt_clip_plans_for_h3` | `tests/test_h3_policy_language_audio_creative.py` |
+| `h3.audio.contradictions` | shared | condicional | H-B | `—` | dominio_sin_capacidad | `apply_h3_audio_policy` | `tests/test_h3_policy_language_audio_creative.py` |
+| `h3.creative.extra_line` | shared | condicional | H-C | `—` | dominio_sin_capacidad | `writing_contract` | `tests/test_h3_policy_language_audio_creative.py` |
 | `wizard.context.blocked` | wizard | condicional | L5 | `—` | dominio_sin_capacidad | `contextCapabilities` | `ui/tests/wizardContext.test.mjs` |
 | `wizard.schema.sent` | wizard | condicional | L5 | `—` | dominio_sin_capacidad | `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA` | `ui/tests/languageIntent.test.ts` |
 
@@ -1073,8 +1073,8 @@ Status: freeze of current contracts. This document does not implement the later 
 - Persistence: plan vs send must not silently mix native/legacy
 - Presentation: generation details
 - Prompt fixture: `tests/fixtures/h3_prompt_fase1_expected.json`
-- Blocking defect: `runtime_calls_omit_explicit_policy`
-- Notes: Permission is bounded. Do not refactor the whole runtime.
+- Blocking defect: none
+- Notes: Bounded runtime wiring. Omitted policy stays native. Quote language lives in models/minimax_h3/spoken_language.py.
 
 #### `h3.audio.contradictions` — Resolve generated audio-policy contradictions; keep user text
 
@@ -1090,8 +1090,8 @@ Status: freeze of current contracts. This document does not implement the later 
 - Persistence: details/provenance fields already available
 - Presentation: generation details
 - Prompt fixture: `tests/fixtures/h3_prompt_fase1_expected.json`
-- Blocking defect: `audio_policy_contradictions`
-- Notes: 'Qué silencio' inside a line is literal dialogue, not a mute order.
+- Blocking defect: none
+- Notes: 'Qué silencio' inside a line is literal dialogue, not a mute order. Plan vs send uses existing _director_h3_* fields.
 
 #### `h3.creative.extra_line` — Creative writing actually adds supporting dialogue
 
@@ -1107,8 +1107,8 @@ Status: freeze of current contracts. This document does not implement the later 
 - Persistence: compiled prompt, not prefabricated post-LLM lines
 - Presentation: effective prompt
 - Prompt fixture: `tests/fixtures/h3_prompt_fase1_expected.json`
-- Blocking defect: `creative_does_not_add_dialogue_in_cited_tests`
-- Notes: Instructions exist; cited tests did not show Creative adding a line. Do not hand-write the evaluated sentence.
+- Blocking defect: none
+- Notes: Simulated LLM transport keeps the extra line; Faithful and only-these-lines do not. Do not hand-write the evaluated sentence.
 
 #### `wizard.context.blocked` — Advertise blocked vs available Wizard capabilities
 

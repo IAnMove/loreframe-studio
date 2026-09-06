@@ -156,20 +156,20 @@
     {
       "id": "runtime_calls_omit_explicit_policy",
       "phase": "H-A",
-      "summary": "Runtime calls adapt_clip_plans_for_h3 without explicit policy; default native. Quote path in ref2va still English-hardcoded.",
-      "evidence": "generation runtime adapter adapt_clip_plans_for_h3; app/models/minimax_h3/ref2va.py"
+      "summary": "Addressed: runtime adapt_clip_plans_for_h3 now passes effective policy; ref2va quote path uses models-safe language tags. Default remains native when omitted.",
+      "evidence": "tests/test_h3_policy_language_audio_creative.py; app/models/minimax_h3/spoken_language.py"
     },
     {
       "id": "audio_policy_contradictions",
       "phase": "H-B",
-      "summary": "System-generated audio instructions can contradict; need structured capture of plan vs send.",
-      "evidence": "h3_prompt_policy / finalizer / details provenance"
+      "summary": "Addressed: plan vs send recorded on existing Director provenance fields; quoted 'Qué silencio' is dialogue, not a mute order.",
+      "evidence": "tests/test_h3_policy_language_audio_creative.py; _director_h3_source_prompt / _director_h3_compiled_prompt"
     },
     {
       "id": "creative_does_not_add_dialogue_in_cited_tests",
       "phase": "H-C",
-      "summary": "Creative instructions exist in h3_prompt_policy; cited tests did not show an extra spoken line. Eight fused videos used a manually added line.",
-      "evidence": "h3_prompt_policy writing_contract; protected outputs must not be overwritten"
+      "summary": "Addressed: Creative extra lines come from the LLM transport, not a canned post-LLM sentence. Faithful and 'only these lines' keep extras out.",
+      "evidence": "tests/test_h3_policy_language_audio_creative.py; llm_service._apply_creative_supporting_dialogue"
     }
   ],
   "operations": [
@@ -1650,10 +1650,10 @@
       "preconditions": "Bounded generation-runtime wiring only after hotspot is free",
       "persistence": "plan vs send must not silently mix native/legacy",
       "presentation": "generation details",
-      "test": "tests/test_h3_prompt_finalization.py",
-      "notes": "Permission is bounded. Do not refactor the whole runtime.",
+      "test": "tests/test_h3_policy_language_audio_creative.py",
+      "notes": "Bounded runtime wiring. Omitted policy stays native. Quote language lives in models/minimax_h3/spoken_language.py.",
       "prompt_fixture": "tests/fixtures/h3_prompt_fase1_expected.json",
-      "blocking_defect": "runtime_calls_omit_explicit_policy"
+      "blocking_defect": ""
     },
     {
       "id": "h3.audio.contradictions",
@@ -1676,10 +1676,10 @@
       "preconditions": "Capture concrete before/after examples first",
       "persistence": "details/provenance fields already available",
       "presentation": "generation details",
-      "test": "tests/test_h3_prompt_finalization.py",
-      "notes": "'Qué silencio' inside a line is literal dialogue, not a mute order.",
+      "test": "tests/test_h3_policy_language_audio_creative.py",
+      "notes": "'Qué silencio' inside a line is literal dialogue, not a mute order. Plan vs send uses existing _director_h3_* fields.",
       "prompt_fixture": "tests/fixtures/h3_prompt_fase1_expected.json",
-      "blocking_defect": "audio_policy_contradictions"
+      "blocking_defect": ""
     },
     {
       "id": "h3.creative.extra_line",
@@ -1702,10 +1702,10 @@
       "preconditions": "Explicit request to add a line; duration budget; Faithful negative control",
       "persistence": "compiled prompt, not prefabricated post-LLM lines",
       "presentation": "effective prompt",
-      "test": "tests/test_h3_prompt_finalization.py",
-      "notes": "Instructions exist; cited tests did not show Creative adding a line. Do not hand-write the evaluated sentence.",
+      "test": "tests/test_h3_policy_language_audio_creative.py",
+      "notes": "Simulated LLM transport keeps the extra line; Faithful and only-these-lines do not. Do not hand-write the evaluated sentence.",
       "prompt_fixture": "tests/fixtures/h3_prompt_fase1_expected.json",
-      "blocking_defect": "creative_does_not_add_dialogue_in_cited_tests"
+      "blocking_defect": ""
     },
     {
       "id": "wizard.context.blocked",

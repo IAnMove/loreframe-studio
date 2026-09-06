@@ -3,28 +3,30 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import Any, MutableMapping, Sequence
 
+from models.minimax_h3.spoken_language import (
+    SPANISH_LANGUAGE_RE,
+    h3_language_tag,
+    infer_h3_spoken_language,
+    normalize_spoken_language,
+)
 
-def _fold_marks(text: str) -> str:
-    """Drop combining marks so 'qué' matches the Spanish function word 'que'."""
-    return "".join(
-        character
-        for character in unicodedata.normalize("NFD", text)
-        if unicodedata.category(character) != "Mn"
-    )
+__all__ = [
+    "SPANISH_LANGUAGE_RE",
+    "append_spoken_language_contract",
+    "apply_spoken_language_to_plans",
+    "extract_spoken_language",
+    "h3_language_tag",
+    "infer_h3_spoken_language",
+    "normalize_spoken_language",
+    "spoken_language_contract",
+]
 
-
-_SPANISH_RE = re.compile(r"\b(?:español|spanish|castellano)\b", re.IGNORECASE)
 _LANGUAGE_CONTRACT_RE = re.compile(
     r"(?:^|\n)SPOKEN LANGUAGE CONTRACT[^\n]*",
     re.IGNORECASE,
 )
-
-
-def normalize_spoken_language(value: Any) -> str:
-    return " ".join(str(value or "").split())[:120]
 
 
 def extract_spoken_language(text: Any) -> str:
@@ -36,76 +38,6 @@ def extract_spoken_language(text: Any) -> str:
     return normalize_spoken_language(match.group(1)) if match else ""
 
 
-def h3_language_tag(value: Any) -> str:
-    """Return a broad H3 label instead of inventing a regional tag."""
-    language = normalize_spoken_language(value)
-    if not language:
-        return ""
-    if _SPANISH_RE.search(language):
-        return "Spanish"
-    folded = language.casefold()
-    aliases = {
-        "inglés": "English", "english": "English",
-        "francés": "French", "french": "French",
-        "italiano": "Italian", "italian": "Italian",
-        "alemán": "German", "german": "German",
-        "portugués": "Portuguese", "portuguese": "Portuguese",
-        "japonés": "Japanese", "japanese": "Japanese",
-        "coreano": "Korean", "korean": "Korean",
-        "chino": "Chinese", "chinese": "Chinese",
-    }
-    for needle, label in aliases.items():
-        if needle in folded:
-            return label
-    return language
-
-
-def infer_h3_spoken_language(text: Any) -> str:
-    """Infer a broad H3 language tag only when no authored tag exists."""
-
-    source = str(text or "")
-    if re.search(r"[\u3040-\u30ff]", source):
-        return "Japanese"
-    if re.search(r"[\uac00-\ud7af]", source):
-        return "Korean"
-    if re.search(r"[\u0400-\u04ff]", source):
-        return "Russian"
-    if re.search(r"[\u0600-\u06ff]", source):
-        return "Arabic"
-    if re.search(r"[\u3400-\u9fff]", source):
-        return "Chinese"
-
-    raw = source.casefold()
-    words = set(re.findall(r"[^\W_]+", _fold_marks(raw), flags=re.UNICODE))
-
-    def folded_words(candidates: set[str]) -> set[str]:
-        return {_fold_marks(item) for item in candidates}
-
-    scores = {
-        "Spanish": (
-            3 * len(re.findall(r"[¿¡ñ]", raw))
-            + len(words & folded_words({"que", "por", "para", "una", "está", "nadie", "aquí", "pero"}))
-        ),
-        "French": (
-            3 * len(re.findall(r"[œêëÿ]", raw))
-            + len(words & folded_words({"je", "vous", "avec", "une", "est", "pas", "mais", "ici"}))
-        ),
-        "Portuguese": (
-            3 * len(re.findall(r"[ãõ]", raw))
-            + len(words & folded_words({"você", "não", "uma", "está", "mas", "aqui"}))
-        ),
-        "German": (
-            3 * len(re.findall(r"[äöß]", raw))
-            + len(words & folded_words({"ich", "nicht", "und", "ist", "aber", "hier"}))
-        ),
-        "Italian": len(words & folded_words({"io", "non", "una", "sono", "che", "ma", "qui"})),
-    }
-    language, score = max(scores.items(), key=lambda item: item[1])
-    if score:
-        return language
-    return "English"
-
-
 def spoken_language_contract(value: Any) -> str:
     language = normalize_spoken_language(value)
     if not language:
@@ -113,7 +45,7 @@ def spoken_language_contract(value: Any) -> str:
     regional = (
         " Use a native Spain/Castilian accent and vocabulary; never use Latin-American "
         "Spanish, Italian, or another language."
-        if _SPANISH_RE.search(language)
+        if SPANISH_LANGUAGE_RE.search(language)
         and any(token in language.casefold() for token in ("españa", "castellano", "spain"))
         else " Never switch to another language or accent."
     )

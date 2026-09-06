@@ -27,6 +27,11 @@ def requests_silence(prompt: str) -> bool:
     return bool(_SILENT.search(clean))
 
 
+def requests_only_supplied_lines(prompt: str) -> bool:
+    """True when the user forbids extra speech outside quoted/tagged lines."""
+    return bool(_ONLY.search(_QUOTE.sub("", str(prompt or ""))))
+
+
 def _speaker_before(source: str, offset: int) -> str:
     prefix = source[max(0, offset-500):offset]
     named = re.search(r'([\wÀ-ÿ.-]+(?:\s+[\wÀ-ÿ.-]+){0,3})\s+(?:says?|asks?|replies|dice|responde|pregunta|grita|susurra|canta)\s*[:：]?\s*$', prefix, re.I)

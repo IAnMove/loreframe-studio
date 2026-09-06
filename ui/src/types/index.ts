@@ -1603,6 +1603,8 @@ export interface DirectorV2PlanRequest {
   video_model?: string
   h3_reference_mode?: 'first_frame' | 'references'
   h3_audio_prompt?: string
+  h3_audio_policy?: 'native' | 'legacy'
+  minimax_h3_audio_policy?: 'native' | 'legacy'
   seamless?: boolean
   multishot_lora_mode?: boolean
   music_video_treatment?: MusicVideoTreatment
@@ -1754,6 +1756,7 @@ export interface PlannedDirectorClip {
   section_label?: string
   suggested_prompt_hint?: string
   _director_h3_source_prompt?: string
+  _director_h3_compiled_prompt?: string
   _director_audio_plan?: Record<string, unknown>
   _director_dialogue_beats?: Array<Record<string, unknown>>
   _director_subjects_on_screen?: Array<Record<string, unknown>>
