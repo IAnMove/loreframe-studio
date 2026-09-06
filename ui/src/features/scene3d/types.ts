@@ -12,6 +12,19 @@ export type Scene3DCameraFamily =
 
 export type Scene3DSlotId = 'subject_1' | 'subject_2' | 'background' | 'prop'
 
+export const SCENE3D_TEMPLATE_IDS = [
+  'two-shot',
+  'product-orbit',
+  'hero-push',
+  'over-shoulder',
+  'tracking',
+  'crane-reveal',
+  'establishing',
+  'run-loop',
+] as const
+
+export type Scene3DTemplateId = (typeof SCENE3D_TEMPLATE_IDS)[number]
+
 export type Scene3DClipRef = {
   index: number
   name: string
@@ -61,7 +74,7 @@ export type Scene3DDocument = {
   height: number
   fps: 24 | 30 | 60
   duration: number
-  templateId: string
+  templateId: Scene3DTemplateId
   camera: Scene3DCamera
   light: Scene3DLight
   slots: Scene3DSlot[]

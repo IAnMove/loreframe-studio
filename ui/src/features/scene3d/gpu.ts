@@ -64,7 +64,7 @@ export function clipKeyOf(clip: Scene3DSlot['clip']): string {
 }
 
 export function catalogFromClips(animations: GLTF['animations']): Scene3DClipCatalogEntry[] {
-  return animations.map((clip, index) => ({
+  return animations.map((clip: { name: string; duration: number }, index: number) => ({
     index,
     name: clip.name,
     durationSeconds: Number.isFinite(clip.duration) && clip.duration > 0 ? clip.duration : null,
@@ -83,7 +83,7 @@ export function disposeMaterial(material: Material) {
 }
 
 export function disposeObject(object: Object3D) {
-  object.traverse(child => {
+  object.traverse((child: Object3D) => {
     if (!(child instanceof Mesh)) return
     child.geometry.dispose()
     const materials = Array.isArray(child.material) ? child.material : [child.material]
@@ -158,7 +158,7 @@ export function imageBackdropMesh(slot: Scene3DSlot, texture: Texture | null): M
 
 function firstMap(root: Object3D): Texture | null {
   let found: Texture | null = null
-  root.traverse(child => {
+  root.traverse((child: Object3D) => {
     if (found || !(child instanceof Mesh)) return
     const material = Array.isArray(child.material) ? child.material[0] : child.material
     if (material && 'map' in material && isTexture(material.map)) found = material.map

@@ -1,18 +1,7 @@
 import { createDefaultScene3DDocument } from './document.ts'
-import type { Scene3DCameraFamily, Scene3DDocument, Scene3DSlot, Scene3DSlotId } from './types.ts'
+import { SCENE3D_TEMPLATE_IDS, type Scene3DCameraFamily, type Scene3DDocument, type Scene3DSlot, type Scene3DSlotId, type Scene3DTemplateId } from './types.ts'
 
-export const SCENE3D_TEMPLATE_IDS = [
-  'two-shot',
-  'product-orbit',
-  'hero-push',
-  'over-shoulder',
-  'tracking',
-  'crane-reveal',
-  'establishing',
-  'run-loop',
-] as const
-
-export type Scene3DTemplateId = (typeof SCENE3D_TEMPLATE_IDS)[number]
+export { SCENE3D_TEMPLATE_IDS, type Scene3DTemplateId }
 
 export type Scene3DTemplate = {
   id: Scene3DTemplateId

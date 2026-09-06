@@ -12,7 +12,7 @@ import { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES, type Scene3D
 import type { Scene3DCameraFamily, Scene3DClipCatalogEntry, Scene3DDocument, Scene3DLoop, Scene3DSlot } from './types.ts'
 import { documentFromWorld3DRequest, listenForWorld3DWorkflow } from './world3dAgent.ts'
 
-const FAMILIES: Scene3DCameraFamily[] = ['establishment', 'orbit', 'follow', 'pursuit', 'product', 'reveal', 'encounter']
+const FAMILIES = ['establishment', 'orbit', 'follow', 'pursuit', 'product', 'reveal', 'encounter', 'musical'] as const satisfies readonly Scene3DCameraFamily[]
 
 type Props = {
   width: number

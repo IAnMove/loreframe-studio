@@ -1,5 +1,5 @@
 import { parseScene3DLoop } from './backdrop.ts'
-import type { Scene3DDocument, Scene3DSlot } from './types.ts'
+import { SCENE3D_TEMPLATE_IDS, type Scene3DDocument, type Scene3DSlot, type Scene3DTemplateId } from './types.ts'
 
 const SLOT_COLORS: Record<string, [number, number, number]> = {
   subject_1: [40, 140, 220],
@@ -76,5 +76,9 @@ export function parseScene3DDocument(raw: unknown): Scene3DDocument | null {
     media: slot.media === 'image' ? 'image' as const : 'model3d' as const,
     loop: parseScene3DLoop(slot.loop),
   }))
-  return { ...value, slots, templateId: typeof value.templateId === 'string' ? value.templateId : 'two-shot' } as Scene3DDocument
+  const templateId: Scene3DTemplateId = typeof value.templateId === 'string'
+    && (SCENE3D_TEMPLATE_IDS as readonly string[]).includes(value.templateId)
+    ? value.templateId as Scene3DTemplateId
+    : 'two-shot'
+  return { ...value, slots, templateId } as Scene3DDocument
 }

@@ -52,6 +52,57 @@ function assetsForExplorer(
   if (purpose === 'scene-audio') return audio
   return visuals
 }
+
+function explorerTitleKey(purpose: AssetExplorerPurpose): 'animator.generatedModels' | 'animator.generatedMedia' | 'animator.chooseAudio' | 'animator.chooseAsset' {
+  if (purpose === 'layer-model') return 'animator.generatedModels'
+  if (purpose === 'layer-media') return 'animator.generatedMedia'
+  if (purpose === 'scene-audio') return 'animator.chooseAudio'
+  return 'animator.chooseAsset'
+}
+
+function explorerSelectedName(
+  purpose: AssetExplorerPurpose,
+  names: { hero: string; plate: string; prop: string; foreground: string },
+): string | undefined {
+  if (purpose === 'narrative-hero') return names.hero
+  if (purpose === 'narrative-plate') return names.plate
+  if (purpose === 'narrative-prop') return names.prop
+  if (purpose === 'narrative-foreground') return names.foreground
+  return undefined
+}
+
+function explorerAllowsNone(purpose: AssetExplorerPurpose): boolean {
+  return purpose.startsWith('narrative-')
+}
+
+function applyExplorerChoice(
+  purpose: AssetExplorerPurpose,
+  item: ApiOutput | null,
+  handlers: {
+    addLayer: (type: 'model3d' | 'video' | 'image', url: string, name: string, thumbnail?: string) => void
+    setHero: (name: string) => void
+    setPlate: (name: string) => void
+    setProp: (name: string) => void
+    setForeground: (name: string) => void
+    attachAudio: (filename: string, title: string, kind: 'audio') => void
+  },
+): void {
+  if (purpose === 'layer-model' && item) {
+    handlers.addLayer('model3d', item.url, item.name, item.thumbnail_url ?? undefined)
+    return
+  }
+  if (purpose === 'layer-media' && item) {
+    handlers.addLayer(item.type === 'video' ? 'video' : 'image', item.url, item.name, item.thumbnail_url ?? undefined)
+    return
+  }
+  if (purpose === 'narrative-hero') { handlers.setHero(item?.name ?? ''); return }
+  if (purpose === 'narrative-plate') { handlers.setPlate(item?.name ?? ''); return }
+  if (purpose === 'narrative-prop') { handlers.setProp(item?.name ?? ''); return }
+  if (purpose === 'narrative-foreground') { handlers.setForeground(item?.name ?? ''); return }
+  if (purpose === 'scene-audio' && item) {
+    handlers.attachAudio(item.name, item.name.replace(/\.[^.]+$/, ''), 'audio')
+  }
+}
 type AnimatorLayer = Omit<SceneLayer, 'type' | 'animation'> & {
   type: AnimatorLayerType
   /** Camera-pan response. Distant layers move less; foreground layers move more. */
@@ -3211,20 +3262,25 @@ export function SceneAnimatorPanel() {
     {templateComposerOpen && <TemplateComposerDialog key={workspace} workspace={workspace} onClose={() => setTemplateComposerOpen(false)} onApply={next => importScene(JSON.stringify(next), 'Plantilla creada con assets de Library; revisa el encuadre antes de exportar.')} />}
     <AssetExplorerDialog
       open={Boolean(assetExplorer)}
-      title={assetExplorer === 'layer-model' ? t('animator.generatedModels') : assetExplorer === 'layer-media' ? t('animator.generatedMedia') : assetExplorer === 'scene-audio' ? t('animator.chooseAudio') : t('animator.chooseAsset')}
+      title={assetExplorer ? t(explorerTitleKey(assetExplorer)) : t('animator.chooseAsset')}
       items={assetExplorer ? assetsForExplorer(assetExplorer, generatedModels, generatedMedia, narrativeVisuals, generatedAudio) : []}
-      selectedName={assetExplorer === 'narrative-hero' ? narrativeHero : assetExplorer === 'narrative-plate' ? narrativePlate : assetExplorer === 'narrative-prop' ? narrativeProp : assetExplorer === 'narrative-foreground' ? narrativeForeground : undefined}
-      allowNone={assetExplorer === 'narrative-hero' || assetExplorer === 'narrative-plate' || assetExplorer === 'narrative-prop' || assetExplorer === 'narrative-foreground'}
+      selectedName={assetExplorer ? explorerSelectedName(assetExplorer, {
+        hero: narrativeHero, plate: narrativePlate, prop: narrativeProp, foreground: narrativeForeground,
+      }) : undefined}
+      allowNone={Boolean(assetExplorer && explorerAllowsNone(assetExplorer))}
       noneLabel={t('animator.none')}
       onClose={() => setAssetExplorer(null)}
       onChoose={item => {
-        if (assetExplorer === 'layer-model' && item) addLayer('model3d', item.url, item.name, item.thumbnail_url ?? undefined)
-        else if (assetExplorer === 'layer-media' && item) addLayer(item.type === 'video' ? 'video' : 'image', item.url, item.name, item.thumbnail_url ?? undefined)
-        else if (assetExplorer === 'narrative-hero') setNarrativeHero(item?.name ?? '')
-        else if (assetExplorer === 'narrative-plate') { setNarrativePlate(item?.name ?? ''); setNarrativePlateLoopReady(false) }
-        else if (assetExplorer === 'narrative-prop') setNarrativeProp(item?.name ?? '')
-        else if (assetExplorer === 'narrative-foreground') setNarrativeForeground(item?.name ?? '')
-        else if (assetExplorer === 'scene-audio' && item) attachSceneAudio(item.name, item.name.replace(/\.[^.]+$/, ''), 'audio')
+        if (assetExplorer) {
+          applyExplorerChoice(assetExplorer, item, {
+            addLayer,
+            setHero: setNarrativeHero,
+            setPlate: name => { setNarrativePlate(name); setNarrativePlateLoopReady(false) },
+            setProp: setNarrativeProp,
+            setForeground: setNarrativeForeground,
+            attachAudio: attachSceneAudio,
+          })
+        }
         setAssetExplorer(null)
       }}
     />

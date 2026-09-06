@@ -882,7 +882,7 @@
     "deleteKitConfirm": "Delete Character Kit “{{name}}”? Scene assets and generated files will remain untouched.",
     "kitRemoved": "Character Kit removed. Its source assets were not deleted.",
     "kitRemoveFailed": "Could not remove Character Kit.",
-    "export3dFailed": "No se pudo exportar la escena 3D a MP4.",
+    "export3dFailed": "Could not export the 3D scene to MP4.",
     "webcodecsFallback": "This browser lacks deterministic WebCodecs export; using compatibility recording.",
     "cameraN": "Camera {{n}}",
     "eventN": "Event {{n}}",
@@ -923,7 +923,8 @@
       "product": "Product turntable",
       "reveal": "Crane reveal",
       "encounter": "Two-shot / OTS",
-      "pursuit": "Pursuit / run"
+      "pursuit": "Pursuit / run",
+      "musical": "Musical orbit"
     },
     "template": {
       "two-shot": "Two-shot",

@@ -71,7 +71,7 @@ function loadSlotImage(
   if (!url) return
   new TextureLoader().load(
     url,
-    texture => {
+    (texture: import('three').Texture) => {
       if (cancelled()) {
         texture.dispose()
         return
@@ -164,7 +164,7 @@ export function Scene3DStage({ document, sceneSeconds, onSlotClips }: Props) {
     applyLoopOffset(world, sceneSeconds)
     for (const gpu of world.slots.values()) {
       if (!gpu.mixer) continue
-      const clip = gpu.animations.find((_, index) => clipMatches(gpu, index))
+      const clip = gpu.animations.find((_clip: { duration?: number }, index: number) => clipMatches(gpu, index))
       const local = scene3dClipLocalTime(sceneSeconds, clip?.duration ?? null, { loop: true })
       if (local != null) gpu.mixer.setTime(local)
     }
