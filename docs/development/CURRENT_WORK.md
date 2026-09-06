@@ -36,11 +36,10 @@ esa revisión ni que exista una publicación de aplicación en main.
 En la primera consulta había cambios locales sin PR. Al cerrar esta revisión,
 escenas 3D ya tiene el PR #198 abierto; no está integrado. Estado por dominio:
 
-- **Taller de habla/personajes**: rama `feat/character-speech-workshop`, documentos
-  `CHARACTER_SPEECH_RASTER_PLAN.md` y `CHARACTER_SPEECH_WORKSHOP.md` (este último aún
-  local en la inspección). Cambios en CharacterCreator/FaceRig, biblioteca y tests.
-  El test del panel recibió una corrección local por agotamiento de RAM: 13 tests
-  dirigidos pasaron con ~260 MiB de RSS máximo. Eso no equivale a merge ni CI.
+- **Taller de habla/personajes**: PR [#200](https://github.com/IAnMove/hocuspocus/pull/200),
+  rama `feat/character-speech-workshop`. Documentos `CHARACTER_SPEECH_RASTER_PLAN.md` y
+  `CHARACTER_SPEECH_WORKSHOP.md`. El test del panel evita aserciones HTMLElement-vs-null
+  que agotaban RAM; 13 tests dirigidos ~260 MiB de RSS máximo. No integrado hasta CI.
 - **Escenas 3D reales**: PR [#198](https://github.com/IAnMove/hocuspocus/pull/198),
   rama `feat/video3d-real-scene-mode`, cambios en
   `PROCEDURAL_3D_SCENE_SPEC.md`, SceneAnimator, `features/scene3d`, dependencias e i18n.
