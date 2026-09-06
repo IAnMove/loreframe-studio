@@ -206,9 +206,10 @@ test('recovery dialog warns that leftover jobs would duplicate a live generation
 
   render(<QueueRecoveryDialog />)
   await screen.findByRole('dialog', { name: /Older leftovers besides the current generation/i })
-  assert.ok(screen.getByText(/duplicates the GPU/i))
+  assert.ok(screen.getByText(/queues them behind and reruns them from scratch/i))
+  assert.ok(screen.getByText(/does not affect the active generation/i))
   assert.equal(screen.getByRole('button', { name: 'Resume old leftovers anyway' }).disabled, false)
-  assert.equal(screen.getByRole('button', { name: 'Discard and start clean' }).disabled, false)
+  assert.equal(screen.getByRole('button', { name: 'Discard interrupted jobs only' }).disabled, false)
   cleanup()
 })
 

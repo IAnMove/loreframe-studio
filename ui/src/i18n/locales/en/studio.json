@@ -793,5 +793,30 @@
     "denseAuto": "Automatic dense",
     "fallback": "Sparse attention falls back to dense if unavailable. Sol requires Triton 3.6+.",
     "turboPreset": "H3 acceleration preset"
+  },
+  "h3Bridge": {
+    "label": "Semantic Bridge (experimental)",
+    "hint": "Optional prompt-adherence adapter for First/Last. Starts off; 0.10 is the recommended starting strength. Downloads about 11 MB on first use.",
+    "strength": "Bridge strength",
+    "magnitude": "Magnitude matching",
+    "perToken": "Per token (recommended)",
+    "global": "Global",
+    "none": "None"
+  },
+  "h3Catalog": {
+    "fastName": "H3 · Fast mode — {{workflow}}",
+    "frames": "Frames",
+    "references": "References",
+    "fastHint": "Fused · Experimental. Generates in 4 steps; may lose some quality.",
+    "prunedHint": "Pruned · Reduced model. Smaller weights than Full; memory use depends on settings.",
+    "fullHint": "Full · Complete model. Advanced option: may increase RAM pressure without necessarily improving results.",
+    "legacyHint": "Legacy · Previous implementation for compatibility.",
+    "memory": "Memory measured in the benchmark",
+    "measured": "Observed peaks: process RAM (PSS) {{ram}} GiB · process VRAM {{vram}} GiB.",
+    "conditions": "24 GB RTX 4090 · 64 GB installed RAM · 864×480 · 10.1 s · profile {{profile}}. Pruned/Full: PDD 8 + Sol; Fused: 4 steps + SLA.",
+    "warmOnly": "Fused Frames RAM: second run only; the initial measurement contained an anomalous sample.",
+    "memoryLimit": "Local measurements, not minimum requirements. Swap was used. Whole-system peaks may be higher; usage varies with resolution, duration, encoder and profile.",
+    "unmeasured": "This variant was not measured in the current comparison.",
+    "audioLimit": "These tests contained invented speech at the end. Fast mode does not guarantee clean dialogue."
   }
 }

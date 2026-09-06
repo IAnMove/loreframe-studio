@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useStore, getFamiliesForMode, getModelsForFamily } from '../../stores/useStore'
 import { useUiTranslation } from '../../i18n'
 import { InfoTooltip } from './InfoTooltip'
+import { H3ModelInfo, H3ModelName } from './H3ModelInfo'
 import { modelRequirementsText } from '../../lib/minimaxMusicCatalog'
 
 export function ModelSelector() {
@@ -72,10 +73,12 @@ export function ModelSelector() {
         className="w-full flex items-center gap-1.5 bg-bg-tertiary border border-border rounded-lg px-2.5 py-2 text-left hover:border-border-light transition-colors"
       >
         <span className="flex-1 min-w-0 truncate text-xs text-text-primary">
-          {currentModel?.name ?? t('model.select')}
+          <H3ModelName modelType={currentModelType} fallback={currentModel?.name ?? t('model.select')} />
         </span>
         <ChevronDown size={14} className={`shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+
+      <H3ModelInfo modelType={currentModelType} compact />
 
       {/* Dropdown (opens upward) */}
       {open && (
@@ -120,7 +123,7 @@ export function ModelSelector() {
                         }}
                         className="min-w-0 flex-1 px-3 py-1.5 flex items-center gap-2 text-left"
                       >
-                        <span className="flex-1 min-w-0 text-xs truncate">{model.name}</span>
+                        <span className="flex-1 min-w-0 text-xs truncate"><H3ModelName modelType={model.model_type} fallback={model.name} /></span>
                         {model.resource_requirements?.vram_gb != null && (
                           <span className="shrink-0 text-[9px] text-text-muted tabular-nums">
                             ~{model.resource_requirements.vram_gb} GB VRAM
