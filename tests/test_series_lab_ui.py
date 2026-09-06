@@ -92,8 +92,8 @@ def test_review_is_thumbnail_first_and_exposes_ordered_editable_attempt_history(
     assert "open ? <video" in review
     assert 'preload="metadata"' in review
     assert "Saved generation request and result metadata" in review
-    assert "Approve this attempt" in review and "Reject</button>" in review
-    assert "Approve all" in review and "approveSeriesAttemptsBulk" in review
+    assert "review.useThisTake" in review and "Reject</button>" in review
+    assert "review.usePendingTakes" in review and "approveSeriesAttemptsBulk" in review
     assert "bulkApproveSelections" in review
     assert "Replace finals with latest" in review
     assert "Play all" in review and "if (playingAll) advancePlayAll()" in review

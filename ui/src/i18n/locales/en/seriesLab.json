@@ -16,7 +16,11 @@
     "syllables": "{{count}} syllables · {{rate}} s/syllable",
     "recalculating": "Recalculating as the dialogue changes…",
     "minimumLimited": "The model’s native minimum leaves unspoken visual room.",
-    "requiresSplit": "The dialogue exceeds one clip’s maximum; split it before rendering."
+    "requiresSplit": "The dialogue exceeds one clip’s maximum; split it before rendering.",
+    "useThisTake": "Use this take",
+    "usePendingTakes": "Use pending takes ({{count}})",
+    "usingPendingTakes": "Using takes {{current}}/{{total}}",
+    "usePendingTakesHint": "Use pending takes fills empty finals only. Existing chosen takes stay unless you explicitly replace finals. Incomplete, rejected, or missing media are omitted ({{kept}} kept · {{omitted}} omitted)."
   },
   "library": {
     "loading": "Loading Series Lab…",

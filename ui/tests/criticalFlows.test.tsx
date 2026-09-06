@@ -96,7 +96,7 @@ test('Director recovery resumes the selected crashed pipeline from the accessibl
   cleanup()
 })
 
-test('Approve all sends every eligible shot in one bulk review action', { concurrency: false }, async () => {
+test('Use pending takes sends every eligible shot in one bulk review action', { concurrency: false }, async () => {
   const { render, screen, waitFor, fireEvent, cleanup } = await import('@testing-library/react')
   const { SeriesReviewPanel } = await import('../src/features/series/SeriesReviewPanel.tsx')
   const { episode, series } = makeSeriesReviewFixture()
@@ -118,7 +118,7 @@ test('Approve all sends every eligible shot in one bulk review action', { concur
     updateEpisode={() => {}}
     saveNow={async () => null}
   />)
-  fireEvent.click(screen.getByRole('button', { name: 'Approve all (2)' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use pending takes (2)' }))
   await waitFor(() => assert.equal(reloads, 1))
   assert.deepEqual(submitted?.selections, [
     { shotId: 'shot-1', attemptId: 'attempt-1' },

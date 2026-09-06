@@ -15,6 +15,7 @@ import { bulkApproveSelections } from './shotReviewPolicy'
 function AttemptPreview({ series, attempt, approved, onApprove, onReject }: {
   series: SeriesProject; attempt: SeriesRenderAttempt; approved: boolean; onApprove: () => void; onReject: () => void
 }) {
+  const { t } = useUiTranslation('seriesLab')
   const [open, setOpen] = useState(false)
   const asset = attempt.outputAssetIds.map(id => series.assets[id]).find(Boolean)
   const filename = asset?.uri.replace(/^outputs\//, '')
@@ -24,7 +25,7 @@ function AttemptPreview({ series, attempt, approved, onApprove, onReject }: {
     {url && (open ? <video className="mt-2 max-h-64 w-full rounded bg-black" src={url} controls autoPlay preload="metadata" /> : <button className="relative mt-2 flex h-28 w-full items-center justify-center overflow-hidden rounded bg-black/70 text-xs text-white" onClick={() => setOpen(true)}><img src={api.getOutputThumbnailUrl(filename || '', asset?.workspaceId)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-70" /><span className="relative flex items-center rounded-full bg-black/70 px-3 py-2"><Play size={18} className="mr-2" />Load video preview</span></button>)}
     {attempt.error && <p className="mt-2 text-[10px] text-red-300">{attempt.error}</p>}
     <details className="mt-2 text-[10px] text-text-muted"><summary className="cursor-pointer">Saved generation request and result metadata</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg-tertiary p-2">{JSON.stringify({ prompt: attempt.prompt, negativePrompt: attempt.negativePrompt, model: attempt.model, seed: attempt.seed, settings: attempt.settings, references: attempt.referenceManifest, createdAt: attempt.createdAt, submittedAt: attempt.submittedAt, completedAt: attempt.completedAt, elapsedMs: attempt.elapsedMs }, null, 2)}</pre></details>
-    {attempt.status === 'completed' && !approved && <div className="mt-2 flex gap-2"><button className={greenButton} onClick={onApprove}><Check size={12} />Approve this attempt</button><button className={secondaryButton} onClick={onReject}><X size={12} />Reject</button></div>}
+    {attempt.status === 'completed' && !approved && <div className="mt-2 flex gap-2"><button className={greenButton} onClick={onApprove}><Check size={12} />{t('review.useThisTake')}</button><button className={secondaryButton} onClick={onReject}><X size={12} />Reject</button></div>}
   </div>
 }
 
@@ -342,7 +343,9 @@ export function SeriesReviewPanel({
       <div className="flex flex-wrap gap-2">
         <button className={greenButton} disabled={!pendingApprovals.selections.length || Boolean(approvalProgress)} onClick={() => void approveAll()}>
           {approvalProgress ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-          {approvalProgress ? `Approving ${approvalProgress.current}/${approvalProgress.total}` : `Approve all (${pendingApprovals.selections.length})`}
+          {approvalProgress
+            ? t('review.usingPendingTakes', { current: approvalProgress.current, total: approvalProgress.total })
+            : t('review.usePendingTakes', { count: pendingApprovals.selections.length })}
         </button>
         <button className={secondaryButton} disabled={!replaceApprovals.replaced || Boolean(approvalProgress)} onClick={() => void approveBulk(replaceApprovals.selections, 'Replace finals')}>
           Replace finals with latest ({replaceApprovals.replaced})
@@ -351,7 +354,7 @@ export function SeriesReviewPanel({
         {playingAll && <button className={secondaryButton} onClick={stopPlayAll}><Square size={13} />Stop</button>}
         <button className={greenButton} disabled={approved.length !== episode.shots.length || Boolean(assemblyJob && ['queued', 'running', 'cancelling'].includes(assemblyJob.status))} onClick={() => void joinApproved()}>{assemblyJob && ['queued', 'running', 'cancelling'].includes(assemblyJob.status) ? <Loader2 size={13} className="animate-spin" /> : <Film size={13} />}Join clips</button>
       </div>
-      <p className="mt-2 text-[10px] text-text-muted">Approve all fills empty finals only. Existing approved takes stay unless you explicitly replace finals. Incomplete, rejected, or missing media are omitted ({pendingApprovals.kept} kept · {pendingApprovals.omitted} omitted).</p>
+      <p className="mt-2 text-[10px] text-text-muted">{t('review.usePendingTakesHint', { kept: pendingApprovals.kept, omitted: pendingApprovals.omitted })}</p>
       <div className="mt-3 grid min-h-[28rem] overflow-hidden rounded-xl border border-border lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="max-h-[70vh] overflow-y-auto border-b border-border bg-bg-secondary p-2 lg:border-b-0 lg:border-r">{sortedShots.map(shot => { const safe = playable.find(item => item.shot.id === shot.id); const queuedItem = job?.items?.find(item => item.shotId === shot.id && ['queued', 'running', 'cancelling'].includes(item.status)); const selected = displayPlayback?.shot.id === shot.id; return <button key={shot.id} onClick={() => focusSlot(shot.id)} className={`mb-2 w-full rounded-lg border p-2 text-left ${selected ? 'border-violet-400 bg-violet-500/20' : 'border-border bg-bg-primary hover:bg-bg-hover'}`}><div className="flex items-center gap-2"><Pill tone={selected && playingAll ? 'violet' : shot.approvedAttemptId ? 'green' : safe ? 'blue' : 'neutral'}>Shot {shot.order}</Pill>{queuedItem && <Pill tone="violet">{queuedItem.status}</Pill>}<span className="ml-auto text-[9px] text-text-muted">{shot.durationSeconds}s · {shot.attempts.length} tries</span></div><p className="mt-1 line-clamp-2 text-[10px] text-text-secondary">{shot.action || shot.prompt || 'Empty shot'}</p><div className="mt-2 flex gap-1"><span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[9px] text-text-muted">{safe ? 'playable' : 'missing'}</span>{shot.approvedAttemptId && <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[9px] text-green-300">final</span>}{queuedItem && <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[9px] text-violet-200">will replace this slot</span>}</div></button> })}</div>
       {displayPlayback ? <div className="min-w-0 bg-black">

@@ -422,7 +422,7 @@ export function createStoryProject(projectType: StoryProject['projectType'] = 'f
     synopsis: '',
     theme: '',
     ending: '',
-    workflowMode: 'guided',
+    workflowMode: 'automatic',
     provider: {
       useGlobalProfile: true,
       writingProvider: 'maestro',
