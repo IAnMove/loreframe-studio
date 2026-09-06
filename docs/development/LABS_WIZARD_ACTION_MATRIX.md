@@ -1284,7 +1284,7 @@ This freeze does not execute models and does not change runtime behaviour.
 
 ## L12 verification (2026-09-06)
 
-Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L11 suites it reuses. Desktop Story Lab shells are also in `ui/e2e/specs/labs-wizard-l12-shells.spec.ts` against the simulated API.
+Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L11 suites it reuses. Desktop Story Lab shells are in `ui/e2e/specs/labs-wizard-l12-shells.spec.ts` against the simulated API. Mobile layout remains in RTL (`seriesResponsive`, `storyLabResponsive`); the boot e2e helper needs the desktop Studios control.
 
 | Mandatory case | Result in this PR |
 |---|---|

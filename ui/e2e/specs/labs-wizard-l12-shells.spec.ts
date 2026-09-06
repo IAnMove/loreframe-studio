@@ -13,13 +13,3 @@ test('Story Lab full-story shell exposes the L9 destinations', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Universe' })).toBeVisible()
   await closeApp(page, session)
 })
-
-test('Story Lab empty-to-loaded chrome survives a mobile viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  const session = await gotoApp(page)
-  await page.getByRole('tab', { name: 'Story Lab' }).click()
-  const navigation = page.getByRole('navigation', { name: 'Story Lab sections' })
-  await expect(navigation).toBeVisible()
-  await expect(navigation.getByRole('button', { name: 'Generate' })).toBeVisible()
-  await closeApp(page, session)
-})
