@@ -57,7 +57,7 @@ Source: https://blog.fal.ai/introducing-h3-max-by-fal/
 
 ## Validation and handoff
 
-Human listening review remains pending. Automatic transcription recognizes the two anchor lines in all eight clips, plus the manually authored extra line in the four expanded variants, without additional tail words. ASR can omit nonsense and is not proof of silence; it writes homophones “tasas”/“tazas” inconsistently. Do not equate a clean
+Human listening review is complete: the user reports perfect audio in all eight clips in this batch. Automatic transcription recognizes the two anchor lines in all eight clips, plus the manually authored extra line in the four expanded variants, without additional tail words. ASR can omit nonsense and is not proof of silence; it writes homophones “tasas”/“tazas” inconsistently. Do not equate a clean
 Git merge, unit tests, automatic transcription or absence of a PR with media
 quality or independent technical approval.
 
@@ -80,10 +80,16 @@ All values are sampled peaks, not minimum hardware requirements. The process PSS
 | creative-none-action | 90.561 | 18.24 | 20.88 | 46.39 | 1.27 |
 | creative-none-silence | 277.882 | 17.90 | 20.92 | 49.07 | 2.89 |
 
-All eight have raw video, prompt/request, timing, memory, contact sheet and ASR records. The live page includes automatic transcripts under configuration/evaluation and links to the earlier dense PDD 8 / SDPA reference. No winning audio preset is selected without listening.
+All eight have raw video, prompt/request, timing, memory, contact sheet and ASR records. The live page includes automatic transcripts under configuration/evaluation and links to the earlier dense PDD 8 / SDPA reference. All eight variants pass the user’s listening review; this batch does not identify a uniquely superior audio preset.
 
 Merged-tree validation: 2,035 Python tests passed (15 dependency deprecation/future warnings); 717 UI tests passed; 9 simulated browser tests passed; TypeScript/build, lint with zero warnings, i18n, dependency/documentation/brand/clean-repo guards and compileall passed. Entry JS gzip is 315,120 / 327,680 bytes. Two initial failures expected the intentionally removed long silence prose; updated assertions preserve literal dialogue and window isolation, then all 2,035 passed. Code-health ratchet uses development 353a1225. No independent agent QA or remote CI is claimed.
 
 Deployment: feature branch fast-forwarded to integration commit 76fb8a01 after `/api/v1/jobs` returned an empty list. Only the temporary Pinokio benchmark app was restarted; LAN root and comparison page return HTTP 200. Original shared checkout remains on feat/local-minimax-music3 and its server remains alive. The reviewed Grok plan is the only file edited by this task in that checkout.
 
 Post-deployment Creative enhancement check: the same source, 10.125 s and 1,200-token limit took 21.837 s and again returned only the two anchor lines. Saved as `outputs/h3-speech-4step/prompt-creative-after-guide-fix.json`. Creative permission is wired, but this check does not demonstrate automatic extra dialogue; the four expanded video prompts remain explicitly manual. Total local enhancement calls for this speech comparison/check: three, 45.428 s combined; tokens N/A, paid external providers zero.
+
+## Human audio review — all eight pass
+
+After listening, the user reported: “a nivel de audio han quedado todos perfectos en este caso”. This applies to all eight four-step speech variants above and supersedes their pending-listening status. It does not revise the earlier batch, which the user reported had hallucinated tails.
+
+The common simplified prompt without the long VOCAL TIMELINE LOCK is a promising candidate explanation, not an isolated causal result: the earlier prompts also differed in other details. Neither extra dialogue, ambience nor an explicit silence ending was necessary to achieve good audio in this batch. Keep the successful prompts, raw videos and exact settings as regression references; no Semantic Bridge or automatic Creative extra-dialogue claim follows from this result.
