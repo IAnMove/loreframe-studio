@@ -120,8 +120,9 @@ de uso/gasto. Posteriormente IAnMove mezcló #168 (`8542bf74`) y autorizó expre
 seguir sin Cursor temporalmente. No se cambian protecciones: revisión independiente
 con otro agente y CI siguen siendo condiciones del merge normal.
 
-Piloto local: 27 tests de catálogo/compilación/arte/decisiones; 3 E2E descubiertos
-y ejecutados en `ui/e2e/specs`. Galería con 24 MP4 reales, reproducción/seek y
+Piloto local inicial: 27 tests de catálogo/compilación/arte/decisiones y 3 E2E.
+La revisión final de C1/#173 amplió la batería a 36 tests enfocados y 5 E2E
+ejecutados en `ui/e2e/specs`. Galería con 24 MP4 reales, reproducción/seek y
 guardado del snapshot probado contra servidor aislado. Son 4 s, 1280×720/30,
 sin audio; ningún proveedor de vídeo IA se ha usado. La herramienta reproducible
 también exportó una composición y una escena GLB con la UI construida: 2/2.
@@ -134,7 +135,8 @@ el transporte/metadata, no un MP4 válido. Los renders reales se verifican con f
 Los 24 originales coral fueron aprobados visualmente y publicados como
 [referencias de estilo/acción](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1),
 no release de aplicación. No reescribir sus sidecars ni atribuirles cambios futuros.
-Continuar B (#169), C1 y C2 secuencialmente desde development actualizado.
+B (#169) y C1 (#173) ya están mezclados. Continuar C2 (#175) desde development
+actualizado, sin volver a aplicar los commits de B/C1.
 Ver P00D del roadmap para selector con vídeos de referencia y assets de Library
 reemplazables. La prueba pintada adicional no sustituye estos originales.
 

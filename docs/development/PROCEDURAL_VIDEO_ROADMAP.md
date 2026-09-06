@@ -563,4 +563,5 @@ la falta de revisión de código no autoriza merge.
   no sustituto de nuestros límites y pruebas de importación.
 - Documentos locales: VIDEO3D_PRODUCTION_PLAN.md, VIDEO3D_TEMPLATE_REVIEW_PLAN.md,
   WIZARD_PROGRAMMATIC_VIDEO.md, WIZARD_WORKFLOW_RUNTIME.md, LOCAL_VALIDATION.md,
-  CODE_HEALTH.md y SCENE_TEMPLATE_REVIEW.md.
+  CODE_HEALTH.md y SCENE_TEMPLATE_REVIEW.md (este último llega con C2/#175;
+  pendiente de merge, no asumir que existe antes).
