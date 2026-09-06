@@ -9,8 +9,21 @@ import wave
 from pathlib import Path
 from typing import Any, Mapping
 
-from .music_finalization import finalize_reserved_music
+from .music_finalization import MusicFinalizationError, finalize_reserved_music
 from .music_submission import public_music_job
+
+
+def portable_audio_filename(candidate_id: str) -> str:
+    raw = str(candidate_id or "").strip()
+    if (
+        not raw
+        or raw in {".", ".."}
+        or "/" in raw
+        or "\\" in raw
+        or raw != Path(raw).name
+    ):
+        raise MusicFinalizationError("audio_filename must be a portable file name")
+    return raw if raw.endswith(".wav") else f"{raw}.wav"
 
 
 def write_silent_wav(path: Path, *, seconds: float = 0.25, rate: int = 8000) -> Path:
@@ -25,9 +38,9 @@ def write_silent_wav(path: Path, *, seconds: float = 0.25, rate: int = 8000) -> 
 
 
 def run_fake_music_worker(workspace_dir: str, record: Mapping[str, Any]) -> dict[str, Any]:
-    candidate_id = str(record.get("candidate_id") or "song").strip() or "song"
-    filename = f"{candidate_id}.wav"
-    write_silent_wav(Path(workspace_dir) / filename)
+    filename = portable_audio_filename(str(record.get("candidate_id") or "song"))
+    destination = Path(workspace_dir) / filename
+    write_silent_wav(destination)
     return finalize_reserved_music(
         workspace_dir=workspace_dir,
         generation_id=str(record.get("generation_id") or ""),

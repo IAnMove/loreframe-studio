@@ -6,7 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.services.music_fake_worker import public_job_from_record, run_fake_music_worker
+from app.services.music_fake_worker import portable_audio_filename, public_job_from_record, run_fake_music_worker
+from app.services.music_finalization import MusicFinalizationError
 from app.services.music_submission import (
     MusicSubmissionError,
     MusicSubmissionStore,
@@ -95,6 +96,21 @@ def test_http_fake_worker_publishes_reserved_candidate(tmp_path: Path):
     assert cue["candidates"][0]["status"] == "ready"
     assert cue["candidates"][0]["name"] == "song-1.wav"
     assert (tmp_path / "song-1.wav").is_file()
+
+
+def test_fake_worker_rejects_path_candidate_ids_before_writing(tmp_path: Path):
+    try:
+        portable_audio_filename("../escape")
+        raise AssertionError("expected MusicFinalizationError")
+    except MusicFinalizationError:
+        pass
+    try:
+        portable_audio_filename("nested/song")
+        raise AssertionError("expected MusicFinalizationError")
+    except MusicFinalizationError:
+        pass
+    assert portable_audio_filename("song-1") == "song-1.wav"
+    assert not (tmp_path / "escape.wav").exists()
 
 
 def test_http_fake_worker_replay_does_not_duplicate(tmp_path: Path):
