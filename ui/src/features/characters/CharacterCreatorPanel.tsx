@@ -15,6 +15,7 @@ import {
   type CharacterCreatorHistoryEntry,
 } from './characterCreatorHistory'
 import { useUiTranslation } from '../../i18n'
+import { CharacterSpeechWorkshopEntry } from './CharacterSpeechWorkshopEntry'
 import {
   buildCharacterOrbitPrompt,
   CHARACTER_ORBIT_VIEWS,
@@ -522,6 +523,7 @@ export function CharacterCreatorPanel() {
         )}
       </header>
       <div className="flex-1 overflow-y-auto p-3 md:p-4">
+        <CharacterSpeechWorkshopEntry workspace={activeWorkspace} />
         <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <div className="space-y-3">
             <div className="flex gap-1">

@@ -47,6 +47,9 @@ type Props = {
   kit: CharacterKit
   poseId: string
   disabled?: boolean
+  /** Manual workshop must never load a model or call a generation provider. */
+  allowModelActions?: boolean
+  workspace?: string
   onChange: (kit: CharacterKit) => void
   onCommit?: (kit: CharacterKit) => void
   onStatus?: (message: string) => void
@@ -95,17 +98,19 @@ async function inspectSourceAlpha(source: string) {
   } finally { bitmap.close() }
 }
 
-export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChange, onCommit, onStatus }: Props) {
+export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, allowModelActions = true, workspace: workspaceOverride, onChange, onCommit, onStatus }: Props) {
   const { t } = useUiTranslation('characters')
   const stateLabel = (state: CharacterKitFaceRigState) => t(`faceRig.states.${state}`)
   const imageModel = useStore(state => state.selectedModelPerMode.image || '')
   const speechModel = useStore(state => state.selectedModelPerAudioSubMode.speech ?? 'kugelaudio_0_open')
-  const workspace = useStore(state => state.activeWorkspace)
+  const activeWorkspace = useStore(state => state.activeWorkspace)
+  const workspace = workspaceOverride ?? activeWorkspace
   const [selectedState, setSelectedState] = useState<CharacterKitFaceRigState>('wide')
   const [styleId, setStyleId] = useState<typeof FACE_RIG_STYLE_PRESETS[number]['id']>(FACE_RIG_STYLE_PRESETS[0].id)
   const [traits, setTraits] = useState<string[]>([])
   const [extraNotes, setExtraNotes] = useState(kit.lookNotes ?? '')
   const [busyState, setBusyState] = useState<CharacterKitFaceRigState | 'pack' | 'cleanup' | 'dialogue' | 'pose' | 'wipe' | null>(null)
+  const modelActionsDisabled = disabled || !allowModelActions || Boolean(busyState)
   const [holdBlink, setHoldBlink] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showOverlay, setShowOverlay] = useState(true)
@@ -218,6 +223,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const generatePose = async () => {
+    if (modelActionsDisabled) return
     setBusyState('pose'); setError(null)
     try {
       const generated = await generateImageAsset(
@@ -247,6 +253,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const generateSelected = async () => {
+    if (modelActionsDisabled) return
     setBusyState(selectedState); setError(null)
     try {
       const next = await generateState(persistLook(kit), selectedState)
@@ -257,6 +264,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const generateMissingPack = async () => {
+    if (modelActionsDisabled) return
     setBusyState('pack'); setError(null)
     try {
       let next = persistLook(kit)
@@ -274,6 +282,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const cleanSelected = async () => {
+    if (modelActionsDisabled) return
     const asset = assetFor(kit, selectedState)
     if (!asset) throw new Error(t('faceRig.errors.cleanBeforeGenerate', { name: stateLabel(selectedState) }))
     setBusyState('cleanup'); setError(null)
@@ -345,6 +354,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const speakDialogue = async () => {
+    if (modelActionsDisabled) return
     const line = dialogueText.trim()
     if (!line) throw new Error(t('faceRig.errors.writeLine'))
     setBusyState('dialogue'); setError(null)
@@ -574,7 +584,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
           <button key={trait} type="button" disabled={disabled || Boolean(busyState)} onClick={() => toggleTrait(trait)} className={`rounded border px-1 py-0.5 text-[8px] ${traits.includes(trait) ? 'border-amber-300 bg-amber-400/15 text-amber-100' : 'border-border text-text-muted'}`}>{t(`faceRig.traits.${trait}`)}</button>
         ))}</div>
         <label className="block text-[8px] text-text-muted">{t('faceRig.extraNotes')}<textarea value={extraNotes} disabled={disabled || Boolean(busyState)} onChange={event => setExtraNotes(event.target.value)} rows={2} placeholder={t('faceRig.extraNotesPlaceholder')} className="mt-0.5 w-full resize-y rounded border border-border bg-bg-primary px-1.5 py-1 text-[8px]" /></label>
-        <button type="button" disabled={disabled || Boolean(busyState)} onClick={() => void generatePose()} className="w-full rounded border border-emerald-300/40 bg-emerald-400/10 px-1 py-1 text-[9px] text-emerald-100 disabled:opacity-40">{busyState === 'pose' ? t('faceRig.generatingBody') : poseApproved ? t('faceRig.regenerateBody') : t('faceRig.generateBody')}</button>
+        <button type="button" disabled={modelActionsDisabled} onClick={() => void generatePose()} className="w-full rounded border border-emerald-300/40 bg-emerald-400/10 px-1 py-1 text-[9px] text-emerald-100 disabled:opacity-40">{busyState === 'pose' ? t('faceRig.generatingBody') : poseApproved ? t('faceRig.regenerateBody') : t('faceRig.generateBody')}</button>
         {presetPacks.length > 0 && <div className="grid grid-cols-[1fr_auto] gap-1">
           <select aria-label={t('faceRig.mouthPackAria')} value={presetId} disabled={disabled || Boolean(busyState)} onChange={event => setPresetId(event.target.value)} className="rounded border border-border bg-bg-primary px-1 py-1 text-[8px]">
             {presetPacks.map(pack => <option key={pack.id} value={pack.id}>{pack.label}</option>)}
@@ -629,7 +639,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
       <img src={assetFor(kit, selectedState)!.source} alt={`${kit.name} ${stateLabel(selectedState)}`} className="mx-auto h-28 w-full object-contain" />
       <div className="flex items-center justify-between text-[7px]"><span className="truncate text-text-secondary">{assetFor(kit, selectedState)!.name}</span><span className="text-emerald-100">{t(`alpha.${assetFor(kit, selectedState)!.alphaStatus}`)} · {t(`review.${assetFor(kit, selectedState)!.reviewState}`)}</span></div>
       <FacePatchTextureNotice asset={selectedAsset} />
-      <button type="button" disabled={patchControls.cleanupDisabled} onClick={() => void cleanSelected()} className="w-full rounded border border-cyan-300/40 bg-cyan-400/10 px-1 py-1 text-[8px] text-cyan-100 disabled:opacity-40">{busyState === 'cleanup' ? t('faceRig.cleaningCutout') : t('faceRig.cleanMouthBackground')}</button>
+      <button type="button" disabled={patchControls.cleanupDisabled || modelActionsDisabled} onClick={() => void cleanSelected()} className="w-full rounded border border-cyan-300/40 bg-cyan-400/10 px-1 py-1 text-[8px] text-cyan-100 disabled:opacity-40">{busyState === 'cleanup' ? t('faceRig.cleaningCutout') : t('faceRig.cleanMouthBackground')}</button>
       <div className="flex gap-1 text-[7px] text-text-muted">
         <button type="button" onClick={() => setShowOverlay(value => !value)} className="rounded border border-border px-1 py-0.5">{showOverlay ? t('faceRig.hideMouth') : t('faceRig.showMouth')}</button>
         <button type="button" onClick={() => setCheckerboard(value => !value)} className="rounded border border-border px-1 py-0.5">{checkerboard ? t('faceRig.solidBackground') : t('faceRig.checkerboard')}</button>
@@ -664,13 +674,13 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
       </div>
       <div className="grid grid-cols-2 gap-1"><button type="button" disabled={disabled || Boolean(busyState) || assetFor(kit, selectedState)!.alphaStatus !== 'transparent'} onClick={() => review(selectedState, true)} className="rounded border border-emerald-300/40 bg-emerald-400/10 px-1 py-1 text-[8px] text-emerald-100 disabled:opacity-40">{t('faceRig.approveTransparent')}</button><button type="button" disabled={disabled || Boolean(busyState)} onClick={() => review(selectedState, false)} className="rounded border border-red-300/30 px-1 py-1 text-[8px] text-red-200">{t('faceRig.reject')}</button></div>
     </div>}
-    <div className="grid grid-cols-2 gap-1"><button type="button" disabled={disabled || Boolean(busyState) || !selectedRequest} onClick={() => void generateSelected()} className="rounded border border-emerald-300/50 bg-emerald-400/10 px-1 py-1 text-[8px] text-emerald-100 disabled:opacity-40">{busyState === selectedState ? t('faceRig.generatingNamed', { name: stateLabel(selectedState) }) : t('faceRig.generateNamed', { name: stateLabel(selectedState) })}</button><button type="button" disabled={disabled || Boolean(busyState) || !requests.length} onClick={() => void generateMissingPack()} className="rounded border border-emerald-300/30 px-1 py-1 text-[8px] text-emerald-100 disabled:opacity-40">{busyState === 'pack' ? t('faceRig.generatingPack') : t('faceRig.generateMissing')}</button></div>
+    <div className="grid grid-cols-2 gap-1"><button type="button" disabled={modelActionsDisabled || !selectedRequest} onClick={() => void generateSelected()} className="rounded border border-emerald-300/50 bg-emerald-400/10 px-1 py-1 text-[8px] text-emerald-100 disabled:opacity-40">{busyState === selectedState ? t('faceRig.generatingNamed', { name: stateLabel(selectedState) }) : t('faceRig.generateNamed', { name: stateLabel(selectedState) })}</button><button type="button" disabled={modelActionsDisabled || !requests.length} onClick={() => void generateMissingPack()} className="rounded border border-emerald-300/30 px-1 py-1 text-[8px] text-emerald-100 disabled:opacity-40">{busyState === 'pack' ? t('faceRig.generatingPack') : t('faceRig.generateMissing')}</button></div>
     <details className="space-y-1 rounded border border-amber-300/20 bg-black/15 p-1.5">
       <summary className="cursor-pointer text-[9px] text-text-muted">{t('faceRig.tryLine.summary')}</summary>
       <textarea value={dialogueText} disabled={disabled || Boolean(busyState)} onChange={event => setDialogueText(event.target.value)} rows={2} className="mt-1 w-full resize-y rounded border border-border bg-bg-primary px-1.5 py-1 text-[8px]" />
       <div className="grid grid-cols-2 gap-1">
         <button type="button" disabled={disabled || Boolean(busyState) || !dialogueText.trim()} onClick={planDialogue} className="rounded border border-amber-300/40 px-1 py-1 text-[8px] text-amber-100 disabled:opacity-40">{t('faceRig.tryLine.planMouths')}</button>
-        <button type="button" disabled={disabled || Boolean(busyState) || !dialogueText.trim()} onClick={() => void speakDialogue()} className="rounded border border-amber-300/50 bg-amber-400/10 px-1 py-1 text-[8px] text-amber-100 disabled:opacity-40">{busyState === 'dialogue' ? t('faceRig.tryLine.generatingVoice') : t('faceRig.tryLine.speak')}</button>
+        <button type="button" disabled={modelActionsDisabled || !dialogueText.trim()} onClick={() => void speakDialogue()} className="rounded border border-amber-300/50 bg-amber-400/10 px-1 py-1 text-[8px] text-amber-100 disabled:opacity-40">{busyState === 'dialogue' ? t('faceRig.tryLine.generatingVoice') : t('faceRig.tryLine.speak')}</button>
       </div>
       {dialoguePreview && <div className="space-y-1">
         <p className="text-[7px] text-text-secondary">{t('faceRig.tryLine.beats', { count: dialoguePreview.visemes.length, duration: dialoguePreview.end.toFixed(1), available: dialoguePreview.available.join(', ') || t('faceRig.tryLine.none') })}</p>
