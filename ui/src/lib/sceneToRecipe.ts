@@ -1,5 +1,6 @@
 import type { Scene, SceneLayer } from '../types'
 import type { SceneRecipe, SceneRecipeAsset, SceneRecipeLayer } from './sceneRecipe'
+import { sceneGenerationPolicyFields } from './sceneGenerationPolicy'
 
 /**
  * The recipe representation of a layer contains authored scene state that is
@@ -88,6 +89,7 @@ export function sceneToRecipe(scene: Scene): SceneRecipe {
   return {
     version: 1,
     name: scene.name,
+    ...sceneGenerationPolicyFields(scene.generationPolicy),
     record: false,
     save: false,
     assets,

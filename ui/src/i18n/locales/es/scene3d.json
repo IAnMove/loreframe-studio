@@ -97,6 +97,8 @@
     "auto": "Auto · generar lo que falte",
     "manualHelp": "Añade placas y GLB con vistas previas y pide al LLM que componga. Edita la escena y luego Graba.",
     "autoHelp": "Describe la escena con naturalidad. HocusPocus planifica sujetos 3D reutilizables, placas, cámara y efectos; revisa el plan antes de generar.",
+    "noVideoGeneration": "No generar clips de vídeo",
+    "noVideoGenerationHelp": "Aún se pueden generar imágenes, audio y recursos 3D cuando hagan falta. Los clips de vídeo existentes se permiten y se reutilizan.",
     "howTitle": "Cómo describir una escena",
     "howBody": "Menciona los sujetos que deben conservar su identidad, las acciones en orden, el entorno y, si quieres, cámara, duración o formato. Personajes, vehículos y objetos en movimiento se convierten en recursos 3D reutilizables; un entorno fijo, en una placa; niebla, nieve y lluvia, en efectos.",
     "images": "Imágenes",
@@ -148,6 +150,11 @@
     "resolving": "Resolviendo recursos y audio (genera solo lo que falte)…",
     "mounted": "Plano «{{name}}» montado. Ajústalo en el inspector y luego Graba.",
     "mountedEdit": "Plano «{{name}}» montado. Edítalo libremente y luego Graba.",
+    "policyError": {
+      "generationForbidden": "No se puede generar {{kind}} «{{assetId}}» con la política {{policy}}. Proporciona un recurso existente.",
+      "unknown": "Esta escena usa una política de generación desconocida y se ha bloqueado."
+    },
+    "typeAudio": "Audio",
     "embeddedClips": "Clips esqueléticos incrustados: {{clips}}."
   },
   "hunyuan": {
