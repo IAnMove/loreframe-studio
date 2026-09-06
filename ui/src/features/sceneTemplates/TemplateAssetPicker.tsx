@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchAssets, type AssetCatalogItem } from '../../api/assets'
+import { catalogLocation } from './catalogLocation'
 
 const PAGE_SIZE = 12
 const TABS = [
@@ -18,22 +19,8 @@ export interface TemplateAssetPickerProps {
 
 function previewUrlFor(asset: AssetCatalogItem, workspace: string): string | null {
   if (asset.kind !== 'image') return null
-  const locations = asset.locations.filter(item => item.workspace_id === workspace)
-  if (locations.length !== 1) return null
-  const location = locations[0]
-  const raw = location?.url
-  // Only an API-relative file URL from the active workspace may enter an img tag.
-  // In particular, never use asset.url as a cross-workspace or remote fallback.
-  if (!raw || /[\\/]/.test(location.filename)
-    || raw !== `/api/v1/file/${encodeURIComponent(location.filename)}?workspace=${encodeURIComponent(workspace)}`) return null
-  try {
-    const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
-    const parsed = new URL(raw, origin)
-    if (parsed.origin !== origin || !parsed.pathname.startsWith('/api/v1/file/')) return null
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`
-  } catch {
-    return null
-  }
+  try { return catalogLocation(asset, workspace).url }
+  catch { return null }
 }
 
 function assetStatusLabel(status: AssetCatalogItem['metadata_status']): string {

@@ -1,6 +1,7 @@
 import { fetchAsset, type AssetCatalogItem } from '../../api/assets'
 import type { SceneTemplateDefinition, SceneTemplateSlot, TemplateSlotName } from './catalog'
 import type { TemplateAsset, TemplateBindings } from './sceneBuilders'
+import { catalogLocation } from './catalogLocation'
 
 export type CatalogSelections = Partial<Record<TemplateSlotName, AssetCatalogItem>>
 
@@ -8,12 +9,7 @@ export type CatalogSelections = Partial<Record<TemplateSlotName, AssetCatalogIte
 export function catalogAssetBinding(item: AssetCatalogItem, workspace: string, slot: SceneTemplateSlot): TemplateAsset {
   if (!item.id?.trim() || item.metadata_status !== 'canonical') throw new Error('Necesita identidad y metadatos canónicos de Library; los archivos heredados no se migran automáticamente.')
   if ((item.kind !== 'image' && item.kind !== 'model3d') || !slot.kinds.includes(item.kind)) throw new Error(`El slot ${slot.id} no admite ${item.kind}.`)
-  const locations = item.locations.filter(location => location.workspace_id === workspace)
-  if (locations.length !== 1) throw new Error('El asset necesita una ubicación inequívoca en el workspace activo.')
-  const location = locations[0]
-  const expectedUrl = `/api/v1/file/${encodeURIComponent(location.filename)}?workspace=${encodeURIComponent(workspace)}`
-  if (!location.filename || ['.', '..'].includes(location.filename) || /[\\/]/.test(location.filename)
-    || [...location.filename].some(char => char.charCodeAt(0) < 32) || location.url !== expectedUrl) throw new Error('Referencia de Library no válida para este workspace; no se aceptan URLs externas ni temporales.')
+  const location = catalogLocation(item, workspace)
   if (item.kind === 'model3d' && !/\.glb$/i.test(location.filename)) throw new Error('El compositor necesita un GLB, no otro formato 3D.')
   return { source: location.url, type: item.kind, name: location.filename, catalogAtAssignment: {
     assetId: item.id, workspaceId: workspace, filename: location.filename, metadataStatus: 'canonical',

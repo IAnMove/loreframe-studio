@@ -188,3 +188,19 @@ test('no carga una preview cuyo query apunta a otro workspace aunque la ubicaciÃ
     view.cleanup()
   } finally { globalThis.fetch = originalFetch }
 })
+
+test('muestra y selecciona hero(1).png con la codificaciÃ³n del backend', { concurrency: false }, async () => {
+  const originalFetch = globalThis.fetch
+  const source = '/api/v1/file/hero%281%29.png?workspace=film%282%29'
+  const item = asset({ filename: 'hero(1).png', locations: [{ workspace_id: 'film(2)', filename: 'hero(1).png', url: source }] })
+  globalThis.fetch = (async () => new Response(JSON.stringify({ assets: [item], total: 1 }))) as typeof fetch
+  let picked = ''
+  try {
+    const view = await renderPicker({ workspace: 'film(2)', onPick: value => { picked = value.id } })
+    const button = await view.screen.findByRole('button', { name: 'Seleccionar hero(1).png' })
+    assert.equal(view.screen.getByRole('img').getAttribute('src'), source)
+    view.fireEvent.click(button)
+    assert.equal(picked, item.id)
+    view.cleanup()
+  } finally { globalThis.fetch = originalFetch }
+})

@@ -81,6 +81,17 @@ test('blocks non-canonical metadata and unsafe, ambiguous, or incompatible locat
   assert.throws(() => catalogAssetBinding(nonGlb, WORKSPACE, modelSlot), /GLB/i)
 })
 
+test('matches Python quote for parentheses, quotes, punctuation and Unicode in names/workspaces', () => {
+  const workspace = "film(2)!'"
+  const filename = "héro(1)!'*.png"
+  const source = '/api/v1/file/h%C3%A9ro%281%29%21%27%2A.png?workspace=film%282%29%21%27'
+  const item = makeAsset({ filename, locations: [{ workspace_id: workspace, filename, url: source }] })
+  const binding = catalogAssetBinding(item, workspace, imageSlot)
+  assert.equal(binding.source, source)
+  assert.equal(binding.catalogAtAssignment.filename, filename)
+  assert.equal(binding.catalogAtAssignment.workspaceId, workspace)
+})
+
 test('re-resolves by durable id and rejects identity, type, or source changes', async () => {
   const selected = makeAsset({ id: 'asset-selected' })
   const selectedPlate = makeAsset({
