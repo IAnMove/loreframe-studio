@@ -50,6 +50,7 @@ class MiniMaxH3SLAAttention:
         self._dense_calls = 0
         self._last_topk = 0
         self._last_blocks = 0
+        self._compute_dtype = None
 
     def _fallback(self, reason: Exception | str) -> None:
         self.enabled = False
@@ -70,6 +71,7 @@ class MiniMaxH3SLAAttention:
     def begin_forward(self, sink_tokens: int, device, dtype) -> None:
         from mmgp import offload
 
+        self._compute_dtype = dtype
         requested = offload.shared_state.get("_attention") == "sla"
         self.enabled = bool(requested and not self._runtime_failed)
         self.sink_tokens = max(0, int(sink_tokens))
@@ -120,14 +122,16 @@ class MiniMaxH3SLAAttention:
         if not use_sla:
             return pay_attention(qkv_list, recycle_q=True)
         query, key, value = qkv_list
+        output_dtype = query.dtype
         try:
             from .sla_block_map import get_block_map
             from .sla_kernel import block_sparse_attention
 
-            if not (query.is_contiguous() and key.is_contiguous() and value.is_contiguous()):
-                query, key, value = (
-                    tensor.contiguous() for tensor in (query, key, value)
-                )
+            import torch
+            compute_dtype = self._compute_dtype or torch.bfloat16
+            query, key, value = (
+                tensor.to(compute_dtype).contiguous() for tensor in (query, key, value)
+            )
             block_query = int(self.config["block_size"])
             block_key = 64 if block_query == 128 else block_query
             prefix = (
@@ -161,7 +165,7 @@ class MiniMaxH3SLAAttention:
             self._fallback(error)
             return pay_attention(qkv_list, recycle_q=True)
         qkv_list.clear()
-        return output
+        return output.to(output_dtype)
 
     def summary(self) -> str:
         if not self._calls or not self._last_blocks:

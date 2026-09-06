@@ -8,6 +8,8 @@ import argparse
 import json
 from pathlib import Path
 import time
+import subprocess
+import shutil
 import urllib.request
 import urllib.error
 
@@ -34,18 +36,21 @@ def save(path, obj):
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
-def prepare(base, output):
+FUTURAMA_PROMPT = ('Gag original de Futurama, animación 2D con la estética de la serie, en la sala de Planet Express. Philip J. Fry, con su chaqueta roja y pelo naranja, muestra su móvil a Bender y dice: «Bender, he descubierto una cosa llamada ChatGPT». Bender, el robot gris, lo mira con desprecio y responde: «Pamplinas». Plano medio de ambos, cámara fija y pausa cómica final. Diálogo en español de España. Sin risas enlatadas ni música.')
+
+
+def prepare(base, output, source=PROMPT, prefix=''):
     for style in ('faithful', 'creative'):
-        path = output / f'prompt-{style}.json'
+        path = output / f'{prefix}prompt-{style}.json'
         if path.exists():
             continue
         started = time.monotonic()
         result = request(base, '/api/v1/llm/enhance-prompt', {
-            'prompt': PROMPT, 'model_type': 'minimax_h3', 'mode': 'video',
+            'prompt': source, 'model_type': 'minimax_h3', 'mode': 'video',
             'planning_style': style, 'h3_audio_policy': 'native',
             'duration_seconds': 10.125, 'max_new_tokens': 1200,
         })
-        result['source_prompt'] = PROMPT
+        result['source_prompt'] = source
         result['elapsed_seconds'] = round(time.monotonic()-started, 3)
         result['llm_status'] = request(base, '/api/v1/llm/status')
         save(path, result)
@@ -77,15 +82,53 @@ def matrix():
     return rows
 
 
-def run_row(base, output, row, reference=None):
+def monitor_job(base, folder, row, active):
+    job_id = active['job_id']
+    last_message = None
+    while True:
+        status = request(base, '/api/v1/status/' + job_id, timeout=120)
+        save(folder / 'status.json', status)
+        message = (status.get('status'), status.get('message'), status.get('progress'))
+        if message != last_message:
+            print(row['id'], message, flush=True)
+            last_message = message
+        if status.get('status') in ('completed', 'complete', 'done', 'failed', 'error', 'cancelled', 'canceled'):
+            break
+        if time.time() - active['started_at'] > 5400:
+            status = {'status':'timeout', 'job_id':job_id, 'note':'Job left visible; inspect before submitting further rows.'}
+            break
+        time.sleep(3)
+    result = {'row':row, 'elapsed_seconds':round(time.time() - active['started_at'], 3), 'result':status}
+    save(folder / 'result.json', result)
+    return result
+
+
+def run_row(base, output, row, reference=None, server_pid=None):
+    if server_pid and not (output / row["id"] / "result.json").exists():
+        from benchmark_h3_memory import MemorySampler
+        sampler = MemorySampler(server_pid, output / row['id'])
+        sampler.start()
+        try:
+            result = run_row(base, output, row, reference)
+        finally:
+            memory = sampler.finish()
+        result['memory'] = memory
+        save(output / row['id'] / 'result.json', result)
+        return result
     folder = output / row['id']
-    result_file = folder/'result.json'
+    result_file = folder / 'result.json'
     if result_file.exists():
         return json.loads(result_file.read_text())
+    active_file = folder / 'active.json'
+    if active_file.exists():
+        # The backend owns generation, independently of this client/browser.
+        # Reattach to the recorded job instead of submitting a duplicate.
+        return monitor_job(base, folder, row, json.loads(active_file.read_text()))
     defaults = request(base, '/api/v1/defaults/'+row['model'])
-    prompt_data = json.loads((output/f'prompt-{row["style"]}.json').read_text())
+    prefix = 'futurama-' if row.get('scene') == 'futurama' else ''
+    prompt_data = json.loads((output/f'{prefix}prompt-{row["style"]}.json').read_text())
     params = {**defaults, 'model_type': row['model'], 'prompt': prompt_data['enhanced'],
-        'override_profile': 3.5, 'multi_prompts_gen_type': 2, 'seed': 20260906, 'resolution': '864x480', 'video_length': row['frames'],
+        'override_profile': 3, 'multi_prompts_gen_type': 2, 'seed': 20260906, 'resolution': '864x480', 'video_length': row['frames'],
         'num_inference_steps': row['steps'], 'guidance_scale': 1, 'batch_size': 1,
         'minimax_h3_turbo_mode': bool(row['preset']), 'minimax_h3_turbo_preset': row['preset'],
         'activated_loras': [], 'loras_multipliers': '', 'override_attention': row['attention'],
@@ -96,40 +139,42 @@ def run_row(base, output, row, reference=None):
         'skip_steps_cache_type': '', 'workspace': 'h3_benchmark',
     }
     if row['frames'] > 243:
-        params['prompt'] = PROMPT
+        params['prompt'] = prompt_data['source_prompt']
         params['minimax_h3_reference_sequence'] = 'ref2va' in row['model']
     if 'ref2va' in row['model']:
         if not reference:
             return {'status': 'blocked', 'reason': 'reference image required'}
-        params['minimax_h3_references'] = [{'type':'image', 'path':str(reference), 'role':'George Costanza and Jerry Seinfeld, the two characters in the apartment', 'image_intent':'composition'}]
-    save(folder/'request.json',params)
-    started = time.monotonic()
+        params['minimax_h3_references'] = [{'type':'image', 'path':str(reference), 'role': ('Fry and Bender in Planet Express' if row.get('scene') == 'futurama' else 'George Costanza and Jerry Seinfeld, the two characters in the apartment'), 'image_intent':'composition'}]
+    save(folder / 'request.json', params)
+    started = time.time()
     try:
         submission = request(base, '/api/v1/generate', params)
-        save(folder/'submission.json',submission)
+        save(folder / 'submission.json', submission)
         job_id = submission.get('job_id') or submission.get('jobId')
         if not job_id:
             raise RuntimeError(str(submission))
-        save(folder/'active.json', {'job_id':job_id, 'started_at':time.time()})
-        last_message = None
-        while True:
-            status = request(base, '/api/v1/status/'+job_id, timeout=120)
-            save(folder/'status.json',status)
-            message = (status.get('status'),status.get('message'),status.get('progress'))
-            if message != last_message:
-                print(row['id'], message, flush=True)
-                last_message = message
-            if status.get('status') in ('completed','complete','done','failed','error','cancelled','canceled'):
-                break
-            if time.monotonic()-started > 5400:
-                status = {'status':'timeout','job_id':job_id, 'note':'Job left visible; inspect before submitting further rows.'}
-                break
-            time.sleep(15)
-        result = {'row':row, 'elapsed_seconds':round(time.monotonic()-started,3), 'result':status}
     except Exception as error:
-        result = {'row':row, 'elapsed_seconds':round(time.monotonic()-started,3), 'error':str(error)}
-    save(result_file,result)
-    return result
+        result = {'row':row, 'elapsed_seconds':round(time.time()-started, 3), 'error':str(error)}
+        save(result_file, result)
+        return result
+    active = {'job_id':job_id, 'started_at':started}
+    save(active_file, active)
+    return monitor_job(base, folder, row, active)
+
+
+def extract_reference(result, destination: Path):
+    files = result.get('result', {}).get('output_files') or []
+    if not files:
+        return None
+    app_dir = Path(__file__).resolve().parents[1]
+    video = app_dir / 'outputs/h3_benchmark' / files[0]
+    binary = shutil.which('ffmpeg')
+    if not binary:
+        import imageio_ffmpeg
+        binary = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run([binary, '-y', '-ss', '2', '-i', str(video), '-frames:v', '1', str(destination)],
+                   check=True, capture_output=True, timeout=90)
+    return destination.resolve()
 
 
 def main():
@@ -138,11 +183,44 @@ def main():
     parser.add_argument('--output-dir',type=Path,required=True)
     parser.add_argument('--prepare',action='store_true')
     parser.add_argument('--index',type=int)
+    parser.add_argument('--indices',type=int,nargs='+')
+    parser.add_argument('--auto-reference',action='store_true')
     parser.add_argument('--reference',type=Path)
+    parser.add_argument('--futurama-reference',type=Path)
+    parser.add_argument('--server-pid',type=int)
+    parser.add_argument('--paired',action='store_true')
     args=parser.parse_args()
-    save(args.output_dir/'matrix.json',matrix())
-    if args.prepare: prepare(args.base_url,args.output_dir)
-    if args.index is not None:
-        print(json.dumps(run_row(args.base_url,args.output_dir,matrix()[args.index],args.reference),ensure_ascii=False),flush=True)
+    rows = matrix()
+    paired_rows = [{**row, 'id': row['id']+'-futurama', 'scene':'futurama', 'run_order':2} for row in rows]
+    save(args.output_dir/'matrix.json', [item for pair in zip(rows, paired_rows) for item in pair] if args.paired else rows)
+    if args.prepare:
+        prepare(args.base_url,args.output_dir)
+        if args.paired:
+            prepare(args.base_url,args.output_dir,FUTURAMA_PROMPT,'futurama-')
+    indices = args.indices or ([] if args.index is None else [args.index])
+    reference = args.reference
+    jobs = [(index, row) for index in indices for row in ([rows[index], paired_rows[index]] if args.paired else [rows[index]])]
+    futurama_reference = args.futurama_reference
+    for index, row in jobs:
+        selected_reference = futurama_reference if row.get('scene') == 'futurama' else reference
+        result = run_row(args.base_url, args.output_dir, row, selected_reference, args.server_pid)
+        print(json.dumps({'index': index, 'id': row['id'],
+            'elapsed_seconds': result.get('elapsed_seconds'),
+            'status': result.get('result', {}).get('status'),
+            'output_files': result.get('result', {}).get('output_files'),
+            'error': result.get('error')}, ensure_ascii=False), flush=True)
+        if result.get('result', {}).get('status') == 'timeout':
+            raise SystemExit('Stopped: an unfinished job must be inspected before continuing.')
+        if args.auto_reference:
+            if row.get('scene') == 'futurama' and futurama_reference is None:
+                futurama_reference = extract_reference(result, args.output_dir / 'reference-futurama.png')
+            elif row.get('scene') != 'futurama' and reference is None:
+                reference = extract_reference(result, args.output_dir / 'reference.png')
+        from benchmark_h3_report import render
+        render(args.output_dir, Path(__file__).resolve().parents[1] / 'outputs/h3_benchmark/h3-benchmark.html')
+        if result.get('error'):
+            # Continue only if the server is still reachable; never turn a
+            # crashed runtime into twenty misleading configuration failures.
+            request(args.base_url, '/api/v1/llm/status', timeout=15)
 
 if __name__=='__main__': main()

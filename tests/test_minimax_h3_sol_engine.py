@@ -108,6 +108,39 @@ class TestSolAttentionRouting(unittest.TestCase):
         self.assertTrue(probe.called)
         self.assertEqual(tuple(output.shape), (1, 4, 8))
 
+    def test_float32_normalized_queries_use_value_compute_dtype(self):
+        from unittest.mock import patch
+        from models.minimax_h3.sol_attention import MiniMaxH3SolAttention
+        torch = self.torch
+        query = torch.randn(1, 4, 1, 8, dtype=torch.float32)
+        value = query.clone()
+        inputs = [query, query.clone(), value]
+        def kernel(q, k, v, **kwargs):
+            self.assertEqual(q.dtype, torch.bfloat16)
+            self.assertEqual(k.dtype, torch.bfloat16)
+            self.assertEqual(v.dtype, torch.bfloat16)
+            return v
+        with patch("shared.sol_attn.sol_attn", side_effect=kernel):
+            output = MiniMaxH3SolAttention()(inputs, True)
+        self.assertEqual(output.dtype, torch.float32)
+        self.assertEqual(inputs, [])
+        torch.testing.assert_close(output, value.bfloat16().float())
+
+    def test_sla_normalizes_projection_dtypes_without_losing_output_dtype(self):
+        from unittest.mock import patch
+        from models.minimax_h3.sla_attention import MiniMaxH3SLAAttention
+        torch = self.torch
+        value = torch.randn(1, 4, 1, 8, dtype=torch.float32)
+        inputs = [value, value.clone(), value.clone()]
+        def kernel(q, k, v, *args):
+            self.assertEqual({q.dtype, k.dtype, v.dtype}, {torch.bfloat16})
+            return v
+        with patch("models.minimax_h3.sla_block_map.get_block_map", return_value=(None, 1)), patch("models.minimax_h3.sla_kernel.block_sparse_attention", side_effect=kernel):
+            output = MiniMaxH3SLAAttention()(inputs, True)
+        self.assertEqual(output.dtype, torch.float32)
+        self.assertEqual(inputs, [])
+        torch.testing.assert_close(output, value.bfloat16().float())
+
     def test_kernel_failure_stays_on_dense_fallback_for_process(self):
         from models.minimax_h3.sol_attention import MiniMaxH3SolAttention
 

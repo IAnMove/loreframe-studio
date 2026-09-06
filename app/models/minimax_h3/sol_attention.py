@@ -83,11 +83,14 @@ class MiniMaxH3SolAttention:
         query, key, value = qkv_list
         try:
             from shared.sol_attn import sol_attn
+            import torch
 
             output = sol_attn(
-                query,
-                key,
-                value,
+                # ConvRot/LoRA projections and RMSNorm may promote intermediates
+                # to float32 although the H3 compute policy is bfloat16.
+                query.to(torch.bfloat16),
+                key.to(torch.bfloat16),
+                value.to(torch.bfloat16),
                 tau=SOL_ATTN_TAU,
                 thresh_type=SOL_ATTN_THRESH_TYPE,
                 sink_start=0,
@@ -98,7 +101,7 @@ class MiniMaxH3SolAttention:
             self._fallback(error)
             return pay_attention(qkv_list, recycle_q=True)
         qkv_list.clear()
-        return output
+        return output.to(query.dtype)
 
 
 __all__ = [
