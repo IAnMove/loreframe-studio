@@ -820,6 +820,8 @@
     "mp4Failed": "No se pudo exportar el MP4.",
     "recipeLoaded": "Escena de receta cargada: {{name}}",
     "waitingModels": "Esperando a que se pinten los modelos 3D…",
+    "modelsReady": "Modelos 3D listos. Escena montada; pulsa Exportar MP4 cuando quieras.",
+    "modelsTimeout": "Los modelos 3D no se pintaron a tiempo. Mantén visible la pestaña Vídeo 3D e inténtalo de nuevo.",
     "recordingScene": "Grabando escena…",
     "convertingMp4": "Convirtiendo a MP4 y añadiéndolo a Vídeos…",
     "mp4Ready": "MP4 listo en Vídeos: {{name}}",

@@ -4,9 +4,12 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { chromium } from '@playwright/test'
+import { LANGUAGE_STORAGE_KEY } from '../../src/i18n/storageKey.ts'
+import { animatorLabels } from '../../src/i18n/animatorLabels.ts'
 
 const catalog = await import(new URL('../../src/features/sceneTemplates/catalog.ts', import.meta.url))
 const demos = await import(new URL('../../src/features/sceneTemplates/demoScenes.ts', import.meta.url))
+const copy = animatorLabels('en')
 
 const renderTimeout = 300_000
 
@@ -53,7 +56,7 @@ async function saveEditableScene(page, server, template) {
   const responsePromise = page.waitForResponse(response => (
     response.url().endsWith('/api/v1/scenes') && response.request().method() === 'POST'
   ), { timeout: 60_000 })
-  await page.getByRole('button', { name: 'Save scene', exact: true }).first().click()
+  await page.getByRole('button', { name: copy.saveScene, exact: true }).first().click()
   const response = await responsePromise
   assert(response.ok(), `Editable scene save failed for ${template.id}: ${await response.text()}`)
   const saved = await response.json()
@@ -72,7 +75,11 @@ async function saveEditableScene(page, server, template) {
 async function renderOne({ browser, server, repoRoot, template, runtime }) {
   const source = gitSnapshot(repoRoot)
   const scene = demos.candidateDemoScene(template.id, 'coral')
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' })
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+    locale: 'en-US',
+    serviceWorkers: 'block',
+  })
   const page = await context.newPage()
   page.setDefaultTimeout(60_000)
   const pageErrors = []
@@ -82,16 +89,17 @@ async function renderOne({ browser, server, repoRoot, template, runtime }) {
     if (requestUrl.origin === server.localOrigin || requestUrl.protocol === 'data:' || requestUrl.protocol === 'blob:') return route.continue()
     return route.abort('blockedbyclient')
   })
-  await page.addInitScript(({ snapshot }) => {
-    localStorage.setItem('i18nextLng', 'en')
+  await page.addInitScript(({ snapshot, languageKey }) => {
+    localStorage.setItem(languageKey, 'en')
+    localStorage.setItem('hocuspocus_welcome_seen_v1', '1')
     sessionStorage.setItem('maestro_scene_animator_pending_scene', JSON.stringify(snapshot))
-  }, { snapshot: scene })
+  }, { snapshot: scene, languageKey: LANGUAGE_STORAGE_KEY })
 
   try {
     await page.goto(`${server.localOrigin}/scene-template-review?editor=1`, { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('Scene name', { exact: true }).waitFor()
-    await page.getByLabel('Scene name', { exact: true }).fill(scene.name)
-    await page.getByLabel('Scene name', { exact: true }).blur()
+    await page.getByLabel(copy.sceneNameAria, { exact: true }).waitFor()
+    await page.getByLabel(copy.sceneNameAria, { exact: true }).fill(scene.name)
+    await page.getByLabel(copy.sceneNameAria, { exact: true }).blur()
     await waitForImages(page, scene)
     await waitForModels(page, scene)
     const savedScene = await saveEditableScene(page, server, template)
@@ -112,7 +120,7 @@ async function renderOne({ browser, server, repoRoot, template, runtime }) {
       response.url().endsWith('/api/v1/scenes/recordings') && response.request().method() === 'POST'
     ), { timeout: renderTimeout })
     console.log(`RENDER ${template.id} ${scene.layers.length} layers`)
-    await page.getByRole('button', { name: 'Export MP4', exact: true }).click()
+    await page.getByRole('button', { name: copy.exportMp4, exact: true }).click()
     const response = await responsePromise
     assert(response.ok(), `MP4 export failed for ${template.id}: ${await response.text()}`)
     const saved = await response.json()

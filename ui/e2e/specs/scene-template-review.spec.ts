@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { closeApp } from '../helpers/gotoApp'
 import { installApiRoutes, type ApiRouteSession } from '../helpers/apiRoutes'
+import { lockUiLanguage } from '../helpers/lockUiLanguage'
 import { CATALOG_VERSION, EXPANDED_CATALOG_VERSION } from '../../src/features/sceneTemplates/catalog'
 import { CATALOG_REVIEW_STORAGE_KEY } from '../../src/features/sceneTemplates/catalogReview'
 import { candidateDemoScene } from '../../src/features/sceneTemplates/demoScenes'
@@ -72,6 +73,7 @@ function reviewRouteState(): ReviewRouteState {
 async function prepareReviewPage(page: Page): Promise<ApiRouteSession> {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const session = await installApiRoutes(page)
+  await lockUiLanguage(page, 'en')
   await page.addInitScript(() => {
     const originalSetItem = Storage.prototype.setItem
     Storage.prototype.setItem = function setItem(key: string, value: string) {

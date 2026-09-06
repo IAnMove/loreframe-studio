@@ -820,6 +820,8 @@
     "mp4Failed": "Failed to export MP4.",
     "recipeLoaded": "Recipe scene loaded: {{name}}",
     "waitingModels": "Waiting for 3D models to paint…",
+    "modelsReady": "3D models ready. Scene mounted; press Export MP4 when ready.",
+    "modelsTimeout": "The 3D models did not paint in time. Keep the 3D Video tab visible and try again.",
     "recordingScene": "Recording scene…",
     "convertingMp4": "Converting to MP4 and adding it to Videos…",
     "mp4Ready": "MP4 ready in Videos: {{name}}",
