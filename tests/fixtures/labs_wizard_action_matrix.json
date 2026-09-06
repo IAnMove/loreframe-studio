@@ -138,8 +138,8 @@
     {
       "id": "false_success_invisible_tab",
       "phase": "L8",
-      "summary": "open_story_section can report open when StoryLabPanel discards a tab not visible for the project type.",
-      "evidence": "navigationQueueCapabilities + storyLabTabs per type"
+      "summary": "Addressed: open_story_section resolves a visible tab or explains incompatibility; it never claims an invisible tab opened.",
+      "evidence": "ui/src/features/stories/labNavigation.ts"
     },
     {
       "id": "t2v_double_mode_and_image_requirements",
@@ -193,17 +193,17 @@
       "wizard_capability": "open_story_section",
       "wizard_schema": "capabilityRegistry.open_story_section.inputSchema",
       "in_wizard_context": true,
-      "wizard_status": "registrada_defectuosa",
-      "wizard_available": false,
+      "wizard_status": "disponible",
+      "wizard_available": true,
       "classification": "solo_navegacion",
       "phase": "L8",
-      "preconditions": "Active Story project; tab must be visible for the project type",
+      "preconditions": "Active Story project; tab must be visible for the project type or have a compact equivalent",
       "persistence": "none (canonical tab state)",
       "presentation": "story_lab + section alias",
-      "test": "ui/tests/navigationQueueCapabilities.test.mjs",
-      "notes": "open_story_section can report success when StoryLabPanel discards an invisible tab and returns to overview.",
+      "test": "ui/tests/labsWizardL8.test.mjs",
+      "notes": "Compact Story types map world/characters/structure onto overview. Invisible sections fail instead of reporting a false open.",
       "prompt_fixture": "",
-      "blocking_defect": "false_success_invisible_tab"
+      "blocking_defect": ""
     },
     {
       "id": "story.library.create",

@@ -84,6 +84,10 @@ export function storyProjectTypes(t: StoryLabT): Array<{
   }))
 }
 
+export function storyLabTabIds(projectType: StoryProjectType): StoryLabTab[] {
+  return (TABS_BY_TYPE[projectType] || TABS_BY_TYPE.full_story).map(item => item.id)
+}
+
 export function storyLabTabs(
   projectType: StoryProjectType,
   t: StoryLabT,

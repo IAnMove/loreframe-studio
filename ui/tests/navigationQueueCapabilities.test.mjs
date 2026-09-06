@@ -9,7 +9,14 @@ Object.assign(globalThis, {
   localStorage: dom.window.localStorage,
   Event: dom.window.Event,
   CustomEvent: dom.window.CustomEvent,
+  HTMLElement: dom.window.HTMLElement,
+  HTMLInputElement: dom.window.HTMLInputElement,
+  HTMLTextAreaElement: dom.window.HTMLTextAreaElement,
+  HTMLSelectElement: dom.window.HTMLSelectElement,
+  HTMLButtonElement: dom.window.HTMLButtonElement,
 })
+window.matchMedia = () => ({ matches: false })
+window.HTMLElement.prototype.scrollIntoView = () => undefined
 
 test('navigation and queue registration is complete and idempotent', async () => {
   const { registerNavigationQueueCapabilities } = await import('../src/features/agent/navigationQueueCapabilities.ts')
@@ -57,6 +64,9 @@ test('registered resolvers preserve section, queue, confirmation and workspace c
 
   const story = definitions.get('open_story_section')
   assert.deepEqual(story.resolve({ story_section: 'music' }), {
+    type: 'open_story_section', section: 'music',
+  })
+  assert.deepEqual(story.resolve({ story_section: 'song' }), {
     type: 'open_story_section', section: 'music',
   })
   assert.equal(story.resolve({ story_section: 'unknown' }), null)

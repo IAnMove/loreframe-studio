@@ -31,7 +31,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
 | `wizard_auto_approves_canon` | L7 | Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series. |
-| `false_success_invisible_tab` | L8 | open_story_section can report open when StoryLabPanel discards a tab not visible for the project type. |
+| `false_success_invisible_tab` | L8 | Addressed: open_story_section resolves a visible tab or explains incompatibility; it never claims an invisible tab opened. |
 | `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
 | `ace_labelled_as_minimax` | L11 | StoryMusicSettingsBar uses isLocalMusicModel, so ACE-Step is labelled MiniMax Music 3 local. |
@@ -43,7 +43,7 @@ Status: freeze of current contracts. This document does not implement the later 
 
 | Id | Lab | Classification | Phase | Wizard | Status | Domain function | Test |
 |---|---|---|---|---|---|---|---|
-| `story.nav.open_section` | story | solo_navegacion | L8 | `open_story_section` | registrada_defectuosa | `open_story_section` | `ui/tests/navigationQueueCapabilities.test.mjs` |
+| `story.nav.open_section` | story | solo_navegacion | L8 | `open_story_section` | disponible | `open_story_section` | `ui/tests/labsWizardL8.test.mjs` |
 | `story.library.create` | story | operativa | L6 | `create_story` | disponible | `createFilledStory` | `ui/tests/storyLibraryMerge.test.mjs` |
 | `story.library.update` | story | operativa | L6 | `update_story` | disponible | `updateFilledStory` | `ui/tests/storyWritingProvider.test.mjs` |
 | `story.library.duplicate_delete` | story | operativa | L9 | `—` | dominio_sin_capacidad | `saveStoryLibrary` | `ui/tests/storyLibraryMerge.test.mjs` |
@@ -116,13 +116,13 @@ Status: freeze of current contracts. This document does not implement the later 
 - API: `—`
 - Wizard capability / schema: `open_story_section` / `capabilityRegistry.open_story_section.inputSchema`
 - In Wizard context snapshot: True
-- Available (strict): False
-- Preconditions: Active Story project; tab must be visible for the project type
+- Available (strict): True
+- Preconditions: Active Story project; tab must be visible for the project type or have a compact equivalent
 - Persistence: none (canonical tab state)
 - Presentation: story_lab + section alias
 - Prompt fixture: `n/a`
-- Blocking defect: `false_success_invisible_tab`
-- Notes: open_story_section can report success when StoryLabPanel discards an invisible tab and returns to overview.
+- Blocking defect: `none`
+- Notes: Compact Story types map world/characters/structure onto overview. Invisible sections fail instead of reporting a false open.
 
 #### `story.library.create` — Create a Story Lab project
 
