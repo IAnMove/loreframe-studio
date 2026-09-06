@@ -291,6 +291,15 @@
     "openLyria": "Open Lyria in Google AI Studio",
     "importGenerated": "Import generated audio",
     "durationOnPlayback": "duration on playback",
+    "executionPhase": {
+      "prepared": "Preparing request",
+      "accepted": "Accepted",
+      "waiting_resource": "Waiting for a GPU",
+      "executing": "Generating",
+      "cancelling": "Cancelling",
+      "terminal": "Finished"
+    },
+    "candidateFailed": "Failed",
     "useInTrailer": "Use in musical trailer",
     "emptyTitle": "No music bible yet",
     "emptyHint": "Generate the complete Story or click “Generate LLM suggestions” here. No MiniMax music credits are used at this stage.",

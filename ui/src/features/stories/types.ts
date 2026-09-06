@@ -162,6 +162,15 @@ export interface StoryProduction {
 
 export type StoryMusicCandidateStatus = 'pending' | 'ready' | 'failed'
 
+/** Durable job phase shown on a pending `song-…` row. Terminal covers completed/failed/cancelled. */
+export type StoryMusicExecutionPhase =
+  | 'prepared'
+  | 'accepted'
+  | 'waiting_resource'
+  | 'executing'
+  | 'cancelling'
+  | 'terminal'
+
 export interface StoryMusicCandidate {
   id: string
   /** Human-readable identity; the provider filename remains in `name`. */
@@ -182,6 +191,8 @@ export interface StoryMusicCandidate {
    * Pending/failed rows may have an empty source so they survive client close.
    */
   status?: StoryMusicCandidateStatus
+  /** Server job phase persisted beside status so reload can show progress without audio. */
+  executionPhase?: StoryMusicExecutionPhase
   /** Canonical backend identity for audit, cancellation and exact output correlation. */
   taskId?: string
   rootTaskId?: string
