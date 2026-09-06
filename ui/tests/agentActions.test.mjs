@@ -1299,7 +1299,16 @@ test('start_director_production after same-turn stage reports that pipeline, not
     ...createStoryProject(),
     title: 'La torre de sal',
     synopsis: 'Una cartógrafa busca un pueblo borrado del mapa.',
-    characters: [{ id: 'char-1', name: 'Iria', role: 'Protagonista', appearance: 'Abrigo rojo' }],
+    characters: [{
+      id: 'char-1', name: 'Iria', role: 'Protagonista', appearance: 'Abrigo rojo',
+      primaryReferenceAssetId: 'asset-iria', referenceAssetIds: ['asset-iria'], approval: 'approved',
+    }],
+    assets: {
+      'asset-iria': {
+        id: 'asset-iria', name: 'Iria', source: 'file://iria.png', prompt: '',
+        provider: 'upload', createdAt: new Date().toISOString(), approval: 'approved',
+      },
+    },
     productions: [{
       id: 'prod-old',
       kind: 'film',

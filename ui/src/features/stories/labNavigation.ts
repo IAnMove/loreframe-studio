@@ -27,6 +27,11 @@ const STORY_SECTION_ALIASES: Record<string, AgentStorySection> = {
   images: 'assets',
   song: 'music',
   generate: 'productions',
+  universe: 'world',
+  script: 'structure',
+  audio: 'music',
+  results: 'assembly',
+  concept: 'overview',
 }
 
 const SERIES_SECTION_ALIASES: Record<string, AgentSeriesSection> = {
@@ -75,6 +80,14 @@ function compactAnchor(section: AgentStorySection): string {
   return 'story-review-world'
 }
 
+function equivalent(
+  requested: AgentStorySection,
+  tab: StoryLabTab,
+  anchor: string,
+): Extract<StoryLabNavigationResolution, { ok: true }> {
+  return { ok: true, requested, tab, anchor, equivalent: true }
+}
+
 export function resolveStoryLabNavigation(
   requested: string,
   projectType: StoryProjectType,
@@ -93,23 +106,23 @@ export function resolveStoryLabNavigation(
       equivalent: false,
     }
   }
-  if (projectType !== 'full_story' && COMPACT_SECTIONS.has(section)) {
-    return {
-      ok: true,
-      requested: section,
-      tab: 'overview',
-      anchor: compactAnchor(section),
-      equivalent: true,
+  if (projectType === 'full_story') {
+    if (section === 'characters' || section === 'relationships' || section === 'assets') {
+      return equivalent(section, 'world', section === 'assets' ? 'story-review-assets' : `story-review-${section}`)
     }
+    if (section === 'trailer') return equivalent(section, 'productions', 'story-review-trailer')
+  }
+  if (projectType !== 'full_story' && COMPACT_SECTIONS.has(section)) {
+    return equivalent(section, 'overview', compactAnchor(section))
+  }
+  if ((projectType === 'music_video' || projectType === 'quick_video') && section === 'assets') {
+    return equivalent(section, 'overview', 'story-review-world')
   }
   if (projectType === 'trailer' && section === 'productions') {
-    return {
-      ok: true,
-      requested: section,
-      tab: 'trailer',
-      anchor: 'story-review-overview',
-      equivalent: true,
-    }
+    return equivalent(section, 'trailer', 'story-review-trailer')
+  }
+  if ((projectType === 'music_video' || projectType === 'quick_video') && section === 'trailer') {
+    return equivalent(section, 'productions', 'story-review-overview')
   }
   return {
     ok: false,

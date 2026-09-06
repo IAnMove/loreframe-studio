@@ -60,7 +60,7 @@ export function StoryTrailerTab(props: StoryTrailerTabProps) {
   const { t } = useUiTranslation('storyLab')
   const { trailerDuration } = props
   return (
-    <div className="space-y-4">
+    <div id="story-review-trailer" className="scroll-mt-4 space-y-4">
       <div className="overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-bg-secondary to-purple-500/10 p-4 md:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">

@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { AspectRatio, ModelDef, ModelOptions, ResolutionPreset } from '../../types'
 import type { ProductionReviewIssue, StoryLabTab } from './storyLabChrome'
 import type { StoryMusicCandidateOption } from './storyLabMusic'
@@ -79,4 +79,5 @@ export type StoryProductionsTabProps = {
   adaptStoryLyrics: () => void
   generateMinimaxSongs: () => void
   openMusicalTrailer: (candidateId?: string) => void
+  trailerRecipe?: ReactNode
 }

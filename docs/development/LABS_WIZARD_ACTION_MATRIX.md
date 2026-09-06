@@ -122,7 +122,7 @@ Status: freeze of current contracts. This document does not implement the later 
 - Presentation: story_lab + section alias
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Compact Story types map world/characters/structure onto overview. Invisible sections fail instead of reporting a false open.
+- Notes: Compact Story types map world/characters/structure onto overview. Full stories group world/characters/relationships/assets onto Universe and trailer onto Generate. Invisible sections fail instead of reporting a false open.
 
 #### `story.library.create` — Create a Story Lab project
 
@@ -424,8 +424,8 @@ Status: freeze of current contracts. This document does not implement the later 
 - In Wizard context snapshot: True
 - Available (strict): True
 - Preconditions: Story exists
-- Persistence: trailer recipe fields
-- Presentation: trailer tab
+- Persistence: project.productionRecipe / creativeBrief.durationSeconds
+- Presentation: Generate (full story) or trailer tab (trailer projects)
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
 - Notes: Six-phase guide is calculated orientation, not planned shots.
