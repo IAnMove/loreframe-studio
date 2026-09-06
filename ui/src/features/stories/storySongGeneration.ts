@@ -11,6 +11,11 @@ import {
 import { pendingSongProvenance } from './provenance'
 import { songProviderLanguageIntent } from './songLanguage'
 import { nextMusicCandidateVersion } from './storyLabMusic'
+import {
+  patchSongCandidateJob,
+  reusableInFlightSongCandidate,
+  songJobIdentityChanged,
+} from './storySongJobPhases'
 import { normalizeStoryProject, saveStoryProjectMutation, storyId, useStoryStore } from './store'
 import type { StoryMusicCandidate, StoryMusicCue, StoryProject } from './types'
 
@@ -20,8 +25,8 @@ export interface GenerateStoryCueSongInput {
   cueId: string
   actor: 'user' | 'wizard'
   capability?: string
-  onJobSubmitted?: (job: MiniMaxMusicJob) => void
-  onProgress?: (job: MiniMaxMusicJob) => void
+  onJobSubmitted?: (job: MiniMaxMusicJob) => void | Promise<void>
+  onProgress?: (job: MiniMaxMusicJob) => void | Promise<void>
 }
 
 export interface GenerateStoryCueSongResult {
@@ -35,6 +40,8 @@ export interface GenerateStoryCueSongResult {
   rootTaskId?: string
   jobId?: string
 }
+
+const inflightCueSongs = new Map<string, Promise<GenerateStoryCueSongResult>>()
 
 type ReadySongPatch = {
   filename: string
@@ -209,6 +216,42 @@ async function generateLocalStorySong(
   return requireSavedCandidate(saved, input.cueId, pending.id, version, rendered.filename)
 }
 
+async function persistJobOnCandidate(
+  input: GenerateStoryCueSongInput,
+  pending: StoryMusicCandidate,
+  job: MiniMaxMusicJob,
+): Promise<void> {
+  const live = cueCandidate(
+    useStoryStore.getState().projects[input.projectId],
+    input.cueId,
+    pending.id,
+  ) || pending
+  if (!songJobIdentityChanged(live, patchSongCandidateJob(live, job))) return
+  await persistCueCandidate(
+    input.workspace,
+    input.projectId,
+    input.cueId,
+    pending.id,
+    source => patchSongCandidateJob(cueCandidate(source, input.cueId, pending.id) || pending, job),
+  )
+}
+
+function remoteSongWatchers(
+  input: GenerateStoryCueSongInput,
+  pending: StoryMusicCandidate,
+) {
+  return {
+    onJobSubmitted: async (job: MiniMaxMusicJob) => {
+      await persistJobOnCandidate(input, pending, job)
+      await input.onJobSubmitted?.(job)
+    },
+    onProgress: async (job: MiniMaxMusicJob) => {
+      await persistJobOnCandidate(input, pending, job)
+      await input.onProgress?.(job)
+    },
+  }
+}
+
 async function generateRemoteStorySong(
   input: GenerateStoryCueSongInput,
   cue: StoryMusicCue,
@@ -216,18 +259,19 @@ async function generateRemoteStorySong(
   version: number,
   model: StoryProject['music']['model'],
 ): Promise<GenerateStoryCueSongResult> {
-  const result = await api.generateStoryMusicCandidates({
-    prompt: cue.style.trim().slice(0, 300),
-    lyrics: cue.instrumental ? '' : cue.lyrics,
-    instrumental: cue.instrumental,
-    count: 1,
-    model,
-    workspace: input.workspace,
-    provenance: songGenerationProvenance(input, pending.id, version),
-  }, {
-    onJobSubmitted: input.onJobSubmitted,
-    onProgress: input.onProgress,
-  })
+  const watchers = remoteSongWatchers(input, pending)
+  const existingJobId = pending.provenance?.jobId?.trim()
+  const result = existingJobId
+    ? await api.watchStoryMusicCandidatesJob(existingJobId, watchers)
+    : await api.generateStoryMusicCandidates({
+      prompt: cue.style.trim().slice(0, 300),
+      lyrics: cue.instrumental ? '' : cue.lyrics,
+      instrumental: cue.instrumental,
+      count: 1,
+      model,
+      workspace: input.workspace,
+      provenance: songGenerationProvenance(input, pending.id, version),
+    }, watchers)
   const rendered = result.candidates[0]
   if (!rendered?.filename || !rendered.source) {
     throw new Error(result.message || 'MiniMax Music terminó sin devolver un archivo de audio verificable.')
@@ -257,12 +301,37 @@ async function markSongFailed(input: GenerateStoryCueSongInput, pending: StoryMu
   }
 }
 
-export async function generateStoryCueSong(
+function resolvePendingCandidate(
+  input: GenerateStoryCueSongInput,
+  project: StoryProject,
+  cue: StoryMusicCue,
+): { pending: StoryMusicCandidate; candidateId: string; version: number; reused: boolean } {
+  const reused = reusableInFlightSongCandidate(cue.candidates)
+  if (!reused) return { ...mintPendingCandidate(input, project, cue), reused: false }
+  return {
+    pending: reused,
+    candidateId: reused.id,
+    version: reused.version || nextMusicCandidateVersion(
+      cue.candidates,
+      cue.lyricsLanguage || project.language,
+      project.language,
+    ),
+    reused: true,
+  }
+}
+
+function cueSongKey(input: GenerateStoryCueSongInput): string {
+  return `${input.workspace}:${input.projectId}:${input.cueId}`
+}
+
+async function generateStoryCueSongOnce(
   input: GenerateStoryCueSongInput,
 ): Promise<GenerateStoryCueSongResult> {
   const { project, cue } = requireOpenCue(useStoryStore.getState().projects[input.projectId], input.cueId)
-  const minted = mintPendingCandidate(input, project, cue)
-  await persistCueCandidate(input.workspace, input.projectId, input.cueId, minted.candidateId, () => minted.pending)
+  const minted = resolvePendingCandidate(input, project, cue)
+  if (!minted.reused) {
+    await persistCueCandidate(input.workspace, input.projectId, input.cueId, minted.candidateId, () => minted.pending)
+  }
   try {
     if (isLocalMusicModel(project.music.model)) {
       return await generateLocalStorySong(input, project, cue, minted.pending, minted.version)
@@ -272,4 +341,17 @@ export async function generateStoryCueSong(
     await markSongFailed(input, minted.pending)
     throw error
   }
+}
+
+export async function generateStoryCueSong(
+  input: GenerateStoryCueSongInput,
+): Promise<GenerateStoryCueSongResult> {
+  const key = cueSongKey(input)
+  const existing = inflightCueSongs.get(key)
+  if (existing) return existing
+  const run = generateStoryCueSongOnce(input).finally(() => {
+    if (inflightCueSongs.get(key) === run) inflightCueSongs.delete(key)
+  })
+  inflightCueSongs.set(key, run)
+  return run
 }

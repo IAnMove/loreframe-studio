@@ -1,5 +1,6 @@
 import type { MiniMaxMusicJob } from '../../api/stories'
 import { patchSongCandidateFailed, patchSongCandidateReady } from './musicWorkflowState'
+import { patchSongCandidateJob, songJobIdentityChanged } from './storySongJobPhases'
 import { isPendingStoryMusicCandidate } from './storySongRecovery'
 import type { StoryMusicCandidate, StoryProject } from './types'
 
@@ -49,21 +50,8 @@ function applyInFlightJob(
   if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'interrupted') {
     return patchSongCandidateFailed(candidate)
   }
-  if (candidate.taskId === (job.taskId || candidate.taskId)
-    && candidate.rootTaskId === (job.rootTaskId || candidate.rootTaskId)
-    && candidate.provenance?.jobId === job.jobId) {
-    return candidate
-  }
-  return {
-    ...candidate,
-    taskId: job.taskId || candidate.taskId,
-    rootTaskId: job.rootTaskId || candidate.rootTaskId,
-    provenance: {
-      ...candidate.provenance,
-      jobId: job.jobId,
-      taskId: job.taskId || candidate.provenance?.taskId,
-    },
-  }
+  const next = patchSongCandidateJob(candidate, job)
+  return songJobIdentityChanged(candidate, next) ? next : candidate
 }
 
 function patchPendingWithJob(

@@ -671,10 +671,11 @@ export async function saveStoryProjectMutation(
     if (!source) throw new Error('La historia activa desapareció antes de poder guardarla.')
     const project = mutate(source)
     try {
+      const visibleId = useStoryStore.getState().project.id
       library = await api.saveStoryLibrary(workspace, {
         version: 2,
         revision: baseline.libraryRevision,
-        activeId: project.id,
+        activeId: baseline.projects[visibleId] ? visibleId : project.id,
         projects: { ...baseline.projects, [project.id]: project },
       })
       break
@@ -688,9 +689,10 @@ export async function saveStoryProjectMutation(
     }
   }
   if (!library?.projects[projectId]) throw new Error('Story Lab guardó la biblioteca sin devolver la historia editada.')
+  const visibleId = useStoryStore.getState().project.id
   useStoryStore.setState({
     workspace,
-    project: library.projects[projectId],
+    project: library.projects[visibleId] || library.projects[projectId],
     projects: library.projects,
     libraryRevision: library.revision,
     dirty: false,

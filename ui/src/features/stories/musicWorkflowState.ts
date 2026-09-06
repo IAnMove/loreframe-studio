@@ -38,6 +38,7 @@ export function buildPendingSongCandidate(input: {
     durationSeconds: cue.durationSeconds,
     createdAt: new Date().toISOString(),
     status: 'pending',
+    executionPhase: 'prepared',
     provenance: pendingSongProvenance({
       outputFolder: input.provenance.outputFolder || '',
       projectId: project.id,
@@ -83,6 +84,7 @@ export function patchSongCandidateReady(
     source: patch.source,
     durationSeconds: patch.durationSeconds ?? candidate.durationSeconds,
     status: 'ready',
+    executionPhase: 'terminal',
     taskId: patch.taskId || candidate.taskId,
     rootTaskId: patch.rootTaskId || candidate.rootTaskId,
     provenance: {
@@ -98,12 +100,17 @@ export function patchSongCandidateFailed(candidate: StoryMusicCandidate): StoryM
   return {
     ...candidate,
     status: 'failed',
+    executionPhase: 'terminal',
     provenance: {
       ...candidate.provenance,
       candidateId: candidate.id,
       completedAt: new Date().toISOString(),
     },
   }
+}
+
+function keepSelectedCandidateId(current: string | undefined, candidateId: string): string {
+  return current || candidateId
 }
 
 export function upsertCueMusicCandidate(
@@ -116,13 +123,13 @@ export function upsertCueMusicCandidate(
     revision: project.revision + 1,
     music: {
       ...project.music,
-      selectedCandidateId: candidate.id,
+      selectedCandidateId: project.music.selectedCandidateId,
       cues: project.music.cues.map(item => item.id === cueId ? {
         ...item,
         candidates: item.candidates.some(existing => existing.id === candidate.id)
           ? item.candidates.map(existing => existing.id === candidate.id ? candidate : existing)
           : [...item.candidates, candidate],
-        selectedCandidateId: candidate.id,
+        selectedCandidateId: keepSelectedCandidateId(item.selectedCandidateId, candidate.id),
       } : item),
     },
     updatedAt: new Date().toISOString(),
