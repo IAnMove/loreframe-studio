@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { chromium } from '@playwright/test'
-import { LANGUAGE_STORAGE_KEY } from '../../src/i18n/language.ts'
+import { LANGUAGE_STORAGE_KEY } from '../../src/i18n/storageKey.ts'
 import { animatorLabels } from '../../src/i18n/animatorLabels.ts'
 
 const catalog = await import(new URL('../../src/features/sceneTemplates/catalog.ts', import.meta.url))

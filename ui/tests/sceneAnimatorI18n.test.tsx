@@ -47,6 +47,14 @@ test('SceneAnimatorPanel surfaces model status through the catalog', async () =>
   assert.doesNotMatch(panel, /The 3D models did not paint in time/)
 })
 
+test('Playwright boot helpers do not import i18n JSON catalogs', async () => {
+  const lock = await readFile(new URL('../e2e/helpers/lockUiLanguage.ts', import.meta.url), 'utf8')
+  const gotoApp = await readFile(new URL('../e2e/helpers/gotoApp.ts', import.meta.url), 'utf8')
+  assert.match(lock, /storageKey/)
+  assert.doesNotMatch(lock, /locales\/en/)
+  assert.doesNotMatch(gotoApp, /locales\/en/)
+})
+
 test('the Video3D review renderer locks the real language key and catalog copy', async () => {
   const source = await readFile(new URL('../scripts/sceneTemplateReview/render.mjs', import.meta.url), 'utf8')
   assert.match(source, /LANGUAGE_STORAGE_KEY/)
