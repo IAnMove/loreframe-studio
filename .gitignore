@@ -93,6 +93,7 @@ app/services/sam/checkpoints/
 # Native Hunyuan3D runtime and official source checkouts
 app/services/hunyuan3d/env/
 app/services/hunyuan3d/vendor/
+app/services/model3d_runtimes/
 app/services/rigging/vendor/
 
 # MiniMax H3 isolated ComfyUI runtime, inputs/outputs, and model weights
