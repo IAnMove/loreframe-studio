@@ -99,12 +99,17 @@ def test_closed_labs_gaps_are_marked_addressed():
         "approve_all_replaces_chosen_takes",
         "script_shots_dialogue_desync",
         "t2v_double_mode_and_image_requirements",
+        "shot_number_is_not_attempt_id",
     )
     for gap_id in closed:
         summary = by_id[gap_id]["summary"]
         assert summary.startswith("Addressed:"), gap_id
     review = (ROOT / "ui" / "src" / "features" / "series" / "actions.ts").read_text(encoding="utf-8")
     assert "replaceFinals: action.scope === 'replace_latest' || action.scope === 'selected_latest'" in review
+    assert "explicitAttemptSelection" in review
+    qa = ROOT / "ui" / "tests" / "labsWizardQaAttemptId.test.mjs"
+    assert qa.is_file()
+    assert "attempt_id" in qa.read_text(encoding="utf-8")
     matcher = (ROOT / "ui" / "src" / "lib" / "productionProfile.ts").read_text(encoding="utf-8")
     assert "settings.flowShift === fields.videoSettings.flowShift" in matcher
     assert "settings.audioShift === fields.videoSettings.audioShift" in matcher
@@ -117,6 +122,7 @@ def test_known_gaps_and_unregistered_series_comic_are_frozen():
     gap_ids = {gap["id"] for gap in data["known_gaps"]}
     assert "fused_dropped_by_model_for_manifest" in gap_ids
     assert "approve_all_replaces_chosen_takes" in gap_ids
+    assert "shot_number_is_not_attempt_id" in gap_ids
     assert "script_shots_dialogue_desync" in gap_ids
     assert "stage_series_comic_unregistered" in gap_ids
     assert "blocked_always_empty" in gap_ids

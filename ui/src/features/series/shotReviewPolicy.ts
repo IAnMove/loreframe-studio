@@ -2,6 +2,7 @@
 
 export interface ReviewableShot {
   id: string
+  order?: number
   approvedAttemptId?: string
   attempts: Array<{
     id: string
@@ -54,6 +55,37 @@ export function missingAssemblyShotOrders(
     const playable = approved?.status === 'completed' && hasReproducibleAsset(approved, hasAsset)
     return playable ? [] : [shot.order]
   })
+}
+
+function shotLabel(shot: ReviewableShot): string | number {
+  return typeof shot.order === 'number' ? shot.order : shot.id
+}
+
+/** A concrete attemptId is never a shot number. It names one historical take on exactly one shot. */
+export function requireSingleShotForAttempt<T extends ReviewableShot>(shots: T[], attemptId: string): T {
+  if (!attemptId) throw new Error('Se requiere un attemptId concreto.')
+  if (shots.length !== 1) {
+    throw new Error('Un attemptId concreto exige exactamente un shot; no uses all_latest ni varios shot_numbers.')
+  }
+  return shots[0]
+}
+
+export function explicitAttemptSelection(
+  shots: ReviewableShot[],
+  attemptId: string,
+  hasAsset: (assetId: string) => boolean,
+): Array<{ shotId: string; attemptId: string }> {
+  const shot = requireSingleShotForAttempt(shots, attemptId)
+  const attempt = shot.attempts.find(item => item.id === attemptId)
+  const label = shotLabel(shot)
+  if (!attempt) throw new Error(`El intento ${attemptId} no pertenece al shot ${label}.`)
+  if (attempt.status !== 'completed' || attempt.reviewDecision === 'rejected') {
+    throw new Error(`El intento ${attempt.id} del shot ${label} no es aprobable.`)
+  }
+  if (!hasReproducibleAsset(attempt, hasAsset)) {
+    throw new Error(`El intento ${attempt.id} del shot ${label} no tiene un asset reproducible.`)
+  }
+  return attempt.id === shot.approvedAttemptId ? [] : [{ shotId: shot.id, attemptId: attempt.id }]
 }
 
 export function bulkApproveSelections(

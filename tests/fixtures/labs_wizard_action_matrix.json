@@ -112,6 +112,12 @@
       "evidence": "ui/tests/shotReviewPolicy.test.ts; ui/src/features/series/actions.ts reviewSeriesAttempts"
     },
     {
+      "id": "shot_number_is_not_attempt_id",
+      "phase": "QA",
+      "summary": "Addressed: review_series_attempts keeps attempt_id only on selected_latest with exactly one shot_number and explicitAttemptSelection picks that historical take, not the latest take of shot N.",
+      "evidence": "ui/tests/labsWizardQaAttemptId.test.mjs; ui/src/features/series/shotReviewPolicy.ts explicitAttemptSelection"
+    },
+    {
       "id": "script_shots_dialogue_desync",
       "phase": "L4",
       "summary": "Addressed: update_series_episode annotates stale/conflict shots; render refuses them; an explicit syncShotDialogueFromScript operation updates beats without dropping historical attempts.",
