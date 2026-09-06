@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from .spoken_language import infer_h3_spoken_language
+from ..h3_prompt_finalization import finalize_h3_prompt
 from ..h3_prompt_policy import h3_field_labels, tagged_dialogue
 
 
@@ -233,6 +234,8 @@ def format_minimax_h3_prompt(
     *,
     reference_mode: str = "first_frame",
     audio_direction: str = "",
+    h3_audio_policy: str = "native",
+    duration_seconds: float = 0,
 ) -> str:
     """Format one final segment prompt for FL2VA or Ref2VA.
 
@@ -242,8 +245,9 @@ def format_minimax_h3_prompt(
     mode = normalize_reference_mode(reference_mode)
     text = str(prompt or "").strip()
     if is_structured_h3_prompt(text, mode):
-        from ..h3_prompt_policy import apply_h3_audio_policy
-        return apply_h3_audio_policy(text)
+        return finalize_h3_prompt(
+            text, policy=h3_audio_policy, duration_seconds=duration_seconds,
+        )
 
     shot = dict(plan or {})
     description = _integrated_description(shot, text)
@@ -255,8 +259,7 @@ def format_minimax_h3_prompt(
             "(S1) the principal subject from the supplied references; "
             "(E1) the referenced environment and its stable visual design"
         )
-        from ..h3_prompt_policy import apply_h3_audio_policy
-        return apply_h3_audio_policy("\n".join((
+        compiled = "\n".join((
             f"subject_definitions: {defined}",
             "summary: [reference generation] Compose one new continuous shot from the supplied references.",
             (
@@ -267,7 +270,10 @@ def format_minimax_h3_prompt(
             f"detailed_description: {description}",
             f"overall_soundscape: {soundscape}.",
             f"non_diegetic_music: {music}",
-        )))
+        ))
+        return finalize_h3_prompt(
+            compiled, policy=h3_audio_policy, duration_seconds=duration_seconds,
+        )
 
     integrated = (
         description
@@ -283,14 +289,13 @@ def format_minimax_h3_prompt(
         f"overall_soundscape: {soundscape}.",
         f"non_diegetic_music: {music}",
     )
-    from ..h3_prompt_policy import apply_h3_audio_policy
-
-    if mode == "direct":
-        return apply_h3_audio_policy("\n".join(fields))
-    return apply_h3_audio_policy("\n".join((
+    compiled = "\n".join(fields) if mode == "direct" else "\n".join((
         FIRST_FRAME_REFERENCE,
         *fields,
-    )))
+    ))
+    return finalize_h3_prompt(
+        compiled, policy=h3_audio_policy, duration_seconds=duration_seconds,
+    )
 
 
 def adapt_clip_plans_for_h3(
@@ -299,6 +304,8 @@ def adapt_clip_plans_for_h3(
     *,
     reference_mode: str = "first_frame",
     audio_direction: str = "",
+    h3_audio_policy: str = "native",
+    duration_seconds: float = 0,
 ) -> list[dict]:
     """Adapt all rendered Director plans without changing image prompts."""
     shots = shots or []
@@ -309,6 +316,8 @@ def adapt_clip_plans_for_h3(
             str(clip.get("video_prompt") or ""),
             reference_mode=reference_mode,
             audio_direction=audio_direction,
+            h3_audio_policy=h3_audio_policy,
+            duration_seconds=duration_seconds,
         )
         windows = clip.get("window_prompts")
         if isinstance(windows, list):
@@ -322,6 +331,8 @@ def adapt_clip_plans_for_h3(
                         str(updated.get(key) or ""),
                         reference_mode=reference_mode,
                         audio_direction=audio_direction,
+                        h3_audio_policy=h3_audio_policy,
+                        duration_seconds=duration_seconds,
                     )
                     adapted.append(updated)
                 else:
@@ -330,6 +341,8 @@ def adapt_clip_plans_for_h3(
                         str(window),
                         reference_mode=reference_mode,
                         audio_direction=audio_direction,
+                        h3_audio_policy=h3_audio_policy,
+                        duration_seconds=duration_seconds,
                     ))
             clip["window_prompts"] = adapted
     return clip_plans

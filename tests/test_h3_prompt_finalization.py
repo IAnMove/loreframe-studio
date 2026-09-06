@@ -11,6 +11,10 @@ Inventory (rule / owner after this cut / remaining duplicates):
   window "closes their mouth" clause, dialect "says", official h3_dialogue_tag
   payload parsing, series_render, model ref2va English hardcode.
 - writing_contract / sound_contract / apply_h3_audio_policy: already shared.
+- Last compiled-prompt gate: h3_prompt_finalization.finalize_h3_prompt
+  (Studio enhance, window compile, official compile, dialect adapter).
+- Studio legacy no longer pre-blanks overall_soundscape; apply_h3_audio_policy
+  already does that. The weaker helper remains for isolated helper tests.
 - extract/repair/enforce: already in h3_story_contract; Director compile is
   a different path and must stay different.
 - system_override and raw_enhancer_mode still skip H3 post-process.
@@ -32,6 +36,7 @@ from services.director.h3_dialogue import (
     validate_h3_prompt_contract,
 )
 from services.director.minimax_h3_prompting import format_minimax_h3_prompt
+from services.h3_prompt_finalization import finalize_h3_prompt
 from services.h3_prompt_policy import (
     CONTEXT_IR_FIELDS,
     REF2VA_FIELDS,
@@ -115,6 +120,21 @@ def test_shared_field_schema_is_the_single_owner():
 def test_tagged_dialogue_is_the_shared_block_syntax():
     assert tagged_dialogue("Spanish", "Hola") == "<d>[Spanish] Hola</d>"
     assert h3_dialogue_tag("[Spanish] Hola") == tagged_dialogue("Spanish", "Hola")
+
+
+def test_finalize_gate_matches_audio_policy_and_dialect_defaults():
+    expected = _expected()
+    source = expected["dialect"]["direct_structured"]
+    assert finalize_h3_prompt(source) == apply_h3_audio_policy(source)
+    assert finalize_h3_prompt(source, policy="legacy") == apply_h3_audio_policy(source, "legacy")
+    first = format_minimax_h3_prompt(
+        _shot(),
+        "The robot kneels, opens one hand, and reveals the seed.",
+        reference_mode="first_frame",
+        h3_audio_policy="native",
+        duration_seconds=0,
+    )
+    assert first == expected["dialect"]["first_frame"]
 
 
 def test_contracts_match_frozen_base():

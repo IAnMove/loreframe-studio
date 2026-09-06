@@ -1795,8 +1795,11 @@ def compile_h3_official_prompt(
         )
         if header:
             compiled = f"{header}\n\n{compiled}"
-    from ..h3_prompt_policy import apply_h3_audio_policy
-    return apply_h3_audio_policy(normalize_h3_text(compiled).strip(), (audio_plan or {}).get("h3_audio_policy", "native")), vocal_contract
+    from ..h3_prompt_finalization import finalize_h3_prompt
+    return finalize_h3_prompt(
+        normalize_h3_text(compiled).strip(),
+        policy=(audio_plan or {}).get("h3_audio_policy", "native"),
+    ), vocal_contract
 
 
 def validate_h3_prompt_contract(
