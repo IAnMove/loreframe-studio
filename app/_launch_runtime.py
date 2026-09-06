@@ -29909,8 +29909,9 @@ def start_series_episode_render(series_id: str, episode_id: str, body: dict):
     from services.series_library import append_shot_render_attempt, series_for_episode_snapshot
     from services.series_reference_router import route_shot_references
     from services.series_render import (
-        apply_series_shot_duration, model_for_manifest, normalize_series_resolution,
-        quantize_h3_frames, series_dialogue_preflight_issues, shot_generation_prompt,
+        apply_series_h3_model_settings, apply_series_shot_duration, model_for_manifest,
+        normalize_series_resolution, quantize_h3_frames, series_dialogue_preflight_issues,
+        shot_generation_prompt,
     )
 
     workspace = _series_library_workspace(body.get("workspace"))
@@ -30000,7 +30001,7 @@ def start_series_episode_render(series_id: str, episode_id: str, body: dict):
             apply_series_shot_duration(routing_series, shot)
             duration_contract = shot.get("dialogueDuration") \
                 if isinstance(shot.get("dialogueDuration"), dict) else {}
-            shot_settings = {
+            shot_settings = apply_series_h3_model_settings(model, {
                 **settings,
                 "requestedDurationSeconds": float(shot.get("durationSeconds") or 0),
                 "dialogueDuration": copy.deepcopy(duration_contract),
@@ -30009,7 +30010,7 @@ def start_series_episode_render(series_id: str, episode_id: str, body: dict):
                 else quantize_h3_frames(
                     shot.get("durationSeconds"), reference_mode=manifest.get("strategy") == "references",
                 ),
-            }
+            })
             updated_shot, attempt = append_shot_render_attempt(
                 shot, manifest=manifest, model=model, settings=shot_settings,
                 seed=(base_seed + int(shot.get("order") or shot_index)) & 0x7FFFFFFF,
