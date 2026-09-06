@@ -44,6 +44,7 @@ export function atmosphere(ctx: BuildContext, kind: SceneAtmosphereKind, color =
   return { ...layer(`atmosphere-${kind}`, 'effect', '', ctx.duration, { opacity: .35 }, 60), atmosphere: { kind, density: 25, speed: .5, size: .6, wind: 1, color } }
 }
 export function pulse(ctx: BuildContext, item: SceneLayer, kind: 'bounce' | 'scale' = 'scale'): SceneLayer {
+  if (item.animation.keyframes?.length) throw new Error('El pulso necesita una pose base, no reemplaza keyframes existentes.')
   const beats: Beat[] = []
   const seconds = 60 / ctx.bpm
   for (let time = 0; time < ctx.duration; time += seconds) {

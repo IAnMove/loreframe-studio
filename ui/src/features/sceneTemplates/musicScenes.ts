@@ -1,10 +1,10 @@
 import type { SceneLayer } from '../../types'
-import { asset, atmosphere, camera, keyframes, pulse, type BuildContext } from './sceneBuilders'
+import { asset, atmosphere, camera, keyframes, layer, pulse, type BuildContext } from './sceneBuilders'
 
 export const musicScenes: Record<string, (ctx: BuildContext) => SceneLayer[]> = {
   'music-pulse': c => [pulse(c, asset(c, 'hero', { x: 50, y: 65, scale: .92 }), 'bounce'), camera(c, [{ at: 0, scale: 1 }, { at: 1, scale: 1.08 }]), atmosphere(c, 'fireflies')],
   'music-duet': c => [pulse(c, asset(c, 'hero', { x: 32, y: 62, scale: .86 }), 'bounce'), pulse(c, asset(c, 'prop', { x: 68, y: 62, scale: .86 })), camera(c, [{ at: 0, rotation: -1.5 }, { at: 1, rotation: 1.5 }])],
-  'music-chorus': c => [asset(c, 'hero', { x: 55, y: 68, scale: 1.03 }), pulse(c, camera(c, [{ at: 0, scale: 1.04 }, { at: 1, scale: 1.04 }])), atmosphere(c, 'confetti')],
+  'music-chorus': c => [asset(c, 'hero', { x: 55, y: 68, scale: 1.03 }), pulse(c, layer('camera', 'camera', '', c.duration, { scale: 1.04 }, 100)), atmosphere(c, 'confetti')],
   'music-orbit': c => {
     const prop = asset(c, 'prop', { scale: .23 }, 12)
     // One model maximum per slot; only 2D props may have repeated instances.

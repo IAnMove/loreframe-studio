@@ -9,7 +9,7 @@ import {
   candidateDemoScene,
 } from '../src/features/sceneTemplates/demoScenes.ts'
 import { compileCandidateScene } from '../src/features/sceneTemplates/compile.ts'
-import { keyframes, layer } from '../src/features/sceneTemplates/sceneBuilders.ts'
+import { keyframes, layer, pulse } from '../src/features/sceneTemplates/sceneBuilders.ts'
 import { parseSceneFile, serializeSceneFile } from '../src/lib/sceneFile.ts'
 import { sceneFromLibraryPayload } from '../src/lib/sceneLibrary.ts'
 
@@ -207,6 +207,14 @@ test('compiler rejects repeated GLB sources and mismatched inline MIME types', (
   assert.doesNotThrow(() => compileCandidateScene('cinema-establishing', {
     ...cinema, plate: { type: 'image', source: '/api/v1/files/asset-id' },
   }))
+})
+
+test('chorus camera pulses around its declared pose without discarding animation', () => {
+  const camera = candidateDemoScene('music-chorus').layers.find(item => item.type === 'camera')
+  assert.equal(camera.animation.keyframes[0].scale, 1.04)
+  assert.equal(camera.animation.keyframes.at(-1).scale, 1.04)
+  assert.equal(Math.max(...camera.animation.keyframes.map(frame => frame.scale)), 1.04 * (1 + .09 * .6))
+  assert.throws(() => pulse({ duration: 4, bpm: 120, intensity: .6, bindings: {} }, camera), /keyframes existentes/i)
 })
 
 test('all 24 builders have distinct motion fingerprints beyond asset sources and names', () => {
