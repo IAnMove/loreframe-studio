@@ -135,7 +135,7 @@ def test_backend_authority_selection_restore_and_recovery_cards_are_wired():
 
 def test_episode_proposal_uses_readable_cards_and_manual_editing():
     panel = source("SeriesEpisodePanel.tsx")
-    review = source("SeriesEpisodeProposalReview.tsx")
+    review = source("SeriesEpisodeProposalReview.tsx") + "\n" + source("SeriesShotDraftFields.tsx")
     client = api_client_source()
     catalog = json.loads(CATALOG_EN.read_text(encoding="utf-8"))
     assert "SeriesEpisodeProposalReview" in panel

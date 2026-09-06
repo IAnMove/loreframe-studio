@@ -1,10 +1,10 @@
 {
   "tabs": {
     "setup": "1 · Preparación",
-    "canon": "2 · Canon",
-    "episode": "3 · Sala del episodio",
+    "canon": "2 · Biblia",
+    "episode": "3 · Episodio",
     "shots": "4 · Planos",
-    "review": "5 · Render y revisión"
+    "review": "5 · Resultados"
   },
   "review": {
     "orderedAssembly": "Montaje ordenado",
@@ -240,7 +240,9 @@
       "props": "Atrezzo / vehículos",
       "arcs": "Arcos largos",
       "timeline": "Línea temporal",
-      "voices": "Biblia de voces"
+      "voices": "Biblia de voces",
+      "continuity": "Continuidad",
+      "advanced": "Avanzado"
     },
     "noReference": "Aún no hay referencia aprobada.",
     "missingAsset": "Falta {{id}}",
@@ -296,10 +298,12 @@
     "event": "Evento",
     "when": "Cuándo",
     "whatHappened": "Qué ocurrió",
-    "voicesTitle": "Biblia de voces",
-    "voicesDescription": "La identidad de voz, la pronunciación y las notas de consentimiento persisten por personaje recurrente. El diálogo nativo de H3 sigue siendo lip sync best-effort.",
+    "voicesTitle": "Biblia de voces · metadatos",
+    "voicesDescription": "Estas notas persisten con el personaje. No controlan MiniMax H3: voiceId, tono, ritmo y pace no se envían al render inspeccionado. El audio hablado sigue el diálogo del plano y la dirección de audio. El lip sync nativo de H3 sigue siendo best-effort.",
     "provider": "Proveedor",
     "voiceId": "ID de voz reutilizable",
+    "voiceIdHint": "Solo metadatos. H3 no consume este ID.",
+    "pronunciationLabel": "Diccionario de pronunciación",
     "language": "Idioma",
     "pace": "Ritmo",
     "pitch": "Tono",
@@ -428,6 +432,9 @@
     "speaker": "Hablante · {{name}}",
     "approvedModel": "Aprobado · {{model}}",
     "reroute": "Reenrutar",
+    "advancedDetails": "IDs, estrategia, manifiesto y overrides",
+    "noDialogue": "Sin diálogo",
+    "pendingTake": "Toma pendiente",
     "strategyAria": "Estrategia de render del plano {{order}}",
     "auto": "Auto",
     "direct": "T2V directo",
