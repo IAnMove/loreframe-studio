@@ -13,12 +13,7 @@ import {
   applySeriesGlobalProvider,
   seriesProviderFieldsFromProfile,
 } from '../../lib/productionProfile'
-import {
-  h3FramesModelId,
-  h3FusedStepRange,
-  SERIES_SETUP_VIDEO_MODELS,
-  seriesSetupVideoUnavailableReason,
-} from '../../lib/h3Catalog'
+import { SeriesSetupVideoFields } from './SeriesSetupVideoFields'
 
 export function SeriesSetupPanel({
   workspace, series, update, saveNow, replaceSeries, job, setJob,
@@ -56,20 +51,6 @@ export function SeriesSetupPanel({
   const useGlobalProfile = () => patchProvider(
     applySeriesGlobalProvider(series.provider, seriesProviderFieldsFromProfile(productionProfile)),
   )
-  const setupVideoModel = h3FramesModelId(series.provider.videoModel)
-  const fusedSteps = h3FusedStepRange(series.provider.videoModel)
-  const unknownVideo = seriesSetupVideoUnavailableReason(series.provider.videoModel)
-  const selectVideoModel = (value: string) => {
-    const range = h3FusedStepRange(value)
-    const steps = Number(series.provider.videoSettings.numInferenceSteps || 20)
-    patchProvider({
-      videoModel: value,
-      videoSettings: {
-        ...series.provider.videoSettings,
-        numInferenceSteps: range && (steps < range.min || steps > range.max) ? range.fallback : steps,
-      },
-    })
-  }
   useEffect(() => {
     if (job?.jobType === 'canon') setImageMode(job.generateImages === true)
     if (!job || job.jobType !== 'canon' || !['queued', 'running', 'cancelling'].includes(job.status)) return
@@ -308,24 +289,7 @@ export function SeriesSetupPanel({
           <SeriesField label={t('providers.writingModel')}><input className={inputClass} value={series.provider.writingModel} onChange={event => patchProvider({ writingModel: event.target.value })} placeholder={t('providers.writingModelPlaceholder')} /></SeriesField>
           <SeriesField label={t('providers.imageProvider')}><select className={selectClass} value={series.provider.imageProvider} onChange={event => patchProvider({ imageProvider: event.target.value })}><option value="maestro">{t('providers.imageLocal')}</option><option value="minimax">{t('providers.imageMinimax')}</option></select></SeriesField>
           <SeriesField label={t('providers.imageModel')}><input className={inputClass} value={series.provider.imageModel} disabled={series.provider.imageProvider === 'minimax'} onChange={event => patchProvider({ imageModel: event.target.value })} placeholder={series.provider.imageProvider === 'minimax' ? t('providers.imageModelMinimax') : t('providers.imageModelLocal')} /></SeriesField>
-          <SeriesField label={t('providers.videoModel')} hint={t('providers.videoModelHint')}>
-            <select className={selectClass} value={SERIES_SETUP_VIDEO_MODELS.some(item => item.id === setupVideoModel) ? setupVideoModel : series.provider.videoModel} onChange={event => selectVideoModel(event.target.value)}>
-              {unknownVideo && <option value={series.provider.videoModel}>{series.provider.videoModel}</option>}
-              {SERIES_SETUP_VIDEO_MODELS.map(item => (
-                <option key={item.id} value={item.id}>{t(item.labelKey)}</option>
-              ))}
-            </select>
-            {unknownVideo && <p className="mt-1 text-[10px] text-amber-300">{t('providers.unknownModel')}</p>}
-          </SeriesField>
-          <SeriesField label={t('providers.resolution')}><select className={selectClass} value={String(series.provider.videoSettings.resolution || '480p')} onChange={event => patchVideo({ resolution: event.target.value })}>
-            <option value="480p">{t('providers.res480')}</option><option value="540p">{t('providers.res540')}</option><option value="720p">{t('providers.res720')}</option><option value="768p">{t('providers.res768')}</option>
-          </select></SeriesField>
-          <SeriesField label={t('providers.orientation')}><select className={selectClass} value={String(series.provider.videoSettings.orientation || 'landscape')} onChange={event => patchVideo({ orientation: event.target.value as 'landscape' | 'portrait' })}>
-            <option value="landscape">{t('providers.landscape')}</option><option value="portrait">{t('providers.portrait')}</option>
-          </select></SeriesField>
-          <SeriesField label={t('providers.steps')} hint={fusedSteps ? t('providers.fusedStepsHint') : undefined}>
-            <input className={inputClass} type="number" min={fusedSteps?.min || 1} max={fusedSteps?.max || 50} value={Number(series.provider.videoSettings.numInferenceSteps || (fusedSteps?.fallback || 20))} onChange={event => patchVideo({ numInferenceSteps: Number(event.target.value) })} />
-          </SeriesField>
+          <SeriesSetupVideoFields series={series} t={t} patchProvider={patchProvider} patchVideo={patchVideo} />
         </div>
         </fieldset>
       </SectionCard>

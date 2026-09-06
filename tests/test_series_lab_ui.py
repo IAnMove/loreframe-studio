@@ -39,13 +39,15 @@ def test_setup_has_required_aura_explicit_models_and_canvas_choices():
     assert "t('setup.needImageModel')" in setup
     assert "will not silently select or download a recommended model" in catalog["setup"]["needImageModel"]
     catalog_ts = (ROOT / "ui" / "src" / "lib" / "h3Catalog.ts").read_text(encoding="utf-8")
-    assert "SERIES_SETUP_VIDEO_MODELS" in setup
+    video_fields = source("SeriesSetupVideoFields.tsx")
+    assert "SERIES_SETUP_VIDEO_MODELS" in video_fields
+    assert "SeriesSetupVideoFields" in setup
     assert "applySeriesGlobalProvider" in setup
     assert "minimax_h3_legacy" in catalog_ts
     assert "minimax_h3_full" in catalog_ts
     assert "minimax_h3_fused_turbo" in catalog_ts
-    assert "480p" in setup and "720p" in setup
-    assert "t('providers.landscape')" in setup and "t('providers.portrait')" in setup
+    assert "480p" in video_fields and "720p" in video_fields
+    assert "t('providers.landscape')" in video_fields and "t('providers.portrait')" in video_fields
     assert catalog["providers"]["landscape"].startswith("Landscape")
     assert catalog["providers"]["portrait"].startswith("Portrait")
     assert "t('setup.knownTitle')" in setup

@@ -52,3 +52,9 @@ export function seriesSetupVideoUnavailableReason(modelType: string): string | n
   }
   return 'unknown_model'
 }
+
+export function seriesStepsForVideoModel(modelType: string, currentSteps: number): number {
+  const range = h3FusedStepRange(modelType)
+  if (!range) return currentSteps
+  return currentSteps < range.min || currentSteps > range.max ? range.fallback : currentSteps
+}
