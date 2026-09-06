@@ -36,3 +36,5 @@ from app.services.music_finalization import finalize_reserved_music, reconcile_r
 ```
 
 Tests use a fake worker (tiny WAV). Real generation is not part of CI.
+`app/services/music_fake_worker.py` is the HTTP-shaped path: reserve → silent
+WAV → finalize → `public_job_from_record`. See `tests/test_music_p5_http.py`.
