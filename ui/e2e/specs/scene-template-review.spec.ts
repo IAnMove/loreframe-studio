@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { closeApp } from '../helpers/gotoApp'
 import { installApiRoutes, type ApiRouteSession } from '../helpers/apiRoutes'
+import { CATALOG_VERSION } from '../../src/features/sceneTemplates/catalog'
+import { candidateDemoScene } from '../../src/features/sceneTemplates/demoScenes'
 
 const PENDING_SCENE_KEY = 'maestro_scene_animator_pending_scene'
 const REVIEW_STORAGE_KEY = 'hocuspocus.scene-template-review.v1'
-const CATALOG_VERSION = '2026-09-review-1'
 const SAVED_OUTPUT = {
   name: 'review.scene.json',
   type: 'scene',
@@ -27,6 +28,32 @@ type ReviewRouteState = {
   outputRequests: string[]
   fileRequests: string[]
   recordingRequests: string[]
+  referenceRequests: string[]
+  referenceMode: 'valid' | 'missing' | 'mismatch'
+}
+
+const referenceScene = (): SceneLike => {
+  const scene = JSON.parse(JSON.stringify(candidateDemoScene('cinema-establishing', 'coral'))) as SceneLike
+  scene.name = 'Referencia coral guardada'
+  scene.duration = 5
+  return scene
+}
+
+const referencePayload = (mode: ReviewRouteState['referenceMode']): Record<string, unknown> | null => {
+  if (mode === 'missing') return null
+  const scene = referenceScene()
+  if (mode === 'mismatch') {
+    const narrative = scene.narrative as SceneLike
+    scene.narrative = { ...narrative, templateId: 'music-pulse' }
+  }
+  return {
+    catalogVersion: CATALOG_VERSION,
+    templateId: 'cinema-establishing',
+    templateVersion: 1,
+    variant: 'coral',
+    status: 'rendered-not-approved',
+    scene,
+  }
 }
 
 function reviewRouteState(): ReviewRouteState {
@@ -36,6 +63,8 @@ function reviewRouteState(): ReviewRouteState {
     outputRequests: [],
     fileRequests: [],
     recordingRequests: [],
+    referenceRequests: [],
+    referenceMode: 'valid',
   }
 }
 
@@ -65,6 +94,16 @@ async function installReviewRoutes(page: Page, state: ReviewRouteState): Promise
       contentType: 'application/json',
       body: JSON.stringify({ version: 1, revision: 0, activeId: '', kits: {} }),
     })
+  })
+
+  await page.route('**/scene-template-previews/cinema-establishing.json', async route => {
+    state.referenceRequests.push(route.request().url())
+    const payload = referencePayload(state.referenceMode)
+    if (!payload) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'reference not found' }) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) })
   })
 
   await page.route('**/api/v1/scenes', async route => {
@@ -145,14 +184,18 @@ test('opens cinema-establishing in the real editor, saves exact scene JSON, and 
 
     const sceneName = page.getByLabel('Scene name', { exact: true })
     await expect(sceneName).toBeVisible()
-    await expect(sceneName).toHaveValue('Plano de establecimiento · candidata')
+    await expect(sceneName).toHaveValue('Referencia coral guardada')
     await expect(page.locator('model-viewer')).toHaveCount(0)
+    expect(state.referenceRequests).toHaveLength(1)
 
     const handoff = await page.evaluate(() => sessionStorage.getItem('__scene_template_test_handoff'))
     expect(handoff).toBeTruthy()
     const handedScene = JSON.parse(handoff!) as SceneLike
     expect(handedScene.narrative).toMatchObject({ templateId: 'cinema-establishing' })
+    expect(handedScene.name).toBe('Referencia coral guardada')
+    expect(handedScene.duration).toBe(5)
     expect(handedScene.generationPolicy).toBe('provided_only')
+    expect(handedScene).toEqual(referenceScene())
     await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
 
     await sceneName.fill('Ajuste prueba')
@@ -196,6 +239,46 @@ test('opens cinema-establishing in the real editor, saves exact scene JSON, and 
       controls: expect.objectContaining({ catalogVersion: CATALOG_VERSION, templateVersion: 1, reviewStatus: 'candidate' }),
     })
     expect(recoveredScene).toEqual(postedScene)
+  } finally {
+    await closeApp(page, session)
+  }
+})
+
+test('shows a visible error and keeps the gallery when the saved reference is missing', async ({ page }) => {
+  const session = await prepareReviewPage(page)
+  const state = reviewRouteState()
+  state.referenceMode = 'missing'
+  await installReviewRoutes(page, state)
+
+  try {
+    await openGallery(page)
+    const card = page.locator('[data-template-id="cinema-establishing"]')
+    await card.getByTestId('open-scene-cinema-establishing').click()
+    await expect(page).toHaveURL(/\/scene-template-review$/)
+    await expect(card.getByRole('alert')).toBeVisible()
+    await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__scene_template_test_handoff'))).toBeNull()
+    expect(state.referenceRequests).toHaveLength(1)
+  } finally {
+    await closeApp(page, session)
+  }
+})
+
+test('rejects a mismatched saved reference without navigating or handing it to the editor', async ({ page }) => {
+  const session = await prepareReviewPage(page)
+  const state = reviewRouteState()
+  state.referenceMode = 'mismatch'
+  await installReviewRoutes(page, state)
+
+  try {
+    await openGallery(page)
+    const card = page.locator('[data-template-id="cinema-establishing"]')
+    await card.getByTestId('open-scene-cinema-establishing').click()
+    await expect(page).toHaveURL(/\/scene-template-review$/)
+    await expect(card.getByRole('alert')).toBeVisible()
+    await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__scene_template_test_handoff'))).toBeNull()
+    expect(state.referenceRequests).toHaveLength(1)
   } finally {
     await closeApp(page, session)
   }

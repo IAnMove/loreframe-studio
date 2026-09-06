@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Scene } from '../../types'
 import { CATALOG_VERSION, CANDIDATE_SCENE_TEMPLATES, getCandidateSceneTemplate } from './catalog'
 import { candidateDemoScene } from './demoScenes'
+import { loadRenderedReferenceScene } from './previewSnapshot'
 import {
   createReviewChoices,
   createReviewExport,
@@ -61,6 +62,9 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
   const [previewErrors, setPreviewErrors] = useState<Record<string, boolean>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+  const referenceRequest = useRef<AbortController | null>(null)
+  const [loadingReference, setLoadingReference] = useState<string | null>(null)
+  useEffect(() => () => referenceRequest.current?.abort(), [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -87,12 +91,30 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
   }, { pending: 0, keep: 0, discard: 0 } as Record<ReviewDecision, number>), [reviews])
 
   const openScene = (id: string, variant: DemoVariant) => {
+    referenceRequest.current?.abort()
+    setLoadingReference(null)
     try {
       const template = getCandidateSceneTemplate(id)
       onOpenScene(candidateDemoScene(template.id, variant))
       setActionErrors(current => ({ ...current, [id]: '' }))
     } catch (reason) {
       setActionErrors(current => ({ ...current, [id]: errorMessage(reason) }))
+    }
+  }
+
+  const openReference = async (id: string) => {
+    referenceRequest.current?.abort()
+    const request = new AbortController()
+    referenceRequest.current = request
+    setLoadingReference(id)
+    setActionErrors(current => ({ ...current, [id]: '' }))
+    try {
+      const scene = await loadRenderedReferenceScene(getCandidateSceneTemplate(id), previewBaseUrl, request.signal)
+      if (!request.signal.aborted) onOpenScene(scene)
+    } catch (reason) {
+      if (!request.signal.aborted) setActionErrors(current => ({ ...current, [id]: errorMessage(reason) }))
+    } finally {
+      if (!request.signal.aborted) setLoadingReference(null)
     }
   }
 
@@ -220,13 +242,14 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                       <p className="text-xs text-text-muted">Muestra coral · render del compositor real, sin audio · no implica aprobación</p>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" data-testid={`open-scene-${template.id}`} onClick={() => openScene(template.id, 'coral')} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400">Abrir en editor</button>
+                        <button type="button" data-testid={`open-scene-${template.id}`} disabled={loadingReference === template.id} onClick={() => void openReference(template.id)} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400 disabled:opacity-50">{loadingReference === template.id ? 'Cargando referencia…' : 'Abrir referencia en editor'}</button>
                         <select aria-label={`Variante para probar ${template.title}`} value={selectedVariant} onChange={event => setVariantById(current => ({ ...current, [template.id]: event.target.value as DemoVariant }))} className="rounded-lg border border-border bg-bg-primary px-2 py-2 text-[10px] text-text-primary">
                           <option value="coral">Coral · preview disponible</option>
                           <option value="teal">Teal · objeto alternativo</option>
                         </select>
-                        <button type="button" data-testid={`open-scene-variant-${template.id}`} onClick={() => openScene(template.id, selectedVariant)} className="rounded-lg border border-violet-300/40 px-3 py-2 text-[10px] text-violet-100 hover:bg-violet-400/10">Abrir variante seleccionada</button>
+                        <button type="button" data-testid={`open-scene-variant-${template.id}`} onClick={() => openScene(template.id, selectedVariant)} className="rounded-lg border border-violet-300/40 px-3 py-2 text-[10px] text-violet-100 hover:bg-violet-400/10">Crear con plantilla actual</button>
                       </div>
+                      <p className="text-[10px] text-text-muted">Abrir referencia recupera el JSON guardado del vídeo; crear con plantilla usa el compilador actual y puede diferir de ese render.</p>
                       {selectedVariant === 'teal' && <p className="text-[10px] text-teal-200">Teal cambia los objetos de la escena; no se afirma que exista un MP4 para esta variante.</p>}
                       {actionErrors[template.id] && <p role="alert" className="text-[10px] text-rose-200">{actionErrors[template.id]}</p>}
 
