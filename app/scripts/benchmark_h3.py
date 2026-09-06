@@ -143,7 +143,9 @@ def run_row(base, output, row, reference=None, server_pid=None):
         params['minimax_h3_reference_sequence'] = 'ref2va' in row['model']
     if 'ref2va' in row['model']:
         if not reference:
-            return {'status': 'blocked', 'reason': 'reference image required'}
+            result = {'row': row, 'result': {'status': 'blocked', 'error': 'reference image required'}}
+            save(result_file, result)
+            return result
         params['minimax_h3_references'] = [{'type':'image', 'path':str(reference), 'role': ('Fry and Bender in Planet Express' if row.get('scene') == 'futurama' else 'George Costanza and Jerry Seinfeld, the two characters in the apartment'), 'image_intent':'composition'}]
     save(folder / 'request.json', params)
     started = time.time()
@@ -202,6 +204,9 @@ def main():
     jobs = [(index, row) for index in indices for row in ([rows[index], paired_rows[index]] if args.paired else [rows[index]])]
     futurama_reference = args.futurama_reference
     for index, row in jobs:
+        selection = args.output_dir / 'selected-indices.json'
+        if selection.exists() and index not in json.loads(selection.read_text()):
+            continue
         selected_reference = futurama_reference if row.get('scene') == 'futurama' else reference
         result = run_row(args.base_url, args.output_dir, row, selected_reference, args.server_pid)
         print(json.dumps({'index': index, 'id': row['id'],

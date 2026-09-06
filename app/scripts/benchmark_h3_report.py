@@ -13,6 +13,11 @@ def read_json(path, default):
 
 def render(records: Path, destination: Path):
     rows = read_json(records / 'matrix.json', [])
+    selected = read_json(records / 'selected-indices.json', None)
+    if selected is not None:
+        from benchmark_h3 import matrix
+        selected_ids = {row['id'] for index, row in enumerate(matrix()) if index in selected}
+        rows = [row for row in rows if row['id'].removesuffix('-futurama') in selected_ids]
     prompt = read_json(records / 'prompt-faithful.json', {}).get('source_prompt', '')
     futurama_prompt = read_json(records / 'futurama-prompt-faithful.json', {}).get('source_prompt', '')
     cards = []

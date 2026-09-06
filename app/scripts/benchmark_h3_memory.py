@@ -21,6 +21,14 @@ class MemorySampler:
         self.peaks = {}
         self.errors = []
         self.samples = 0
+        history = folder / "memory-samples.jsonl"
+        if history.exists():
+            for line in history.read_text().splitlines():
+                try:
+                    data = json.loads(line)
+                except ValueError:
+                    continue
+                self._record(data)
         self.gpus = []
         try:
             pynvml.nvmlInit()
@@ -55,20 +63,23 @@ class MemorySampler:
             data[f'gpu{index}_process_used_bytes'] = sum(amounts)
         return data
 
+    def _record(self, data):
+        for name, value in data.items():
+            if name != "time":
+                self.peaks[name] = max(self.peaks.get(name, 0), value)
+        self.samples += 1
+
     def _run(self):
         self.folder.mkdir(parents=True, exist_ok=True)
         with (self.folder / 'memory-samples.jsonl').open('a') as stream:
             while not self.stop_event.is_set():
                 try:
                     data = self.sample()
-                    for name, value in data.items():
-                        if name != 'time':
-                            self.peaks[name] = max(self.peaks.get(name, 0), value)
                     if self.samples == 0:
                         (self.folder / 'memory-baseline.json').write_text(json.dumps(data, indent=2))
                     stream.write(json.dumps(data) + '\n')
                     stream.flush()
-                    self.samples += 1
+                    self._record(data)
                 except Exception as error:
                     if str(error) not in self.errors:
                         self.errors.append(str(error))
