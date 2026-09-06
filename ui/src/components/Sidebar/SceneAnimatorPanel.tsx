@@ -763,7 +763,7 @@ export function SceneAnimatorPanel() {
   useEffect(() => {
     if (!Object.keys(characterKitLibrary.kits).length) return
     const current = sceneRef.current
-    const synced = syncSceneCharacterKits(current.layers, characterKitLibrary) as AnimatorLayer[]
+    const synced = syncSceneCharacterKits(current.layers, characterKitLibrary, current) as AnimatorLayer[]
     if (synced === current.layers) return
     const next = { ...current, layers: synced }
     sceneRef.current = next
@@ -1199,7 +1199,7 @@ export function SceneAnimatorPanel() {
   }
   const applyCharacterKitsToScene = (library = characterKitLibraryRef.current) => {
     const current = sceneRef.current
-    const synced = syncSceneCharacterKits(current.layers, library) as AnimatorLayer[]
+    const synced = syncSceneCharacterKits(current.layers, library, current) as AnimatorLayer[]
     if (synced === current.layers) return current
     const next = { ...current, layers: synced }
     sceneRef.current = next
@@ -1699,7 +1699,7 @@ export function SceneAnimatorPanel() {
         const keyframes = normalizeSceneKeyframes(rawLayer.animation?.keyframes, timedLayer)
         return keyframes ? withSceneKeyframes(timedLayer, keyframes, timedLayer.animation.duration) as AnimatorLayer : timedLayer
       }))
-      const layers = syncSceneCharacterKits(breakDependencyCycles(normalizedLayers), characterKitLibraryRef.current) as AnimatorLayer[]
+      const layers = syncSceneCharacterKits(breakDependencyCycles(normalizedLayers), characterKitLibraryRef.current, { width, height }) as AnimatorLayer[]
       const duration = Math.min(3600, Math.max(.1, Number.isFinite(incoming.duration) ? incoming.duration : 5, ...layers.map(layer => { const timing = getSceneLayerTiming(layer); return timing.offset + timing.span / timing.speed })))
       const incomingComposition = incoming.composition as Partial<NonNullable<Scene['composition']>> | undefined
       const safeAreas: NonNullable<Scene['composition']>['safeArea'][] = ['none', 'action', 'title', 'vertical', 'all']
@@ -2282,7 +2282,7 @@ export function SceneAnimatorPanel() {
       if (!saved) return
       setCharacterKitDraft(structuredClone(saved))
       updateScene(current => {
-        const synced = syncMountedCharacterKitLayers(current.layers, saved, characterKitPoseId.trim() || 'base') as AnimatorLayer[]
+        const synced = syncMountedCharacterKitLayers(current.layers, saved, characterKitPoseId.trim() || 'base', current) as AnimatorLayer[]
         const layers = ensureCutoutFacePlayback(synced, current.duration, fps, current.dialogueBeats ?? [], cutoutDialogueText) as AnimatorLayer[]
         return { ...current, layers }
       })
@@ -2303,7 +2303,7 @@ export function SceneAnimatorPanel() {
     try {
       const poseId = characterKitPoseId.trim() || 'base'
       const mounted = ensureCutoutFacePlayback(
-        mountCharacterKitLayers(characterKitDraft, poseId, undefined, scene.duration),
+        mountCharacterKitLayers(characterKitDraft, poseId, undefined, scene.duration, scene),
         scene.duration,
         fps,
         [],
@@ -2312,7 +2312,7 @@ export function SceneAnimatorPanel() {
       const mountedIds = new Set(mounted.map(layer => layer.id))
       if (scene.layers.some(layer => mountedIds.has(layer.id))) {
         updateScene(current => {
-          const synced = syncMountedCharacterKitLayers(current.layers, characterKitDraft, poseId) as AnimatorLayer[]
+          const synced = syncMountedCharacterKitLayers(current.layers, characterKitDraft, poseId, current) as AnimatorLayer[]
           const layers = ensureCutoutFacePlayback(synced, current.duration, fps, current.dialogueBeats ?? [], cutoutDialogueText) as AnimatorLayer[]
           return { ...current, layers }
         })

@@ -14,6 +14,8 @@ import threading
 import uuid
 from typing import Any
 
+from .character_face_patch import normalize_character_face_patch
+
 
 CHARACTER_KIT_LIBRARY_FILENAME = ".character-kit-library-v1.json"
 MAX_CHARACTER_KITS = 100
@@ -64,14 +66,24 @@ def _asset(value: Any, label: str) -> dict[str, Any]:
         raise ValueError(f"{label} has an invalid alpha status")
     if review_state not in _REVIEW_STATES:
         raise ValueError(f"{label} has an invalid review state")
+    kind = "overlay" if value.get("kind") == "overlay" else "image"
+    if "facePatch" in value and kind != "overlay":
+        raise ValueError(f"{label} facePatch is only valid for overlay assets")
+    face_patch = (
+        normalize_character_face_patch(value["facePatch"])
+        if "facePatch" in value
+        else None
+    )
     result = {
         "id": _token(value.get("id"), label),
         "name": _text(value.get("name"), f"{label} name", 240, required=True),
         "source": source,
-        "kind": "overlay" if value.get("kind") == "overlay" else "image",
+        "kind": kind,
         "alphaStatus": alpha_status,
         "reviewState": review_state,
     }
+    if face_patch is not None:
+        result["facePatch"] = face_patch
     for key, maximum in (("prompt", 4000), ("model", 240), ("workspace", 120)):
         text = _text(value.get(key), f"{label} {key}", maximum)
         if text:
