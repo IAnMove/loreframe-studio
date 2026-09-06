@@ -1,10 +1,10 @@
 {
   "tabs": {
-    "setup": "1 · Setup",
-    "canon": "2 · Canon",
-    "episode": "3 · Episode room",
+    "setup": "1 · Preparation",
+    "canon": "2 · Bible",
+    "episode": "3 · Episode",
     "shots": "4 · Shots",
-    "review": "5 · Render & review"
+    "review": "5 · Results"
   },
   "review": {
     "orderedAssembly": "Ordered episode assembly",
@@ -240,7 +240,9 @@
       "props": "Props / vehicles",
       "arcs": "Long arcs",
       "timeline": "Timeline",
-      "voices": "Voice bible"
+      "voices": "Voice bible",
+      "continuity": "Continuity",
+      "advanced": "Advanced"
     },
     "noReference": "No approved reference yet.",
     "missingAsset": "Missing {{id}}",
@@ -296,10 +298,12 @@
     "event": "Event",
     "when": "When",
     "whatHappened": "What happened",
-    "voicesTitle": "Voice bible",
-    "voicesDescription": "Voice identity, pronunciation and consent notes persist per recurring character. Native H3 dialogue remains best-effort lip sync.",
+    "voicesTitle": "Voice bible · metadata",
+    "voicesDescription": "These notes persist with the character. They do not control MiniMax H3: voiceId, pitch, pace and rhythm are not sent to the inspected render. Spoken audio follows the shot dialogue and audio direction. Native H3 lip sync remains best-effort.",
     "provider": "Provider",
     "voiceId": "Reusable voice ID",
+    "voiceIdHint": "Metadata only. H3 does not consume this ID.",
+    "pronunciationLabel": "Pronunciation dictionary",
     "language": "Language",
     "pace": "Pace",
     "pitch": "Pitch",
@@ -428,6 +432,9 @@
     "speaker": "Speaker · {{name}}",
     "approvedModel": "Approved · {{model}}",
     "reroute": "Re-route",
+    "advancedDetails": "IDs, strategy, manifest and overrides",
+    "noDialogue": "No dialogue",
+    "pendingTake": "Pending take",
     "strategyAria": "Render strategy for shot {{order}}",
     "auto": "Auto",
     "direct": "Direct T2V",

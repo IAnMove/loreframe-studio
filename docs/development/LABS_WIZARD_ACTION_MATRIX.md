@@ -122,7 +122,7 @@ Status: freeze of current contracts. This document does not implement the later 
 - Presentation: story_lab + section alias
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Compact Story types map world/characters/structure onto overview. Full stories group world/characters/relationships/assets onto Universe and trailer onto Generate. Invisible sections fail instead of reporting a false open.
+- Notes: Compact Story types map world/characters/structure onto overview. Full stories group world/characters/relationships/assets onto Universe and trailer onto Generate. Series keeps setup/canon/episode/shots/review IDs labeled Preparation · Bible · Episode · Shots · Results. Invisible sections fail instead of reporting a false open.
 
 #### `story.library.create` — Create a Story Lab project
 
