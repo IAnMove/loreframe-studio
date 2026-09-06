@@ -363,8 +363,8 @@
     "titleCards": "Cartelas mínimas: gancho, título y tagline",
     "titleCardsHint": "Nunca convierte el diálogo en subtítulos. Requiere “Permitir texto visible” en Story.",
     "allowClipText": "Permitir texto visible en esta Story",
-    "timeline": "Arco temporal",
-    "timelineHint": "Los segundos se recalculan al cambiar la duración.",
+    "timeline": "Cronología ilustrativa",
+    "timelineHint": "Cadencia de seis fases calculada para la receta. No son planos realmente planificados en Director.",
     "clipProduction": "Producción de clips",
     "clipProductionHint": "Usa el mismo pipeline recuperable del montaje: clips ordenados, Play all, edición/regeneración en su posición y unión final.",
     "visualGuide": "Guía visual",
@@ -416,7 +416,7 @@
     "titleVideo": "Generar videoclip",
     "titleQuick": "Generar vídeo rápido",
     "title": "Productions",
-    "descriptionStory": "Adapta el mismo material aprobado sin destruir la historia de origen.",
+    "descriptionStory": "Aquí se reúnen las recetas de cómic, cortometraje y tráiler. La cadencia del tráiler es ilustrativa, no una lista de planos planificados.",
     "descriptionOther": "Revisa los modelos, el formato y las referencias aprobadas antes de iniciar Director.",
     "comicTitle": "Adaptación a cómic",
     "comicHint": "Crea un capítulo autónomo dentro del canon maestro. Director recibe cada arco, relación, localización e imagen de identidad aprobada.",
@@ -828,7 +828,7 @@
     }
   },
   "tabs": {
-    "story": "Story",
+    "story": "Historia",
     "assets": "Assets",
     "images": "Imágenes",
     "world": "Mundo",
@@ -843,7 +843,19 @@
     "generate": "Generar",
     "assembly": "Montaje",
     "musicVideo": "Videoclip",
-    "quickVideo": "Vídeo rápido"
+    "quickVideo": "Vídeo rápido",
+    "universe": "Universo",
+    "script": "Guion",
+    "audio": "Audio",
+    "results": "Resultados",
+    "ideaAndRefs": "Idea y referencias",
+    "concept": "Concepto",
+    "references": "Referencias",
+    "ideaAndDialogue": "Idea y diálogo"
+  },
+  "universe": {
+    "title": "Universo",
+    "description": "Mundo, personajes, relaciones y sus referencias visuales. Los mismos editores de antes, agrupados para no volver a introducir los mismos datos."
   },
   "nav": {
     "swipe": "Desliza para más secciones",
@@ -883,7 +895,9 @@
     "approveDescriptions": "Aprobar descripciones: {{names}}",
     "identitiesDetail": "Cada personaje necesita una imagen principal aprobada y su identidad confirmada.",
     "descriptionsDetail": "En vídeo directo no hacen falta imágenes; Aprobar conjunto confirma todas las descripciones de una vez.",
-    "confirmSetDetail": "Las fichas individuales están listas; sólo falta confirmar el conjunto."
+    "confirmSetDetail": "Las fichas individuales están listas; sólo falta confirmar el conjunto.",
+    "technicalMissingRefs": "Aprueba al menos una referencia visual adjunta",
+    "referencesDetail": "La generación con referencias directas necesita una imagen aprobada adjunta al mundo, a una localización o a un personaje."
   },
   "timeline": {
     "openOnce": "Abre una vez el destino preparado para crear su pipeline de clips.",

@@ -363,8 +363,8 @@
     "titleCards": "Minimal cards: hook, title and tagline",
     "titleCardsHint": "Never turns dialogue into subtitles. Requires “Allow visible text” on the Story.",
     "allowClipText": "Allow visible text on this Story",
-    "timeline": "Timeline arc",
-    "timelineHint": "Seconds are recalculated when duration changes.",
+    "timeline": "Illustrative timeline",
+    "timelineHint": "A calculated six-phase cadence for the recipe. These are not planned Director shots.",
     "clipProduction": "Clip production",
     "clipProductionHint": "Uses the same recoverable assembly pipeline: ordered clips, Play all, edit/regenerate in place and a final join.",
     "visualGuide": "Visual guidance",
@@ -416,7 +416,7 @@
     "titleVideo": "Generate music video",
     "titleQuick": "Generate quick video",
     "title": "Productions",
-    "descriptionStory": "Adapt the same approved material without destroying the source story.",
+    "descriptionStory": "Gather the comic, film and trailer recipes here. The trailer cadence is illustrative, not a list of planned shots.",
     "descriptionOther": "Review the models, format and approved references before starting Director.",
     "comicTitle": "Comic adaptation",
     "comicHint": "Creates a self-contained chapter inside the master canon. Director receives every arc, relationship, location and approved identity image.",
@@ -843,7 +843,19 @@
     "generate": "Generate",
     "assembly": "Assembly",
     "musicVideo": "Music video",
-    "quickVideo": "Quick video"
+    "quickVideo": "Quick video",
+    "universe": "Universe",
+    "script": "Script",
+    "audio": "Audio",
+    "results": "Results",
+    "ideaAndRefs": "Idea and references",
+    "concept": "Concept",
+    "references": "References",
+    "ideaAndDialogue": "Idea and dialogue"
+  },
+  "universe": {
+    "title": "Universe",
+    "description": "World, characters, relationships and their visual references. The same editors as before, grouped so you do not re-enter the same data."
   },
   "nav": {
     "swipe": "Swipe for more sections",
@@ -883,7 +895,9 @@
     "approveDescriptions": "Approve descriptions: {{names}}",
     "identitiesDetail": "Each character needs an approved primary image and a confirmed identity.",
     "descriptionsDetail": "Direct video does not need images; Approve set confirms every description at once.",
-    "confirmSetDetail": "The individual sheets are ready; only the set confirmation is missing."
+    "confirmSetDetail": "The individual sheets are ready; only the set confirmation is missing.",
+    "technicalMissingRefs": "Approve at least one attached visual reference",
+    "referencesDetail": "Direct-reference generation needs an approved image attached to the world, a location or a character."
   },
   "timeline": {
     "openOnce": "Open the staged target once to create its clip pipeline.",

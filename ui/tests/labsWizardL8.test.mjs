@@ -51,6 +51,12 @@ test('Story Lab navigation keeps aliases and never claims an invisible tab opene
   const trailerProductions = resolveStoryLabNavigation('productions', 'trailer')
   assert.equal(trailerProductions.ok, true)
   assert.equal(trailerProductions.tab, 'trailer')
+
+  const fullCharacters = resolveStoryLabNavigation('characters', 'full_story')
+  assert.equal(fullCharacters.ok, true)
+  assert.equal(fullCharacters.tab, 'world')
+  assert.equal(fullCharacters.equivalent, true)
+  assert.equal(fullCharacters.anchor, 'story-review-characters')
 })
 
 test('open_story_section reports the resolved destination for compact Story types', async () => {
