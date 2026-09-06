@@ -1,12 +1,17 @@
 import type { Scene } from '../../types'
-import { CATALOG_VERSION, getCandidateSceneTemplate, type SceneTemplateDefinition } from './catalog'
+import { EXPANDED_CATALOG_VERSION, templateCatalogVersion, getCandidateSceneTemplate, type SceneTemplateDefinition } from './catalog'
 import { backdrop, foreground, type TemplateBindings, type TemplateControls, type TemplateAsset } from './sceneBuilders'
 import { cinemaScenes } from './cinemaScenes'
 import { musicScenes } from './musicScenes'
 import { spaceScenes } from './spaceScenes'
+import { musicMotionSolo } from './musicMotionSolo'
+import { musicMotionEnsemble } from './musicMotionEnsemble'
+import { musicMotionBackground } from './musicMotionBuilders'
 export type { TemplateBindings, TemplateControls, TemplateAsset } from './sceneBuilders'
 
-const builders = { ...cinemaScenes, ...musicScenes, ...spaceScenes }
+const builders = { ...cinemaScenes, ...musicScenes, ...spaceScenes, ...musicMotionSolo, ...musicMotionEnsemble }
+const DISTINCT_MUSIC_SLOTS = ['subject_1', 'subject_2', 'prop_1'] as const
+
 function finiteRange(value: number, min: number, max: number, label: string) {
   if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${label}: debe estar entre ${min} y ${max}.`)
   return value
@@ -30,9 +35,34 @@ function validateBindings(template: SceneTemplateDefinition, bindings: TemplateB
     if (!slot.kinds.includes(value.type)) throw new Error(`El slot ${slot.id} no admite ${value.type}.`)
     validateAsset(value)
   }
+  validateDistinctMusicSlots(bindings)
   const models = Object.values(bindings).filter(value => value?.type === 'model3d').map(value => value!.source)
   if (new Set(models).size !== models.length) throw new Error('Los slots GLB no admiten fuentes repetidas en este compositor.')
 }
+
+function validateDistinctMusicSlots(bindings: TemplateBindings) {
+  const sources = new Map<string, string>()
+  const assetIds = new Map<string, string>()
+  for (const slot of DISTINCT_MUSIC_SLOTS) {
+    const binding = bindings[slot]
+    if (!binding) continue
+
+    const previousSourceSlot = sources.get(binding.source)
+    if (previousSourceSlot) {
+      throw new Error(`Los slots musicales ${previousSourceSlot} y ${slot} no pueden reutilizar el mismo recurso: source coincide.`)
+    }
+    sources.set(binding.source, slot)
+
+    const assetId = binding.catalogAtAssignment?.assetId
+    if (typeof assetId !== 'string' || !assetId.trim()) continue
+    const previousAssetSlot = assetIds.get(assetId)
+    if (previousAssetSlot) {
+      throw new Error(`Los slots musicales ${previousAssetSlot} y ${slot} no pueden reutilizar el mismo recurso: assetId canónico coincide (${assetId}).`)
+    }
+    assetIds.set(assetId, slot)
+  }
+}
+
 export function compileCandidateScene(id: string, bindings: TemplateBindings, options: Partial<TemplateControls> = {}): Scene {
   const template = getCandidateSceneTemplate(id)
   const build = builders[id]
@@ -44,13 +74,15 @@ export function compileCandidateScene(id: string, bindings: TemplateBindings, op
     intensity: finiteRange(options.intensity ?? .6, 0, 1, 'Intensidad'),
   }
   const ctx = { ...controls, bindings }
-  const layers = [backdrop(ctx), ...build(ctx), ...foreground(ctx)]
+  const expanded = templateCatalogVersion(template) === EXPANDED_CATALOG_VERSION
+  const background = expanded ? musicMotionBackground(id, ctx) : [backdrop(ctx)]
+  const layers = [...background, ...build(ctx), ...foreground(ctx)]
   if (layers.length > 24 || layers.filter(item => item.type === 'model3d').length > 2) throw new Error('La escena excede el presupuesto de 24 capas / 2 GLB.')
   return {
     version: 1, name: `${template.title} · candidata`, generationPolicy: 'provided_only',
     width: 1280, height: 720, fps: 30, duration: controls.duration, layers,
     narrative: { templateId: id, category: template.family, visualIntent: template.description,
-      controls: { ...controls, catalogVersion: CATALOG_VERSION, templateVersion: template.version, reviewStatus: template.status, renderer: 'layer-compositor-v1' },
+      controls: { ...controls, catalogVersion: templateCatalogVersion(template), templateVersion: template.version, reviewStatus: template.status, renderer: 'layer-compositor-v1' },
       assets: Object.entries(bindings).filter(([, value]) => value).map(([slot, value]) => ({ slot, source: value!.source, name: value!.name, type: value!.type,
         ...(value!.catalogAtAssignment ? { catalogAtAssignment: { ...value!.catalogAtAssignment } } : {}),
       })),

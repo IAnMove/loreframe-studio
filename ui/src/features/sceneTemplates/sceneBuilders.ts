@@ -35,7 +35,7 @@ export function camera(ctx: BuildContext, beats: Beat[], shake = 0): SceneLayer 
   return item
 }
 export function backdrop(ctx: BuildContext): SceneLayer {
-  return { ...asset(ctx, 'plate', { scale: 1.15 }, 0), fill: true, parallax: .25 }
+  return { ...asset(ctx, ctx.bindings.background ? 'background' : 'plate', { scale: 1.15 }, 0), fill: true, parallax: .25 }
 }
 export function foreground(ctx: BuildContext): SceneLayer[] {
   return ctx.bindings.foreground ? [{ ...asset(ctx, 'foreground', { scale: 1.12 }, 80), fill: true, parallax: 1.6 }] : []

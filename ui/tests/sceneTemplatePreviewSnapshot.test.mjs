@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { CATALOG_VERSION, getCandidateSceneTemplate } from '../src/features/sceneTemplates/catalog.ts'
+import { CATALOG_VERSION, EXPANDED_CATALOG_VERSION, getCandidateSceneTemplate } from '../src/features/sceneTemplates/catalog.ts'
 import { candidateDemoScene } from '../src/features/sceneTemplates/demoScenes.ts'
 import {
   loadRenderedReferenceScene,
@@ -124,4 +124,19 @@ test('rejects a missing or cancelled reference without falling back to a demo', 
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test('new music references require their own catalog version without invalidating old references', async () => {
+  const music = getCandidateSceneTemplate('music-spiral-exit')
+  const scene = candidateDemoScene(music.id)
+  const payload = { catalogVersion: EXPANDED_CATALOG_VERSION, templateId: music.id,
+    templateVersion: 1, variant: 'coral', status: 'rendered-not-approved', scene }
+  const originalFetch = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify(payload))
+    assert.deepEqual(await loadRenderedReferenceScene(music, '/scene-template-previews'), scene)
+    globalThis.fetch = async () => new Response(JSON.stringify({ ...payload, catalogVersion: CATALOG_VERSION }))
+    await assert.rejects(loadRenderedReferenceScene(music, '/scene-template-previews'), /identidad|versión/i)
+    assert.deepEqual(parseRenderedReferenceScene(referencePayload(), expected), referenceScene())
+  } finally { globalThis.fetch = originalFetch }
 })

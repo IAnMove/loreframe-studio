@@ -148,7 +148,7 @@ async function renderOne({ browser, server, repoRoot, template, runtime }) {
 
     assert(JSON.stringify(gitSnapshot(repoRoot)) === JSON.stringify(source), 'Source changed during rendering; refusing to label this preview as reproducible.')
     const reviewMetadata = {
-      catalogVersion: catalog.CATALOG_VERSION,
+      catalogVersion: catalog.templateCatalogVersion(template),
       templateId: template.id,
       templateVersion: template.version,
       variant: 'coral',
@@ -188,10 +188,13 @@ async function renderOne({ browser, server, repoRoot, template, runtime }) {
 }
 
 export async function renderTemplates({ server, repoRoot, templateIds = [] }) {
-  const knownIds = new Set(catalog.CANDIDATE_SCENE_TEMPLATES.map(template => template.id))
+  const knownIds = new Set(catalog.ALL_SCENE_TEMPLATES.map(template => template.id))
   const unknownIds = [...new Set(templateIds.filter(templateId => !knownIds.has(templateId)))]
   if (unknownIds.length) throw new Error(`Unknown candidate scene template ID(s): ${unknownIds.join(', ')}`)
-  const selected = catalog.CANDIDATE_SCENE_TEMPLATES.filter(template => !templateIds.length || templateIds.includes(template.id))
+  // Keep the default legacy batch within its established disk/output quota.
+  // New pack IDs are opt-in; do not silently double a user's render batch.
+  const candidates = templateIds.length ? catalog.ALL_SCENE_TEMPLATES : catalog.CANDIDATE_SCENE_TEMPLATES
+  const selected = candidates.filter(template => !templateIds.length || templateIds.includes(template.id))
   if (!selected.length) throw new Error('No matching candidate scene templates were requested.')
   assert(selected.every(template => /^[a-z0-9][a-z0-9-]*$/.test(template.id)), 'Unsafe template ID; no paths were created.')
   const browser = await chromium.launch({ args: ['--disable-gpu', '--disable-dev-shm-usage'] })
@@ -206,7 +209,7 @@ export async function renderTemplates({ server, repoRoot, templateIds = [] }) {
         const message = error instanceof Error ? error.message : String(error)
         failures.push({ id: template.id, error: message })
         const failureMetadata = {
-          catalogVersion: catalog.CATALOG_VERSION,
+          catalogVersion: catalog.templateCatalogVersion(template),
           templateId: template.id,
           templateVersion: template.version,
           variant: 'coral',

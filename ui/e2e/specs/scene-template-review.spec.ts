@@ -2,11 +2,12 @@ import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { closeApp } from '../helpers/gotoApp'
 import { installApiRoutes, type ApiRouteSession } from '../helpers/apiRoutes'
-import { CATALOG_VERSION } from '../../src/features/sceneTemplates/catalog'
+import { CATALOG_VERSION, EXPANDED_CATALOG_VERSION } from '../../src/features/sceneTemplates/catalog'
+import { CATALOG_REVIEW_STORAGE_KEY } from '../../src/features/sceneTemplates/catalogReview'
 import { candidateDemoScene } from '../../src/features/sceneTemplates/demoScenes'
 
 const PENDING_SCENE_KEY = 'maestro_scene_animator_pending_scene'
-const REVIEW_STORAGE_KEY = 'hocuspocus.scene-template-review.v1'
+const REVIEW_STORAGE_KEY = CATALOG_REVIEW_STORAGE_KEY
 const SAVED_OUTPUT = {
   name: 'review.scene.json',
   type: 'scene',
@@ -161,7 +162,7 @@ async function installReviewRoutes(page: Page, state: ReviewRouteState): Promise
 async function openGallery(page: Page): Promise<void> {
   await page.goto('/scene-template-review')
   await expect(page.locator('section[aria-label="Galería de plantillas candidatas de Video3D"]')).toBeVisible()
-  await expect(page.locator('[data-template-id]')).toHaveCount(24)
+  await expect(page.locator('[data-template-id]')).toHaveCount(48)
 }
 
 async function readAutosave(page: Page): Promise<SceneLike | null> {
@@ -307,7 +308,7 @@ test('shows a visible error and keeps the gallery when the saved reference is mi
     const card = page.locator('[data-template-id="cinema-establishing"]')
     await card.getByTestId('open-scene-cinema-establishing').click()
     await expect(page).toHaveURL(/\/scene-template-review$/)
-    await expect(card.getByRole('alert')).toBeVisible()
+    await expect(card.getByRole('alert').filter({ hasText: 'No está disponible el snapshot' })).toBeVisible()
     await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__scene_template_test_handoff'))).toBeNull()
     expect(state.referenceRequests).toHaveLength(1)
@@ -327,7 +328,7 @@ test('rejects a mismatched saved reference without navigating or handing it to t
     const card = page.locator('[data-template-id="cinema-establishing"]')
     await card.getByTestId('open-scene-cinema-establishing').click()
     await expect(page).toHaveURL(/\/scene-template-review$/)
-    await expect(card.getByRole('alert')).toBeVisible()
+    await expect(card.getByRole('alert').filter({ hasText: 'La escena guardada no coincide' })).toBeVisible()
     await expect.poll(() => page.evaluate(key => sessionStorage.getItem(key), PENDING_SCENE_KEY)).toBeNull()
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('__scene_template_test_handoff'))).toBeNull()
     expect(state.referenceRequests).toHaveLength(1)
@@ -348,7 +349,7 @@ test('keeps review decisions across reload and exports catalog/template versions
       const value = localStorage.getItem(key)
       return value ? JSON.parse(value) : null
     }, REVIEW_STORAGE_KEY)).toMatchObject({
-      catalogVersion: CATALOG_VERSION,
+      catalogVersion: EXPANDED_CATALOG_VERSION,
       choices: { 'cinema-establishing': { decision: 'keep', templateVersion: 1 } },
     })
 
@@ -359,18 +360,22 @@ test('keeps review decisions across reload and exports catalog/template versions
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Exportar revisión JSON', exact: true }).click()
     const download = await downloadPromise
-    expect(download.suggestedFilename()).toBe(`scene-template-review-${CATALOG_VERSION}.json`)
+    expect(download.suggestedFilename()).toBe(`scene-template-review-${EXPANDED_CATALOG_VERSION}.json`)
     const downloadPath = await download.path()
     expect(downloadPath).toBeTruthy()
     const exported = JSON.parse(await readFile(downloadPath!, 'utf8')) as {
       catalogVersion: string
       templates: Array<{ id: string; templateVersion: number; decision: string }>
     }
-    expect(exported.catalogVersion).toBe(CATALOG_VERSION)
-    expect(exported.templates).toHaveLength(24)
+    expect(exported.catalogVersion).toBe(EXPANDED_CATALOG_VERSION)
+    expect(exported.templates).toHaveLength(48)
     expect(exported.templates.find(template => template.id === 'cinema-establishing')).toMatchObject({
       templateVersion: 1,
       decision: 'keep',
+    })
+    expect(exported.templates.find(template => template.id === 'music-spiral-exit')).toMatchObject({
+      templateVersion: 1,
+      decision: 'pending',
     })
   } finally {
     await closeApp(page, session)
@@ -393,6 +398,50 @@ test('keeps one active preview player when switching candidate previews', async 
     await expect(page.locator('video')).toHaveCount(1)
     await expect(first.locator('video')).toHaveCount(0)
     await expect(second.locator('video')).toHaveCount(1)
+  } finally {
+    await closeApp(page, session)
+  }
+})
+
+test('opens an expanded music template with explicit component roles without inventing a published reference', async ({ page }) => {
+  const session = await prepareReviewPage(page)
+  await installReviewRoutes(page, reviewRouteState())
+  try {
+    await openGallery(page)
+    const card = page.locator('[data-template-id="music-orbit-duel"]')
+    await expect(card.getByText('subject_1', { exact: true })).toBeVisible()
+    await expect(card.getByText('subject_2', { exact: true })).toBeVisible()
+    await expect(card.getByText('background', { exact: true })).toBeVisible()
+    await expect(card.getByTestId('open-scene-music-orbit-duel')).toBeDisabled()
+    await card.getByTestId('open-scene-variant-music-orbit-duel').click()
+    await expect(page).toHaveURL(/\/scene-template-review\?editor=1$/)
+    await expect(page.getByLabel('Scene name', { exact: true })).toBeVisible()
+    const handoff = await page.evaluate(() => JSON.parse(sessionStorage.getItem('__scene_template_test_handoff')!))
+    expect(handoff.generationPolicy).toBe('provided_only')
+    expect(handoff.narrative.controls.catalogVersion).toBe(EXPANDED_CATALOG_VERSION)
+    expect(handoff.narrative.assets.map((asset: { slot: string }) => asset.slot)).toEqual(['subject_1', 'subject_2', 'background'])
+  } finally {
+    await closeApp(page, session)
+  }
+})
+
+test('migrates legacy decisions without overwriting them or approving the new music pack', async ({ page }) => {
+  const session = await prepareReviewPage(page)
+  const legacyKey = 'hocuspocus.scene-template-review.v1'
+  const legacy = JSON.stringify({ schemaVersion: 1, catalogVersion: CATALOG_VERSION, choices: {
+    'cinema-establishing': { id: 'cinema-establishing', templateVersion: 1, decision: 'keep', notes: 'original' },
+    'music-spiral-exit': { id: 'music-spiral-exit', templateVersion: 1, decision: 'keep', notes: 'invalid legacy approval' },
+  } })
+  try {
+    await openGallery(page)
+    await page.evaluate(({ key, raw, expanded }) => {
+      localStorage.removeItem(expanded)
+      localStorage.setItem(key, raw)
+    }, { key: legacyKey, raw: legacy, expanded: CATALOG_REVIEW_STORAGE_KEY })
+    await page.reload()
+    await expect(page.locator('[data-template-id="cinema-establishing"]').getByRole('button', { name: 'Conservar', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('[data-template-id="music-spiral-exit"]').getByRole('button', { name: 'Pendiente', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    expect(await page.evaluate(key => localStorage.getItem(key), legacyKey)).toBe(legacy)
   } finally {
     await closeApp(page, session)
   }

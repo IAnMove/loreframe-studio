@@ -4,7 +4,7 @@ import React from 'react'
 import { JSDOM } from 'jsdom'
 import type { AssetCatalogItem } from '../src/api/assets.ts'
 import type { Scene } from '../src/types/index.ts'
-import { CANDIDATE_SCENE_TEMPLATES } from '../src/features/sceneTemplates/catalog.ts'
+import { ALL_SCENE_TEMPLATES, CANDIDATE_SCENE_TEMPLATES } from '../src/features/sceneTemplates/catalog.ts'
 
 const dom = new JSDOM('<!doctype html><html><body /></html>', { url: 'http://localhost/' })
 Object.assign(globalThis, {
@@ -97,14 +97,15 @@ async function selectHeroAndPlate(view: Awaited<ReturnType<typeof renderDialog>>
   view.fireEvent.click(view.screen.getByRole('checkbox', { name: /He guardado lo que necesito/ }))
 }
 
-test('expone las 24 plantillas y habilita BPM/intensidad sólo en plantillas rítmicas', { concurrency: false }, async () => {
+test('expone 24 referencias más 24 movimientos y habilita BPM/intensidad sólo en plantillas rítmicas', { concurrency: false }, async () => {
   const originalFetch = globalThis.fetch
   installAssetFetch()
   try {
     const view = await renderDialog()
     const selector = view.screen.getByRole('combobox', { name: 'Acción / plantilla' }) as HTMLSelectElement
-    assert.equal(selector.options.length, CANDIDATE_SCENE_TEMPLATES.length)
-    assert.equal(selector.options.length, 24)
+    assert.equal(selector.options.length, ALL_SCENE_TEMPLATES.length)
+    assert.equal(selector.options.length, 48)
+    assert.equal(CANDIDATE_SCENE_TEMPLATES.length, 24)
     assert.equal((view.screen.getByRole('spinbutton', { name: 'BPM visual' }) as HTMLInputElement).disabled, true)
     assert.equal((view.screen.getByRole('spinbutton', { name: 'Intensidad del pulso' }) as HTMLInputElement).disabled, true)
 

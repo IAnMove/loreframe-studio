@@ -6,6 +6,10 @@ import { demoShip } from './demoShips'
 export function candidateDemoBindings(id: string, variant: 'coral' | 'teal' = 'coral'): TemplateBindings {
   const template = getCandidateSceneTemplate(id)
   const art = demoArtwork(variant)
+  if (template.slots.some(slot => slot.id === 'subject_1')) {
+    const sources = { subject_1: art.subject, subject_2: art.partner, background: art.stage, prop_1: art.prop }
+    return Object.fromEntries(template.slots.filter(slot => slot.required).map(slot => [slot.id, sources[slot.id as keyof typeof sources]]))
+  }
   const space = template.family === 'space'
   const bindings: TemplateBindings = {
     hero: space ? demoShip(variant) : id === 'music-product' || id === 'cinema-detail' ? art.prop : art.subject,
