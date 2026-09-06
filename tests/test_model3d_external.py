@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services.asset_manifest import read_asset_manifest
 from app.services import model3d_external as engines
 from app.services import model3d_service as service
 
@@ -112,7 +113,6 @@ def test_trellis_adapter_passes_seed_resolution_and_pbr(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("model_id", ["trellis2", "pixal3d"])
 def test_job_dispatches_isolated_worker_and_publishes_actual_engine(monkeypatch, tmp_path, model_id):
-    from app.services.asset_manifest import read_asset_manifest
     commands = []
     class Process:
         pid = 123456789
@@ -146,7 +146,47 @@ def test_job_dispatches_isolated_worker_and_publishes_actual_engine(monkeypatch,
         sidecar = json.loads(output.with_suffix(".meta.json").read_text())
         assert sidecar["params"]["provider"] == model_id
         assert sidecar["params"]["model_id"] == model_id
+        assert sidecar["params"]["model_repo"] == service.MODEL_BY_ID[model_id]["repo"]
         assert read_asset_manifest(output)["execution"]["task_id"] == created["task_id"]
         assert not (tmp_path / "jobs" / f"{job_id}.json").exists()
+    finally:
+        service._jobs.pop(job_id, None)
+
+
+@pytest.mark.parametrize("model_id,provider,repo", [
+    ("trellis2", "trellis2", "microsoft/TRELLIS.2-4B"),
+    ("pixal3d", "pixal3d", "TencentARC/Pixal3D"),
+    ("hunyuan3d-2-turbo", "hunyuan3d", "tencent/Hunyuan3D-2"),
+])
+def test_simulated_job_publishes_selected_engine_identity(monkeypatch, tmp_path, model_id, provider, repo):
+    monkeypatch.setattr(
+        service.execution_mode,
+        "POLICY",
+        SimpleNamespace(simulated=True, fail_kind="", fail_count=1, step_delay=0.0),
+    )
+    request = service._prepare_request({"model_id": model_id}, {"front": "reference.png"})
+    job_id = f"sim-{model_id}"
+    service._jobs[job_id] = {
+        "job_id": job_id,
+        "task_id": service._canonical_task_id(job_id),
+        "root_task_id": service._canonical_task_id(job_id),
+        "status": "waiting_resource",
+        "progress": 0,
+        "request": request,
+        "updated_at": 0,
+    }
+    try:
+        service._run_job_serialized(job_id, str(tmp_path))
+        job = service._jobs[job_id]
+        assert job["status"] == "completed"
+        assert job["simulated"] is True
+        sidecar = json.loads((tmp_path / job["filename"]).with_suffix(".meta.json").read_text())
+        assert sidecar["params"]["provider"] == provider
+        assert sidecar["params"]["model_id"] == model_id
+        assert sidecar["params"]["model_repo"] == repo
+        loaded = read_asset_manifest(tmp_path / job["filename"])
+        assert loaded["generation"]["model"]["provider"] == provider
+        assert loaded["generation"]["model"]["id"] == model_id
+        assert loaded["generation"]["parameters"]["model_repo"] == repo
     finally:
         service._jobs.pop(job_id, None)

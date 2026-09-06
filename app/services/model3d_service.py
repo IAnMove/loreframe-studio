@@ -525,6 +525,20 @@ def _physical_output_folder(value: Any) -> str | None:
     return name or None
 
 
+def _model3d_sidecar_identity(job: dict[str, Any], request_data: dict[str, Any]) -> dict[str, Any]:
+    """Durable engine identity for Library metadata (real and simulated jobs)."""
+    model = request_data.get("model") if isinstance(request_data.get("model"), dict) else {}
+    identity = {
+        "model_id": model.get("id"),
+        "model_type": model.get("id"),
+        "provider": job.get("provider") or model.get("provider", "hunyuan3d"),
+    }
+    repo = model.get("repo")
+    if repo:
+        identity["model_repo"] = repo
+    return identity
+
+
 def _publish_model3d_result(job: dict[str, Any], output_path: str | Path, sidecar: dict[str, Any]) -> None:
     provenance = job.get("provenance") if isinstance(job.get("provenance"), dict) else {}
     command = provenance.get("command") if isinstance(provenance.get("command"), dict) else {}
@@ -1008,9 +1022,7 @@ def _run_job_serialized(job_id: str, output_dir: str) -> None:
                 "execution_mode": "simulate",
                 "params": {
                     **request_data.get("settings", {}),
-                    "model_id": (request_data.get("model") or {}).get("id"),
-                    "model_type": (request_data.get("model") or {}).get("id"),
-                    "provider": "hunyuan3d",
+                    **_model3d_sidecar_identity(current_job, request_data),
                 },
             })
             _update_job(
@@ -1216,10 +1228,7 @@ def _run_job_serialized(job_id: str, output_dir: str) -> None:
                 "created_at": time.time(),
                 "params": {
                     **request_data["settings"],
-                    "model_id": model_id,
-                    "model_type": model_id,
-                    "provider": current_job.get("provider") or request_data["model"].get("provider", "hunyuan3d"),
-                    "model_repo": request_data["model"]["repo"],
+                    **_model3d_sidecar_identity(current_job, request_data),
                     "operation": operation,
                     "source_model": os.path.basename(request_data["source_mesh"]) if request_data.get("source_mesh") else None,
                     "preset": request_data["preset"],
