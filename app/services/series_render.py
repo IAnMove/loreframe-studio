@@ -348,6 +348,10 @@ def series_dialogue_preflight_issues(shot: dict, series: dict | None = None) -> 
         if isinstance(beat, dict) and str(beat.get("text") or "").strip()
     ]
     issues: list[str] = []
+    if shot.get("scriptDialogueStatus") in {"stale", "manual_conflict"}:
+        issues.append(
+            "shot dialogue is out of date with the episode script; sync the shot before rendering"
+        )
     for beat in beats:
         dialogue = str(beat.get("text") or "").strip()
         if re.search(r"</?d(?:\s|>)", dialogue, flags=re.IGNORECASE):

@@ -400,7 +400,7 @@ export interface AgentReviewSeriesAttemptsAction {
   seriesTitle: string
   targetEpisodeTitle: string
   decision: 'approve' | 'reject'
-  scope: 'selected_latest' | 'all_latest'
+  scope: 'selected_latest' | 'all_latest' | 'replace_latest'
   shotNumbers: number[]
   attemptId: string
   confirm: true
@@ -807,7 +807,7 @@ const SERIES_RENDER_MODES = new Set<AgentRenderSeriesShotsAction['mode']>([
   'selected', 'missing', 'failed', 'all',
 ])
 const SERIES_REVIEW_DECISIONS = new Set<AgentReviewSeriesAttemptsAction['decision']>(['approve', 'reject'])
-const SERIES_REVIEW_SCOPES = new Set<AgentReviewSeriesAttemptsAction['scope']>(['selected_latest', 'all_latest'])
+const SERIES_REVIEW_SCOPES = new Set<AgentReviewSeriesAttemptsAction['scope']>(['selected_latest', 'all_latest', 'replace_latest'])
 const SERIES_CANON_DECISIONS = new Set<AgentCommitSeriesCanonAction['decision']>([
   'accept_all', 'reject_all', 'accept_selected', 'reject_selected',
 ])
@@ -1470,7 +1470,7 @@ function parseAction(value: unknown): AgentAction | null {
     const shotNumbers = positiveIntegerArray(raw.shot_numbers, 200)
     const attemptId = cleanString(raw.attempt_id, 160)
     if (scope === 'selected_latest' && !shotNumbers.length) return null
-    if (scope === 'all_latest' && (decision !== 'approve' || shotNumbers.length || attemptId)) return null
+    if ((scope === 'all_latest' || scope === 'replace_latest') && (decision !== 'approve' || shotNumbers.length || attemptId)) return null
     if (decision === 'reject' && (shotNumbers.length !== 1 || scope !== 'selected_latest')) return null
     if (attemptId && shotNumbers.length !== 1) return null
     return {
@@ -2540,7 +2540,7 @@ export const HOCUSPOCUS_AGENT_RESPONSE_SCHEMA: Record<string, unknown> = {
           shot_numbers: { type: 'array', maxItems: 200, items: { type: 'integer', minimum: 1, maximum: 10_000 } },
           attempt_id: { type: 'string', maxLength: 160 },
           review_decision: { type: 'string', enum: ['', 'approve', 'reject'] },
-          review_scope: { type: 'string', enum: ['', 'selected_latest', 'all_latest'] },
+          review_scope: { type: 'string', enum: ['', 'selected_latest', 'all_latest', 'replace_latest'] },
           canon_decision: { type: 'string', enum: ['', 'accept_all', 'reject_all', 'accept_selected', 'reject_selected'] },
           canon_item_ids: { type: 'array', maxItems: 200, items: { type: 'string', maxLength: 160 } },
           target_names: { type: 'array', maxItems: 40, items: { type: 'string', maxLength: 300 } },

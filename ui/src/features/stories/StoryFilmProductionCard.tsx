@@ -30,7 +30,7 @@ export function StoryFilmProductionCard(props: StoryProductionsTabProps) {
       <div className="rounded-md border border-violet-500/25 bg-violet-500/5 p-2.5 space-y-2">
         <p className="text-[10px] font-medium text-violet-100">{t('productions.visualGuidance')}</p>
         <div className="grid grid-cols-2 gap-1.5">
-          <button type="button" className={`${button} flex-col ${!directReferenceVideo ? 'border-purple-400/60 text-purple-200' : ''}`}
+          <button type="button" className={`${button} flex-col ${!directReferenceVideo && !directVideo ? 'border-purple-400/60 text-purple-200' : ''}`}
             onClick={() => patch({ musicVideoGenerationMode: 'image_guided' })}>
             <span>{t('productions.generateStartImages')}</span>
             <span className="text-[9px] text-text-muted">{t('productions.imageGuidedHint')}</span>

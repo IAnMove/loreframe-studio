@@ -22,6 +22,7 @@ import type {
   StageSeriesComicCommand,
   UpdateSeriesEpisodeCommand,
 } from './commands'
+import { bulkApproveSelections } from './shotReviewPolicy'
 
 function seriesEpisodeResult(
   workspaceId: string,
@@ -529,6 +530,15 @@ export async function renderSeriesShots(action: RenderSeriesShotsCommand): Promi
     ? `No existe el episodio “${action.targetEpisodeTitle}” en “${series.title}”.`
     : `“${series.title}” necesita un episodio activo o único.`)
   if (!episode.shots.length) throw new Error(`“${episode.title}” no tiene shots; genera y aplica un plan complete primero.`)
+  const staleShots = episode.shots.filter(shot => (
+    (action.mode !== 'selected' || action.shotIds.includes(shot.id))
+    && (shot.scriptDialogueStatus === 'stale' || shot.scriptDialogueStatus === 'manual_conflict')
+  ))
+  if (staleShots.length) {
+    throw new Error(
+      `El diálogo del guion y de ${staleShots.length} plano(s) no coincide. Sincroniza los planos en Episodio antes de renderizar.`,
+    )
+  }
   if (episode.shots.some(shot => shot.dialogueBeats.length > 0) && !series.bestEffortLipSyncAcknowledged) {
     throw new Error('Este episodio tiene diálogo. Marca primero “I understand lip sync is best-effort” en Series Lab; el Wizard no puede inferir ese consentimiento.')
   }
@@ -608,7 +618,7 @@ export async function reviewSeriesAttempts(action: ReviewSeriesAttemptsCommand):
     if (shotsByOrder.has(shot.order)) throw new Error(`El episodio tiene más de un shot con el número ${shot.order}; no se puede resolver de forma segura.`)
     shotsByOrder.set(shot.order, shot)
   }
-  const selectedShots = action.scope === 'all_latest'
+  const selectedShots = action.scope === 'all_latest' || action.scope === 'replace_latest'
     ? episode.shots
     : action.shotNumbers.map(number => {
         const shot = shotsByOrder.get(number)
@@ -617,27 +627,32 @@ export async function reviewSeriesAttempts(action: ReviewSeriesAttemptsCommand):
       })
 
   if (action.decision === 'approve') {
-    const selections = selectedShots.flatMap(shot => {
-      const attempt = action.attemptId
-        ? shot.attempts.find(item => item.id === action.attemptId)
-        : [...shot.attempts].reverse().find(item => (
-            item.status === 'completed'
-            && item.reviewDecision !== 'rejected'
-            && item.outputAssetIds.some(id => Boolean(series.assets[id]))
-          ))
-      if (!attempt) {
-        if (action.attemptId) throw new Error(`El intento ${action.attemptId} no pertenece al shot ${shot.order}.`)
-        if (action.scope === 'selected_latest') throw new Error(`El shot ${shot.order} no tiene un intento completado y reproducible que aprobar.`)
-        return []
+    const hasAsset = (assetId: string) => Boolean(series.assets[assetId])
+    const bulk = action.attemptId
+      ? null
+      : bulkApproveSelections(selectedShots, hasAsset, {
+        replaceFinals: action.scope === 'replace_latest' || action.scope === 'selected_latest',
+      })
+    const selections = bulk
+      ? bulk.selections
+      : selectedShots.flatMap(shot => {
+        const attempt = shot.attempts.find(item => item.id === action.attemptId)
+        if (!attempt) throw new Error(`El intento ${action.attemptId} no pertenece al shot ${shot.order}.`)
+        if (attempt.status !== 'completed' || attempt.reviewDecision === 'rejected') {
+          throw new Error(`El intento ${attempt.id} del shot ${shot.order} no es aprobable.`)
+        }
+        if (!attempt.outputAssetIds.some(id => Boolean(series.assets[id]))) {
+          throw new Error(`El intento ${attempt.id} del shot ${shot.order} no tiene un asset reproducible.`)
+        }
+        return attempt.id === shot.approvedAttemptId ? [] : [{ shotId: shot.id, attemptId: attempt.id }]
+      })
+    if (action.scope === 'selected_latest' && action.attemptId === '' && bulk) {
+      const missing = selectedShots.filter(shot => !bulk.selections.some(item => item.shotId === shot.id)
+        && !shot.approvedAttemptId)
+      if (missing.length) {
+        throw new Error(`El shot ${missing[0].order} no tiene un intento completado y reproducible que aprobar.`)
       }
-      if (attempt.status !== 'completed' || attempt.reviewDecision === 'rejected') {
-        throw new Error(`El intento ${attempt.id} del shot ${shot.order} no es aprobable.`)
-      }
-      if (!attempt.outputAssetIds.some(id => Boolean(series.assets[id]))) {
-        throw new Error(`El intento ${attempt.id} del shot ${shot.order} no tiene un asset reproducible.`)
-      }
-      return attempt.id === shot.approvedAttemptId ? [] : [{ shotId: shot.id, attemptId: attempt.id }]
-    })
+    }
     if (!selections.length) throw new Error('No hay nuevos intentos elegibles que aprobar; las tomas resueltas ya están aprobadas o no tienen vídeo válido.')
     const result = await api.approveSeriesAttemptsBulk(workspace, series.id, episode.id, selections)
     if (result.seriesId !== series.id || result.episodeId !== episode.id) {
