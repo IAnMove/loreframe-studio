@@ -13,25 +13,12 @@ import re
 from typing import Any
 
 from .spoken_language import infer_h3_spoken_language
+from ..h3_prompt_policy import h3_field_labels, tagged_dialogue
 
 
 FIRST_FRAME_REFERENCE = (
     "For the target video, at 0.00 seconds into the target video, <Picture 1> "
     "(from [Shot 1]) is fully referenced."
-)
-
-_FIRST_FRAME_FIELDS = (
-    "integrated_multimodal_description:",
-    "overall_soundscape:",
-    "non_diegetic_music:",
-)
-_REFERENCE_FIELDS = (
-    "subject_definitions:",
-    "summary:",
-    "retention_analysis:",
-    "detailed_description:",
-    "overall_soundscape:",
-    "non_diegetic_music:",
 )
 
 
@@ -51,7 +38,7 @@ def normalize_reference_mode(value: str | None) -> str:
 def is_structured_h3_prompt(prompt: str, reference_mode: str | None = None) -> bool:
     text = str(prompt or "")
     mode = normalize_reference_mode(reference_mode)
-    fields = _REFERENCE_FIELDS if mode == "references" else _FIRST_FRAME_FIELDS
+    fields = h3_field_labels("references" if mode == "references" else "context")
     if mode == "first_frame" and FIRST_FRAME_REFERENCE not in text:
         return False
     if mode == "direct" and FIRST_FRAME_REFERENCE in text:
@@ -163,7 +150,7 @@ def _dialogue_sentences(plan: dict, subject_ids: list[str]) -> list[str]:
         cue = f"({speaker_id})"
         if speaker:
             cue += f" {speaker}"
-        cue += f" says <d>[{infer_h3_spoken_language(spoken)}] {spoken}</d>"
+        cue += f" says {tagged_dialogue(infer_h3_spoken_language(spoken), spoken)}"
         sentences.append(cue + ".")
     return sentences
 

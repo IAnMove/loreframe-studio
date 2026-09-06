@@ -191,6 +191,27 @@ def test_does_not_steal_a_selection_the_user_changed(tmp_path: Path):
     assert by_id["song-1"]["status"] == "ready"
 
 
+def test_late_job_does_not_overwrite_a_ready_candidate(tmp_path: Path):
+    _library(tmp_path)
+    first = _submit(tmp_path, idempotency_key="cmd-first", candidate_id="song-1")
+    second = _submit(tmp_path, idempotency_key="cmd-second", candidate_id="song-1")
+    finalize_reserved_music(
+        workspace_dir=str(tmp_path),
+        generation_id=first["generation_id"],
+        audio_path=_wav(tmp_path / "first.wav"),
+    )
+    with pytest.raises(MusicFinalizationError, match="already published"):
+        finalize_reserved_music(
+            workspace_dir=str(tmp_path),
+            generation_id=second["generation_id"],
+            audio_path=_wav(tmp_path / "second.wav"),
+        )
+    cue = read_story_library(str(tmp_path))["projects"]["story-1"]["music"]["cues"][0]
+    assert cue["candidates"][0]["name"] == "first.wav"
+    assert cue["candidates"][0]["provenance"]["jobId"] == first["job_id"]
+    assert first["job_id"] != second["job_id"]
+
+
 def test_two_generations_of_the_same_cue_keep_distinct_rows(tmp_path: Path):
     _library(tmp_path)
     library = read_story_library(str(tmp_path))
