@@ -5,17 +5,25 @@
 
 ## Estado exacto
 
-No todos los pasos están terminados. El Wizard tiene un PR abierto; el catálogo,
-galería, tooling y plan tienen commits de checkpoint. No se han mezclado ni
-publicado main. P01 y posteriores están diseñadas, **no implementadas**.
+No todos los pasos están terminados. #168 está mezclado en development, el catálogo
+está en PR #169; galería y tooling tienen commits de checkpoint. No se ha publicado
+main. P01 y posteriores están diseñadas, **no implementadas**.
 
 - PR #168: `feat/wizard-programmatic-video`, base development, HEAD
   `3aaa65cb5b3e5c74e62f99a3856a81279bf12a41`.
 - CI required de ese HEAD: verde. Revisión Cursor previa encontró dos problemas,
   corregidos con tests. La revisión actual no se ejecutó por límite de uso/gasto.
 - No considerar `Cursor Automation: Untitled` como revisión Bugbot completada.
-- Esperar restablecimiento de cuota o autorización expresa de otro revisor.
-  No aumentar gasto ni cambiar el procedimiento unilateralmente.
+- Actualización del usuario (2026-09-06): excepción temporal expresa de Cursor;
+  continuar con revisión independiente de agente + tests locales + CI. No cambiar
+  protecciones ni gasto. No usar admin/force bypass. Retomar Cursor cuando vuelva.
+- #168: mezclado por IAnMove, development `8542bf74`.
+- #169: HEAD `7615a9e929e8b3193e68fb7475c22909018b4259`, 22 tests enfocados locales,
+  lint/tipos/build pasan; 5 hallazgos independientes corregidos. Consultar estado
+  remoto actual antes de afirmar CI verde o merge.
+- 24 coral: aprobación visual explícita del usuario y publicación independiente
+  [referencias v1](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1).
+  74 assets remotos cotejados con hashes, sin medios en Git. No es release de app.
 
 Branch de conservación: `work/procedural-video-pilot-checkpoint`.
 Es un checkpoint, no una rama para mezclar de golpe contra development.
@@ -36,15 +44,16 @@ no se abre una cadena de PRs que incluya repetidamente los commits anteriores.
 
 1. Inspeccionar `git status`, worktrees, PRs y HEAD remotos. No cambiar el checkout
    compartido. Fetch sólo necesario, no force/reset/stash del trabajo ajeno.
-2. Verificar estado de #168 y cuota de revisión. Si sigue bloqueada, informar y
-   no mezclar ni pedir reintentos en bucle.
+2. Verificar PRs y cuota. La excepción temporal de Cursor ya está autorizada;
+   no pedir reintentos en bucle ni esperar cuota mientras pueda revisar otro agente.
 3. Con revisión obtenida, leer hallazgos de HEAD actual y CI; corregir si procede.
    Mezclar normalmente usando comprobación del SHA esperado, nunca admin bypass.
 4. Crear otro worktree temporal/branch desde nuevo origin/development. Cherry-pick
    sólo `5f6dc88e`, inspeccionar compatibilidad con cambios recientes y probar.
-5. PR B → pedir Cursor → esperar revisión/CI actuales → arreglar → mezclar.
+5. PR B (#169) → revisión independiente/CI actuales → arreglar → merge normal.
 6. Repetir con `72e5cdd8`, después `246cb5f8`, cada uno desde development mezclado.
-7. Incorporar documentación, actualizar estados reales e iniciar P01 del roadmap.
+7. Incorporar documentación, P00D selector/referencias y bindings durables; después
+   P01 del roadmap, reutilizando el contrato mínimo de assets.
 8. Continuar fases sólo con dependencias mezcladas y aceptación cumplida. Ante
    dudas complejas, principal; Luna sólo tarea delimitada y resultados revisados.
 
@@ -99,14 +108,30 @@ fuentes/medios en `/tmp/hocus-video3d-neon.Kz8d82`. No modificar o borrar.
 
 Logs fuera de git: `/tmp/hocus-template-review.o8H5is/{render.log,final-tests.log,
 final-build.log,final-lint.log,final-health.log,repro-smoke.log,repro-static-smoke.log}`.
-No copiar clips/pesos al repositorio para conservar evidencia: guardar un archivo
-externo o volver a ejecutar las recetas de prueba.
+No copiar clips/pesos al historial Git. Las referencias originales ya están en la
+publicación externa v1; no sobrescribirlas al volver a ejecutar recetas.
+
+### Worktrees y prueba pintada de la continuación
+
+- Catálogo PR #169: `/tmp/hocus-procedural-phases.g9zon7`, branch
+  `feat/procedural-scene-catalog`; separado del servidor de galería anterior.
+- Documentación: `/tmp/hocus-procedural-plan.jrMCSw`, branch
+  `docs/procedural-video-phases`. No mezclar una pila entera del checkpoint.
+- Prueba pintada: `/tmp/hocus-painted-trial.628k1j`, MP4 en
+  `http://192.168.1.87:41353/scene-template-previews/painted-establishing-v1.mp4`.
+- PNG originales + prompts en el directorio ignorado
+  `app/outputs/procedural-style-trials-v1/` del worktree del catálogo.
+- Dos imágenes generadas con image_gen integrado, no modelos GPU locales;
+  versión exacta de modelo no expuesta. Video procedural real, 4 s/720p/30,
+  personaje estático no articulado. Aprobación visual de esta estética pendiente.
+- Sandbox tiene URLs temporales: no presentarlas como assetId durable de producto.
 
 ## Exit checklist
 
 - [x] AGENTS snapshot y límites de tarea revisados; no se editaron launchers.
 - [x] Destino/ejemplos/captura URL de Pinokio no aplican a estos cambios de lógica/UI.
 - [x] Apps 42003/42004 y cambios de otros agentes preservados.
-- [x] Artefactos generados fuera de git; ninguna descarga/modelo de IA ejecutado.
+- [x] Artefactos fuera de Git; ningún modelo GPU local ni vídeo IA ejecutado.
+  Dos imágenes se generaron con la herramienta integrada, con prompts conservados.
 - [x] CI, revisión, merge y render real distinguidos; no aprobar candidatas por PR.
 - [ ] Completar revisión pendiente y merges secuenciales antes de nuevas fases.

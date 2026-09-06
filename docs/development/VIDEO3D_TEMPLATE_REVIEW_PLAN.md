@@ -111,12 +111,14 @@ No se mezcla ahora un motor nuevo ni se declara que estas 24 candidatas la
 resuelvan. La propuesta recomendada es un editor con dos tipos de escena y
 contratos compartidos; no dos editores ni herramientas de modelado tipo Blender.
 
-## Bloqueo de revisión y evidencia local
+## Historial de revisión y evidencia local
 
 PR #168, HEAD `3aaa65cb5b3e5c74e62f99a3856a81279bf12a41`: 120 tests locales
 en checkout de ese HEAD y build pasan; CI required verde. Se corrigieron dos
 hallazgos iniciales de Cursor, pero su nueva revisión no ha podido ejecutarse por límite
-de uso/gasto. No se ha mezclado ni sustituido el revisor sin autorización.
+de uso/gasto. Posteriormente IAnMove mezcló #168 (`8542bf74`) y autorizó expresamente
+seguir sin Cursor temporalmente. No se cambian protecciones: revisión independiente
+con otro agente y CI siguen siendo condiciones del merge normal.
 
 Piloto local: 27 tests de catálogo/compilación/arte/decisiones; 3 E2E descubiertos
 y ejecutados en `ui/e2e/specs`. Galería con 24 MP4 reales, reproducción/seek y
@@ -129,8 +131,12 @@ Origin validados e índice de archivos. No usa el servidor de desarrollo ni prox
 al backend. Las pruebas de contrato HTTP usan una cabecera MP4 mínima: eso prueba
 el transporte/metadata, no un MP4 válido. Los renders reales se verifican con ffprobe.
 
-No empezar PRs dependientes apilados mientras #168 no tenga revisión completada.
-Guardar por separado commits B/C/plan para reanudarlos desde development actualizado.
+Los 24 originales coral fueron aprobados visualmente y publicados como
+[referencias de estilo/acción](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1),
+no release de aplicación. No reescribir sus sidecars ni atribuirles cambios futuros.
+Continuar B (#169), C1 y C2 secuencialmente desde development actualizado.
+Ver P00D del roadmap para selector con vídeos de referencia y assets de Library
+reemplazables. La prueba pintada adicional no sustituye estos originales.
 
 Para mantener revisables los cambios, C se divide en **C1 galería/editor** y
 **C2 herramienta reproducible**. No se mezclan ~1.800 líneas de UI, pruebas y

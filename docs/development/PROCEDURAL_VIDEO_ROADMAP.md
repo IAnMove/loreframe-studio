@@ -25,12 +25,13 @@ espejo, zoom, LUT o cambio de objeto no aumenta el contador de plantillas.
 - [50 escenarios 3D](procedural-video/SCENES_3D.md)
 - [50 técnicas de acabado](procedural-video/FILTERS.md)
 
-## Estado de partida y bloqueo real
+## Estado de partida y decisiones del usuario
 
 - PR #166: corrección facial mezclada en development, no publicación en main.
 - PR #168: Wizard prepara un formulario visible, con política de assets;
   HEAD `3aaa65cb5b3e5c74e62f99a3856a81279bf12a41`, 120 pruebas locales enfocadas
   y CI required verdes. Dos observaciones iniciales de Cursor corregidas.
+- #168 fue mezclado por IAnMove en development (`8542bf74`, 2026-09-06).
 - Revisión Cursor del HEAD actual **no completada**: límite de uso/gasto.
   «Cursor Automation: success» no equivale a revisión Bugbot del código.
 - Catálogo piloto de 24, compiladores, arte SVG/GLB original y galería:
@@ -42,9 +43,18 @@ espejo, zoom, LUT o cambio de objeto no aumenta el contador de plantillas.
 - Los GLB actuales se renderizan individualmente: su composición no demuestra
   oclusión/iluminación/colisiones entre modelos en un único mundo.
 
-Mientras Cursor esté bloqueado: guardar commits locales y evidencias; no mezclar,
-no aumentar gasto, no sustituir el revisor sin autorización, no apilar PRs
-dependientes. Se puede avanzar documentación y verificaciones locales seguras.
+El usuario autorizó expresamente continuar sin el check de Cursor hasta que vuelva
+su cuota (2026-09-06). Excepción temporal: revisión independiente con otro agente,
+tests locales y CI del HEAD actual antes del merge normal. No cambiar rulesets,
+checks ni límites de gasto; no afirmar «Cursor revisado». Si una protección real
+impide mezclar, detenerse sin bypass. Al recuperar cuota, retomar Cursor.
+
+Los 24 vídeos coral fueron aprobados visualmente como referencias de estilo y
+acción. Se conservan intactos en una publicación de assets, **no release de app**:
+[referencias v1](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1).
+El manifiesto mantiene SHA por MP4/PNG/JSON y procedencia por clip; la aprobación
+posterior no reescribe el estado histórico del sidecar. No aprobar por extensión
+variantes teal, imágenes pintadas o futuros cambios de cámara.
 
 ## Procedimiento obligatorio para cada PR
 
@@ -57,7 +67,8 @@ dependientes. Se puede avanzar documentación y verificaciones locales seguras.
 - [ ] Ejecutar tests locales aplicables, lint, tipos, build y ratchet contra base real.
 - [ ] Revisar diff y archivos staged explícitos: sin medios, pesos, secretos o outputs.
 - [ ] Commit pequeño; registrar SHA y qué validación corresponde a ese SHA.
-- [ ] Abrir PR contra development, con evidencia y limitaciones, pedir Cursor.
+- [ ] Abrir PR contra development, con evidencia y limitaciones; pedir Cursor
+  cuando esté disponible, o documentar la excepción temporal y revisión independiente.
 - [ ] Leer revisión y CI del **HEAD actual**; arreglar hallazgos y repetir pruebas.
 - [ ] Mezclar normalmente sólo cuando estén satisfechas ambas condiciones.
 - [ ] Actualizar estado y seguir desde development mezclado, no desde una pila vieja.
@@ -109,6 +120,7 @@ CI / Cursor / development / render real / aprobado visualmente / main.
 | Fase | PR(s) previstos | Depende de | Resultado verificable |
 |---|---|---|---|
 | P00 | #168, piloto B, C1, C2 | #166 | Wizard seguro, 24 candidatas editables y evidencia |
+| P00D | referencias + selector de assets | B, C1, C2 | 24 acciones con vídeo de referencia y bindings durables de Library |
 | P01 | contrato procedural | P00 | documento de escena/capacidades compatible |
 | P02 | evaluación determinista | P01 | misma evaluación temporal en preview/export |
 | P03 | cámaras 2D | P02 | movimientos y encuadres reutilizables |
@@ -134,7 +146,8 @@ los quince simultáneamente. El número objetivo no justifica rebajar calidad.
 Objetivo: conservar la demo aprobada, preparar Wizard y entregar selección visual.
 Riesgo medio. Owner principal en integración; Luna en arte/tests/galería acotados.
 
-- [ ] Resolver cuota/revisión #168; no considerar resuelto por CI verde.
+- [x] Resolver cómo continuar: #168 mezclado; excepción de Cursor autorizada,
+  revisión independiente + CI siguen siendo obligatorios.
 - [ ] PR piloto B: `features/sceneTemplates/{catalog,compile,sceneBuilders,
   cinemaScenes,musicScenes,spaceScenes,demoScenes,demoArtwork,demoShips}` y tests.
 - [ ] PR piloto C1: galería/ruta/editor-handoff, decisiones versionadas y E2E
@@ -142,12 +155,38 @@ Riesgo medio. Owner principal en integración; Luna en arte/tests/galería acota
 - [ ] PR piloto C2: tooling local reproducible, API cerrada y tests HTTP. Depende
   de C1; separado para no unir servidor de QA y UI en un PR demasiado grande.
 - [ ] Comprobar 24 snapshots, reproducción/seek, cambio de assets, guardado/reapertura.
-- [ ] Publicar inventario de previews fuera de git, URLs de sesión y límites.
+- [x] Publicar originales fuera de git: referencias v1, 74 assets remotos con
+  tamaño/SHA comprobados (72 originales, manifiesto, ZIP).
 - [ ] No promover ni borrar plantillas antiguas sin selección visual del usuario.
 
 Aceptación: A/B/C1/C2 mezclados con evidencia separada; candidatos visibles y editables.
-La aprobación de cada candidato permanece pendiente hasta feedback; esto no impide
-preparar contratos nuevos que no cambien el catálogo aprobado.
+Los 24 originales coral tienen aprobación visual explícita del usuario; no implica
+que todas las futuras escenas o parámetros estén validados. El estado de código,
+CI y merge continúa registrándose por separado.
+
+### P00D — Selector y estilos sin confundir acción, apariencia e identidad
+
+- [ ] Selector dentro del editor con acción, slots y vídeo original de referencia.
+- [ ] Conservar demos SVG/GLB y escenas originales; no regenerarlas al cambiar código.
+- [ ] Referencias remotas opt-in, estado offline/error visible, un vídeo activo;
+  sin descargas masivas al instalar o abrir HocusPocus.
+- [ ] Separar «abrir plantilla actual» de recuperar el snapshot del MP4 original.
+- [ ] Binding de Library conserva assetId, workspace, localización, tipo y metadata;
+  no considerar un nombre o blob URL como identidad durable.
+- [ ] Formulario visible para fondo, sujeto, objetos y primer plano; tipos
+  incompatibles deshabilitados con motivo; no compilar con slots requeridos vacíos.
+- [ ] Reemplazar assets sin alterar la gramática; no llamar generadores por fallback.
+- [ ] Imágenes generadas: acción explícita separada, modelo/proveedor/prompt reales,
+  autorización por medio, espera de resultado y resolución a assetId en Library.
+  Si el upload aún no devuelve identidad, no fingir que queda registrado.
+- [ ] QA barata: cancelación de búsqueda al cambiar workspace, referencias stale,
+  selección visible y roundtrip de IDs; ningún modelo en CI.
+- [x] Prueba local separada con fondo y recorte pintados por image_gen: 4 s/720p/30,
+  export real y snapshot idéntico al guardado. No es un rig ni aprobación visual.
+
+P01 debe reutilizar este pequeño contrato de referencias, no introducir una segunda
+identidad paralela para los mismos assets. P00D puede dividirse en PR de catálogo/
+referencias y PR de bindings/selector; después abordar la generación explícita.
 
 ## P01 — Base pequeña: documento procedural y matriz de capacidades
 
