@@ -66,6 +66,10 @@ snapshot previo a su resultado remoto; no abrir otro PR por esas casillas.
 
 ## R2 — Generación guiada de piezas coherentes
 
+- [ ] Separar packs de boca por pose/vista antes de automatizar múltiples vistas;
+  migración explícita y round-trip compatible del pack legacy global. El R1
+  conserva un solo mapa de bocas por kit: vincularlo a una pose evita aplicar
+  piezas equivocadas, pero **no** habilita dos packs de poses a la vez.
 - [ ] Un piloto con imagen maestra y closed/small/wide/round, frontal primero.
 - [ ] Generación por HocusPocus/MiniMax autorizado, prompts y job IDs conservados;
   comprobar capacidad de referencia. No cambiar de proveedor silenciosamente.
@@ -124,6 +128,8 @@ el tamaño de la imagen decodificada; no evita la asignación inicial del decode
 Preparación por localhost/HTTPS para usar Web Crypto. Los assets se guardan en
 la biblioteca del kit, pero los uploads no equivalen a promoción al catálogo
 canónico de Library. No borrar uploads referenciados por kits.
+UI y backend deben actualizarse juntos: un backend anterior no conserva este
+campo nuevo. No guardar estos kits desde la UI piloto contra el backend antiguo.
 
 La colocación de parches calcula el ajuste de la imagen al lienzo real (horizontal,
 vertical o cuadrado), a diferencia de trasladar directamente los porcentajes del
