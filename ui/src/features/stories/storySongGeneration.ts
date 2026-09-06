@@ -59,6 +59,15 @@ type ReadySongPatch = {
   jobId?: string
 }
 
+export function storySongIdempotencyKey(
+  workspace: string,
+  projectId: string,
+  cueId: string,
+  candidateId: string,
+): string {
+  return `story-song:${workspace}:${projectId}:${cueId}:${candidateId}`
+}
+
 function songGenerationProvenance(
   input: GenerateStoryCueSongInput,
   candidateId: string,
@@ -309,6 +318,12 @@ async function generateRemoteStorySong(
       count: 1,
       model,
       workspace: input.workspace,
+      idempotency_key: storySongIdempotencyKey(
+        input.workspace,
+        input.projectId,
+        input.cueId,
+        pending.id,
+      ),
       provenance: songGenerationProvenance(input, pending.id, version),
     }, watchers)
   const rendered = result.candidates[0]
