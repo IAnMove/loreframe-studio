@@ -25,29 +25,25 @@ test('every Wizard-promised action has an identified matrix function', async () 
   }
 })
 
-test('stageSeriesComic is a domain operation and is not a Wizard capability', async () => {
+test('stageSeriesComic is the Series comic domain operation exposed as a Wizard capability', async () => {
   const { AGENT_ACTION_TYPES } = await import('../src/features/agent/agentActionTypes.ts')
+  const { listCapabilities } = await import('../src/features/agent/capabilityRegistry.ts')
   const actions = readFileSync(new URL('../src/features/series/actions.ts', import.meta.url), 'utf8')
   assert.match(actions, /export async function stageSeriesComic/)
-  assert.equal(AGENT_ACTION_TYPES.includes('stage_series_comic'), false)
+  assert.equal(AGENT_ACTION_TYPES.includes('stage_series_comic'), true)
+  assert.ok(listCapabilities().some(item => item.name === 'stage_series_comic'))
   const row = matrix.operations.find(item => item.id === 'series.comic.stage')
-  assert.equal(row.classification, 'no_expuesta')
+  assert.equal(row.classification, 'operativa')
   assert.equal(row.phase, 'L6')
-  assert.equal(row.wizard_capability, '')
+  assert.equal(row.wizard_capability, 'stage_series_comic')
 })
 
-test('Wizard context still advertises a manual available list and empty blocked', () => {
+test('Wizard context derives availability with reasons instead of a manual empty blocked list', () => {
   const source = readFileSync(new URL('../src/features/agent/wizardContext.ts', import.meta.url), 'utf8')
-  assert.match(source, /blocked: \[\]/)
-  assert.deepEqual(matrix.wizard_context.blocked, [])
-  for (const name of matrix.wizard_context.story_lab) {
-    assert.match(source, new RegExp(`'${name}'`))
-  }
-  for (const name of matrix.wizard_context.series_lab) {
-    assert.match(source, new RegExp(`'${name}'`))
-  }
-  assert.equal(source.includes("'stage_story_comic'"), false)
-  assert.equal(source.includes("'stage_story_video'"), false)
+  assert.match(source, /projectWizardContextCapabilities/)
+  assert.equal(source.includes('blocked: []'), false)
+  assert.equal(matrix.wizard_context.availability.model, 'derived')
+  assert.ok(matrix.wizard_context.series_lab.includes('stage_series_comic'))
 })
 
 test('H3 finalization fixture remains the Labs prompt freeze', () => {

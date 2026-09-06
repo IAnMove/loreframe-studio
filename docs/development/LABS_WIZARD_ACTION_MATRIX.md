@@ -28,8 +28,8 @@ Status: freeze of current contracts. This document does not implement the later 
 | `partial_global_profile_guard` | L2 | SeriesLabPanel global-profile equality omits writingBaseUrl, flowShift, audioShift, modelProfile. |
 | `approve_all_replaces_chosen_takes` | L3 | Approve all / review_series_attempts all_latest can replace an already chosen take with a newer attempt. |
 | `script_shots_dialogue_desync` | L4 | update_series_episode can change script dialogue while shots.dialogueBeats stay old; shot_generation_prompt uses the old line. |
-| `blocked_always_empty` | L5 | wizardContext.contextCapabilities always returns blocked: [] and a manual available list. |
-| `stage_series_comic_unregistered` | L6 | stageSeriesComic is a domain operation used by UI but is not an AGENT_ACTION_TYPES capability. |
+| `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
+| `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
 | `wizard_auto_approves_canon` | L7 | UI requires approved canon to create an episode; Wizard create_series_episode may auto-approve. |
 | `false_success_invisible_tab` | L8 | open_story_section can report open when StoryLabPanel discards a tab not visible for the project type. |
 | `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
@@ -86,7 +86,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `series.episode.edit` | series | condicional | L4 | `update_series_episode` | registrada_defectuosa | `updateSeriesEpisode` | `tests/test_series_episode_update_router.py` |
 | `series.plan.generate` | series | operativa | L6 | `generate_series_plan` | disponible | `generateSeriesPlan` | `tests/test_series_planning.py` |
 | `series.plan.apply` | series | operativa | L6 | `apply_series_plan` | disponible | `applySeriesPlan` | `tests/test_series_planning.py` |
-| `series.comic.stage` | series | no_expuesta | L6 | `—` | dominio_sin_capacidad | `stageSeriesComic` | `ui/tests/seriesComicProvenance.test.ts` |
+| `series.comic.stage` | series | operativa | L6 | `stage_series_comic` | disponible | `stageSeriesComic` | `ui/tests/seriesComicProvenance.test.ts` |
 | `series.shots.render` | series | condicional | L1 | `render_series_shots` | registrada_defectuosa | `renderSeriesShots` | `tests/test_series_render.py` |
 | `series.shots.edit_prompt_cast` | series | operativa | L10 | `update_series_episode` | disponible | `update_series_episode` | `ui/tests/seriesShotsAccessibility.test.tsx` |
 | `series.shots.duration` | series | operativa | L4 | `—` | dominio_sin_capacidad | `plan_series_shot_duration` | `ui/tests/seriesShotDurationControl.test.tsx` |
@@ -102,8 +102,8 @@ Status: freeze of current contracts. This document does not implement the later 
 | `h3.policy.e2e` | shared | condicional | H-A | `—` | dominio_sin_capacidad | `adapt_clip_plans_for_h3` | `tests/test_h3_policy_language_audio_creative.py` |
 | `h3.audio.contradictions` | shared | condicional | H-B | `—` | dominio_sin_capacidad | `apply_h3_audio_policy` | `tests/test_h3_policy_language_audio_creative.py` |
 | `h3.creative.extra_line` | shared | condicional | H-C | `—` | dominio_sin_capacidad | `writing_contract` | `tests/test_h3_policy_language_audio_creative.py` |
-| `wizard.context.blocked` | wizard | condicional | L5 | `—` | dominio_sin_capacidad | `contextCapabilities` | `ui/tests/wizardContext.test.mjs` |
-| `wizard.schema.sent` | wizard | condicional | L5 | `—` | dominio_sin_capacidad | `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA` | `ui/tests/languageIntent.test.ts` |
+| `wizard.context.blocked` | wizard | operativa | L5 | `—` | disponible | `projectWizardContextCapabilities` | `ui/tests/wizardLabsL5L6.test.mjs` |
+| `wizard.schema.sent` | wizard | operativa | L5 | `—` | disponible | `wizardLlmRequestSchema` | `ui/tests/wizardLabsL5L6.test.mjs` |
 
 ### Operation details
 
@@ -843,17 +843,17 @@ Status: freeze of current contracts. This document does not implement the later 
 - Control: Adapt to comic
 - UI handler: `stageSeriesComic`
 - Domain: `stageSeriesComic` in `ui/src/features/series/actions.ts`
-- Adapter: `—`
+- Adapter: `seriesLab.stageComic`
 - API: `comic handoff`
-- Wizard capability / schema: `—` / `—`
-- In Wizard context snapshot: False
-- Available (strict): False
+- Wizard capability / schema: `stage_series_comic` / `capabilityRegistry.stage_series_comic.inputSchema`
+- In Wizard context snapshot: True
+- Available (strict): True
 - Preconditions: Episode with plan
 - Persistence: comic project + provenance
 - Presentation: comics
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Domain operation exists and is used by UI. Not in AGENT_ACTION_TYPES. Expose an equivalent Wizard capability in L6; do not build another comic pipeline.
+- Notes: Wizard reuses `stageSeriesComic`. `actor=wizard` from the adapter; UI keeps `actor=user`. No second comic pipeline.
 
 #### `series.shots.render` — Render selected / missing / failed / unapproved shots
 
@@ -1114,29 +1114,29 @@ Status: freeze of current contracts. This document does not implement the later 
 
 - Control: wizardContext.capabilities
 - UI handler: `contextCapabilities`
-- Domain: `contextCapabilities` in `ui/src/features/agent/wizardContext.ts`
+- Domain: `projectWizardContextCapabilities` in `ui/src/features/agent/wizardCapabilityAvailability.ts`
 - Adapter: `—`
 - API: `—`
 - Wizard capability / schema: `—` / `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA`
-- In Wizard context snapshot: False
-- Available (strict): False
+- In Wizard context snapshot: True
+- Available (strict): True
 - Preconditions: Active tab
 - Persistence: none (snapshot)
 - Presentation: Wizard system prompt context
 - Prompt fixture: `n/a`
-- Blocking defect: `blocked_always_empty`
-- Notes: contextCapabilities always returns blocked: []. Availability is a manual per-tab list, not derived from registry preconditions.
+- Blocking defect: `none`
+- Notes: Availability is derived: executable, needs_data, blocked, requires_navigation. Off-tab Labs stay visible as requires_navigation.
 
 #### `wizard.schema.sent` — Send structured action schema to the LLM
 
 - Control: AgentAssistantPanel json_schema
-- UI handler: `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA`
-- Domain: `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA` in `ui/src/features/agent/agentActions.ts`
+- UI handler: `wizardLlmRequestSchema`
+- Domain: `wizardLlmRequestSchema` in `ui/src/features/agent/agentActions.ts`
 - Adapter: `capabilityRunner`
 - API: `generateLlmText`
 - Wizard capability / schema: `—` / `HOCUSPOCUS_AGENT_RESPONSE_SCHEMA`
 - In Wizard context snapshot: False
-- Available (strict): False
+- Available (strict): True
 - Preconditions: Wizard panel mounted
 - Persistence: conversation
 - Presentation: assistant
@@ -1277,7 +1277,7 @@ Each inventory component has a classification and a phase destination. Labels in
 
 - Every audited control group has a classification and a phase destination.
 - Every Wizard-promised action (`AGENT_ACTION_TYPES`) has an identified function in this matrix.
-- `stageSeriesComic` is recorded as domain-only (`no_expuesta`, L6).
+- `stageSeriesComic` is exposed as Wizard capability `stage_series_comic` (L6).
 - Effective prompts reuse `tests/fixtures/h3_prompt_fase1_expected.json`; later L4/L12/H-* PRs must not silently regenerate it.
 
 This freeze does not execute models and does not change runtime behaviour.

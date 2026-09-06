@@ -23,6 +23,7 @@ import type {
   AgentGenerateStoryVisualsAction,
   AgentRenderSeriesShotsAction,
   AgentReviewSeriesAttemptsAction,
+  AgentStageSeriesComicAction,
   AgentStageStoryComicAction,
   AgentStartDirectorProductionAction,
   AgentStageStoryVideoAction,
@@ -138,7 +139,7 @@ const LANGUAGE_AWARE_CAPABILITIES = new Set<AgentAction['type']>([
   'prepare_video', 'prepare_image', 'prepare_audio', 'queue_sfx_pack', 'prepare_3d',
   'create_story', 'update_story', 'generate_story_section', 'stage_story_comic',
   'stage_story_video', 'configure_story_song', 'stage_story_music_video',
-  'create_series_episode', 'update_series_episode', 'generate_series_plan',
+  'create_series_episode', 'update_series_episode', 'generate_series_plan', 'stage_series_comic',
   'create_rhythmic_3d_video', 'create_comic',
 ])
 
@@ -816,6 +817,56 @@ defineCapability<AgentAssembleSeriesEpisodeAction>({
   inputSchema: { type: 'object', additionalProperties: false, properties: { type: { const: 'assemble_series_episode' }, confirm: { const: true } }, required: ['type', 'confirm'] }, risk: 'compute', confirmation: 'required', progress: 'Ensamblando el episodio de Series Lab…',
   resolve(raw) { return raw.confirm === true ? { type: 'assemble_series_episode', seriesTitle: text(raw.series_title, 300), targetEpisodeTitle: text(raw.target_episode_title, 300), confirm: true } : null },
   validate(action) { return action.confirm === true ? [] : ['confirmation is required'] }, async prepare(action) { return action }, async execute(action, context) { return context.adapters.seriesLab.assembleEpisode(action) }, correlate(_action, outcome) { return outcome.target }, async track(_action, outcome) { return outcome }, report: { targetKind: 'series_episode', successState: 'completed' }, summarize(_action, outcome) { return outcome.message }, presentation: { destination: 'series_lab', anchors: ['review', 'assembly'], replay: 'atomic' },
+})
+
+defineCapability<AgentStageSeriesComicAction>({
+  name: 'stage_series_comic',
+  title: 'Stage a Series Lab episode as an editable comic',
+  description: 'Create a new editable Comic Director project from one exact Series episode, then verify its comic ID. It does not draw panels.',
+  useWhen: 'The user explicitly asks to turn the active or exactly named Series episode into a filled comic without rendering artwork.',
+  parameters: ['series_title', 'target_episode_title', 'series_id', 'episode_id', 'title', 'page_count', 'panels_per_page', 'confirm'],
+  inputSchema: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      type: { const: 'stage_series_comic' },
+      series_title: { type: 'string', maxLength: 300 },
+      target_episode_title: { type: 'string', maxLength: 300 },
+      series_id: { type: 'string', maxLength: 160 },
+      episode_id: { type: 'string', maxLength: 160 },
+      title: { type: 'string', maxLength: 300 },
+      page_count: { type: 'integer', minimum: 1, maximum: 100 },
+      panels_per_page: { type: 'integer', minimum: 1, maximum: 12 },
+      confirm: { const: true },
+    },
+    required: ['type', 'confirm'],
+  },
+  risk: 'edit', confirmation: 'required', progress: 'Convirtiendo el episodio en un cómic editable…',
+  resolve(raw) {
+    if (raw.confirm !== true) return null
+    return {
+      type: 'stage_series_comic',
+      seriesTitle: text(raw.series_title, 300),
+      targetEpisodeTitle: text(raw.target_episode_title, 300),
+      seriesId: text(raw.series_id, 160),
+      episodeId: text(raw.episode_id, 160),
+      title: text(raw.title, 300),
+      pageCount: Math.round(boundedNumber(raw.page_count, 1, 100, 4)),
+      panelsPerPage: Math.round(boundedNumber(raw.panels_per_page, 1, 12, 4)),
+      confirm: true,
+    }
+  },
+  validate(action) {
+    return action.confirm === true && action.pageCount >= 1 && action.panelsPerPage >= 1
+      ? []
+      : ['confirmed page and panel counts are required']
+  },
+  async prepare(action) { return action },
+  async execute(action, context) { return context.adapters.seriesLab.stageComic(action) },
+  correlate(_action, outcome) { return outcome.target },
+  async track(_action, outcome) { return outcome },
+  report: { targetKind: 'comic', successState: 'completed' },
+  summarize(_action, outcome) { return outcome.message },
+  presentation: { destination: 'comics', anchors: ['project', 'pages', 'panels'], replay: 'atomic' },
 })
 
 defineCapability<AgentCreateComicAction>({

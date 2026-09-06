@@ -4,7 +4,7 @@ import { rememberedCharacterKitLibrary } from '../characters/session'
 import type { SeriesAssemblyJob } from '../series/assemblyContract'
 import type { SeriesJobStatus } from '../series/types'
 import type { MediaFilter } from '../../types'
-import type { AgentApply3dRhythmAction, AgentApplySeriesPlanAction, AgentApplyStoryProposalAction, AgentApproveStorySectionAction, AgentApproveStoryVisualsAction, AgentAssembleSeriesEpisodeAction, AgentAttachStudioReferencesAction, AgentCommitSeriesCanonAction, AgentConfigureStudioLorasAction, AgentConfigureStorySongAction, AgentCreateComicAction, AgentCreateSeriesEpisodeAction, AgentCreateStoryAction, AgentCreateWorkspaceAction, AgentCreateWorkspaceCollectionAction, AgentDownloadModelAction, AgentGenerateComicAction, AgentGenerateSeriesPlanAction, AgentGenerateStorySectionAction, AgentGenerateStorySongAction, AgentGenerateStoryVisualsAction, AgentPrepare3dAction, AgentPrepareAudioAction, AgentPrepareImageAction, AgentPrepareVideoAction, AgentQueueSfxPackAction, AgentRemoveBackgroundAction, AgentRenderSeriesShotsAction, AgentReviewSeriesAttemptsAction, AgentSelectWorkspaceAction, AgentStartGenerationAction, AgentStageStoryComicAction, AgentStartDirectorProductionAction, AgentStageStoryMusicVideoAction, AgentStageStoryVideoAction, AgentUpdateSeriesEpisodeAction, AgentUpdateStoryAction, AgentUpdateWorkspaceCollectionAction } from './agentActions'
+import type { AgentApply3dRhythmAction, AgentApplySeriesPlanAction, AgentApplyStoryProposalAction, AgentApproveStorySectionAction, AgentApproveStoryVisualsAction, AgentAssembleSeriesEpisodeAction, AgentAttachStudioReferencesAction, AgentCommitSeriesCanonAction, AgentConfigureStudioLorasAction, AgentConfigureStorySongAction, AgentCreateComicAction, AgentCreateSeriesEpisodeAction, AgentCreateStoryAction, AgentCreateWorkspaceAction, AgentCreateWorkspaceCollectionAction, AgentDownloadModelAction, AgentGenerateComicAction, AgentGenerateSeriesPlanAction, AgentGenerateStorySectionAction, AgentGenerateStorySongAction, AgentGenerateStoryVisualsAction, AgentPrepare3dAction, AgentPrepareAudioAction, AgentPrepareImageAction, AgentPrepareVideoAction, AgentQueueSfxPackAction, AgentRemoveBackgroundAction, AgentRenderSeriesShotsAction, AgentReviewSeriesAttemptsAction, AgentStageSeriesComicAction, AgentSelectWorkspaceAction, AgentStartGenerationAction, AgentStageStoryComicAction, AgentStartDirectorProductionAction, AgentStageStoryMusicVideoAction, AgentStageStoryVideoAction, AgentUpdateSeriesEpisodeAction, AgentUpdateStoryAction, AgentUpdateWorkspaceCollectionAction } from './agentActions'
 import type {
   AgentAttachVideoclipAlternativeSongAction,
   AgentMountVideoclipAlternativeSongAction,
@@ -109,6 +109,7 @@ export interface SeriesLabAdapter {
   reviewAttempts(action: AgentReviewSeriesAttemptsAction): Promise<AdapterOutcome>
   commitCanon(action: AgentCommitSeriesCanonAction): Promise<AdapterOutcome>
   assembleEpisode(action: AgentAssembleSeriesEpisodeAction): Promise<AdapterOutcome>
+  stageComic(action: AgentStageSeriesComicAction): Promise<AdapterOutcome>
 }
 export interface ComicAdapter {
   open(): Promise<AdapterOutcome>
@@ -552,6 +553,10 @@ export function createDefaultApplicationAdapters(): WizardApplicationAdapters {
       if (!outcome.taskId) throw new Error('Series Lab no devolvió el job de ensamblado iniciado.')
       return outcome
     },
+    async stageComic(action) {
+      const { resolveSeriesComicCommand, stageSeriesComic } = await import('../series/adapters')
+      return presentSeriesComicResult(await stageSeriesComic(resolveSeriesComicCommand(action)))
+    },
   }
   adapters.comic = {
     open: () => navigate('comics'),
@@ -993,6 +998,20 @@ async function seriesEpisodeOutcome(message: string): Promise<AdapterOutcome> {
   const episode = series?.episodesById[state.activeEpisodeId]
   if (!series?.id || !episode?.id) throw new Error('Series Lab no devolvió el episodio canónico creado o actualizado.')
   return { message, target: { kind: 'series_episode', id: episode.id, title: `${series.title} · ${episode.title}` } }
+}
+
+async function presentSeriesComicResult(result: CommandResult): Promise<AdapterOutcome> {
+  await navigate('comics')
+  const { useComicStore } = await import('../comics/store')
+  const comic = useComicStore.getState().project
+  const meta = result.artifacts[0]?.metadata || {}
+  const summary = typeof meta.summary === 'string' ? meta.summary : 'Cómic de Series Lab preparado.'
+  if (!comic?.id) throw new Error('Series Lab no correlacionó el cómic editable.')
+  return {
+    message: summary,
+    target: { kind: 'comic', id: comic.id, title: comic.title },
+    metadata: meta,
+  }
 }
 
 async function presentSeriesSliceResult(result: CommandResult): Promise<AdapterOutcome> {

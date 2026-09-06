@@ -100,12 +100,13 @@ def test_known_gaps_and_unregistered_series_comic_are_frozen():
     assert "blocked_always_empty" in gap_ids
     comic = next(row for row in data["operations"] if row["id"] == "series.comic.stage")
     assert comic["domain_function"] == "stageSeriesComic"
-    assert comic["wizard_capability"] == ""
-    assert comic["classification"] == "no_expuesta"
+    assert comic["wizard_capability"] == "stage_series_comic"
+    assert comic["classification"] == "operativa"
     assert comic["phase"] == "L6"
-    assert data["wizard_context"]["blocked"] == []
+    assert data["wizard_context"]["availability"]["model"] == "derived"
     wizard = next(row for row in data["operations"] if row["id"] == "wizard.context.blocked")
-    assert wizard["blocking_defect"] == "blocked_always_empty"
+    assert wizard["blocking_defect"] == ""
+    assert wizard["wizard_available"] is True
 
 
 def test_h3_prompt_fixtures_are_reused_not_copied():
