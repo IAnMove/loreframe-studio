@@ -885,5 +885,30 @@
     "cameraN": "Camera {{n}}",
     "eventN": "Event {{n}}",
     "photoCamera": "Photo camera · {{label}}"
+  },
+  "stage": {
+    "badge": "3D stage",
+    "compositor": "2.5D compositor",
+    "world": "3D stage",
+    "play": "Play",
+    "pause": "Pause",
+    "help": "Metres, Y-up. Clip identity is index plus the exact glTF name. Local GLB files stay in the browser; they are not uploaded.",
+    "clipIndex": "Clip index",
+    "clipName": "Exact name",
+    "noClip": "No clip",
+    "exactName": "Running",
+    "eye": "eye x {{x}}",
+    "slot": {
+      "subject_1": "Subject 1",
+      "subject_2": "Subject 2",
+      "background": "Background",
+      "prop": "Prop"
+    },
+    "family": {
+      "establishment": "Establishment",
+      "orbit": "Orbit",
+      "follow": "Follow",
+      "product": "Product"
+    }
   }
 }

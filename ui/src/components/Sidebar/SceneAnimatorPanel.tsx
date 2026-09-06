@@ -32,6 +32,7 @@ import { CylinderPanoramaComparison } from './CylinderPanoramaComparison'
 import { CharacterKitLibraryPanel } from '../../features/characters/CharacterKitLibraryPanel'
 import type { CharacterKitEditorTab } from '../../features/characters/characterKitGuide'
 import { listenForAgentSceneControl, listenForAgentSceneRhythm, listenForAgentSceneWorkflow } from '../../features/agent/agentUiBus'
+import { Scene3DWorkspace } from '../../features/scene3d/Scene3DWorkspace'
 
 type Point = { x: number; y: number; scale: number; opacity?: number; rotation?: number }
 type AnimatorLayerType = SceneLayerType
@@ -571,6 +572,7 @@ export function SceneAnimatorPanel() {
   const [previewWidth, setPreviewWidth] = useState(1280)
   const [clipsByLayer, setClipsByLayer] = useState<Record<string, string[]>>({})
   const [clipDurationsByLayer, setClipDurationsByLayer] = useState<Record<string, number>>({})
+  const [stageMode, setStageMode] = useState<'compositor' | 'world3d'>('compositor')
   const canvasRef = useRef<HTMLDivElement>(null)
   const animationRef = useRef<number | null>(null)
   const recordingAnimationRef = useRef<number | null>(null)
@@ -2940,7 +2942,16 @@ export function SceneAnimatorPanel() {
       </div>
       {selected && isVisualLayer(selected) && selected.type !== 'model3d' && selected.type !== 'effect' && <button onClick={() => updateLayer(selected.id, layer => ({ ...layer, fill: !layer.fill, transform: { ...layer.transform, x: 50, y: 50, scale: 1 }, animation: mapSceneAnimationPoints(layer, point => ({ ...point, x: 50, y: 50, scale: 1 })) }))} className={`mb-3 rounded border px-2 py-1 text-[10px] ${selected.fill ? 'border-accent-blue bg-accent-blue/15 text-accent-blue' : 'border-border bg-bg-primary text-text-secondary'}`}>{selected.fill ? t('animator.fillEnabled') : t('animator.fillScreen')}</button>}
       {selected && isVisualLayer(selected) && selected.type !== 'model3d' && selected.type !== 'effect' && <button onClick={() => { sendToBack(selected.id); applyParallaxPreset(selected.id, 'background') }} className="mb-3 ml-1 rounded border border-border bg-bg-primary px-2 py-1 text-[10px] text-text-secondary">{t('animator.useAsBackground')}</button>}
-      <div className="flex w-full justify-center">
+      <div className="mb-2 flex flex-wrap gap-1" data-testid="video3d-stage-mode">
+        <button type="button" onClick={() => setStageMode('compositor')} className={`rounded border px-2 py-1 text-[9px] ${stageMode === 'compositor' ? 'border-accent-blue bg-accent-blue/15 text-accent-blue' : 'border-border text-text-muted'}`}>{t(scene3dKey('stage.compositor'))}</button>
+        <button type="button" onClick={() => {
+          if (animationRef.current) cancelAnimationFrame(animationRef.current)
+          animationRef.current = null
+          setPlaying(false)
+          setStageMode('world3d')
+        }} className={`rounded border px-2 py-1 text-[9px] ${stageMode === 'world3d' ? 'border-cyan-300 bg-cyan-400/10 text-cyan-100' : 'border-border text-text-muted'}`}>{t(scene3dKey('stage.world'))}</button>
+      </div>
+      {stageMode === 'world3d' ? <div className="flex w-full justify-center"><div style={{ width: '100%', maxWidth: `${68 * scene.width / scene.height}vh` }}><Scene3DWorkspace width={scene.width} height={scene.height} /></div></div> : <div className="flex w-full justify-center">
       <div ref={canvasRef} className="relative isolate w-full overflow-hidden rounded-lg border border-border bg-[#0b1020]" style={{ aspectRatio: `${scene.width} / ${scene.height}`, maxWidth: `${68 * scene.width / scene.height}vh` }}>
         {[...scene.layers].sort((a, b) => a.z - b.z).map(renderLayer)}
         {composition.showGrid && <div className="pointer-events-none absolute inset-0 z-[990] opacity-35" style={{ backgroundImage: 'linear-gradient(to right, rgba(125,211,252,.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(125,211,252,.55) 1px, transparent 1px)', backgroundSize: `${composition.gridSize}% ${composition.gridSize}%` }} />}
@@ -2952,7 +2963,7 @@ export function SceneAnimatorPanel() {
         {flash && <div className="pointer-events-none absolute z-[999]" style={{ left: `${flash.x}%`, top: `${flash.y}%` }}><span className="absolute -left-6 -top-6 h-12 w-12 rounded-full border-2 border-white/90 animate-ping" /><span className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full bg-white shadow-[0_0_20px_8px_rgba(96,165,250,.9)]" /></div>}
         <div className="absolute inset-x-0 bottom-0 z-[1000] h-1 bg-black/40"><div className="h-full bg-accent-blue" style={{ width: `${progress * 100}%` }} /></div>
       </div>
-      </div>
+      </div>}
       <p className="mt-2 text-[9px] text-text-muted">{t('animator.canvasHelp')}</p>
       <SceneTimeline
         layers={scene.layers}

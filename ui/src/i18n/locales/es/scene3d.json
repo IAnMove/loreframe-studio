@@ -885,5 +885,30 @@
     "cameraN": "Cámara {{n}}",
     "eventN": "Evento {{n}}",
     "photoCamera": "Cámara fotográfica · {{label}}"
+  },
+  "stage": {
+    "badge": "Escenario 3D",
+    "compositor": "Compositor 2,5D",
+    "world": "Escenario 3D",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "help": "Metros, Y-up. La identidad del clip es índice más el nombre glTF exacto. Los GLB locales se quedan en el navegador; no se suben.",
+    "clipIndex": "Índice de clip",
+    "clipName": "Nombre exacto",
+    "noClip": "Sin clip",
+    "exactName": "Running",
+    "eye": "ojo x {{x}}",
+    "slot": {
+      "subject_1": "Sujeto 1",
+      "subject_2": "Sujeto 2",
+      "background": "Fondo",
+      "prop": "Atrezo"
+    },
+    "family": {
+      "establishment": "Establecimiento",
+      "orbit": "Órbita",
+      "follow": "Seguimiento",
+      "product": "Producto"
+    }
   }
 }

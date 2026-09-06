@@ -1,0 +1,17 @@
+export type {
+  Scene3DCamera,
+  Scene3DCameraFamily,
+  Scene3DClipCatalogEntry,
+  Scene3DClipError,
+  Scene3DClipRef,
+  Scene3DDocument,
+  Scene3DLight,
+  Scene3DSlot,
+  Scene3DSlotId,
+  Vec3,
+} from './types.ts'
+export { cameraEyeAtTime, orbitEye, projectPoint } from './camera.ts'
+export { clipBindingError, resolveScene3DClip } from './clips.ts'
+export { scene3dClipLocalTime, scene3dFrameCount, scene3dFrameTime } from './clock.ts'
+export { cloneScene3DDocument, createDefaultScene3DDocument, parseScene3DDocument } from './document.ts'
+export { hashSoftwareFrame, renderScene3DSoftware } from './softwareRender.ts'

@@ -1,9 +1,9 @@
 # Procedural 3D scene spec (G3)
 
-Status: design only. No engine, UI, or `_launch_runtime.py` change ships with
-this document. Playback and HTTP inspection remain blocked on the catalog
-resolver contract (GROK-API-001, mailbox) and on explicit ownership of
-compositor hotspots.
+Status: vertical in Video 3D. The 2.5D compositor stays default. A **3D stage**
+mode lives in `ui/src/features/scene3d/` and is selected with a toggle in
+Video 3D. Private Meshy GLBs stay off git. `_launch_runtime.py` is still not
+mounted for G2.
 
 Related: [GLB animation import contract](GLB_ANIMATION_IMPORT_CONTRACT.md)
 (`inspect_glb`, schema `glb-inspection-v1`).
@@ -44,11 +44,13 @@ selector must use that pair. Human labels must not rename clips.
 | B | Add a **separate scene mode** with a real graph (nodes, camera, light, clips by id) beside the compositor | Yes | Medium | Proposed minimum. |
 | C | Replace the compositor with a general 3D engine | No | High | Rejected. Breaks Character Kits, atmospheres, 2.5D recipes, browser capture. |
 
-### Decision (proposed, not implemented)
+### Decision
 
-Ship **B** only after G2’s resolver contract and hotspot ownership are
-agreed. Mode A remains the default for existing templates and the Omarchy
-compositor work owned by the principal.
+Ship **B** as a sibling, not a replacement. Video 3D keeps the 2.5D compositor
+as the default (`stageMode=compositor`). The 3D stage lives in
+`ui/src/features/scene3d/` and is selected with the 2.5D | 3D toggle. G2’s
+resolver remains unmounted; local GLB files are read in the browser only.
+Mode A remains the path for existing templates and the Omarchy compositor work.
 
 Criteria for choosing B for a shot: more than one mesh must share space,
 occlusion, a camera move in world units, or a light. Otherwise stay on A.
