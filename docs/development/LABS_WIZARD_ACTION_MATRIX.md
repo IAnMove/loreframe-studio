@@ -34,7 +34,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `false_success_invisible_tab` | L8 | Addressed: open_story_section resolves a visible tab or explains incompatibility; it never claims an invisible tab opened. |
 | `t2v_double_mode_and_image_requirements` | L9 | Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V. |
 | `voice_bible_not_h3` | L10 | Series voice bible fields persist but do not change the inspected H3 shot prompt. |
-| `ace_labelled_as_minimax` | L11 | StoryMusicSettingsBar uses isLocalMusicModel, so ACE-Step is labelled MiniMax Music 3 local. |
+| `ace_labelled_as_minimax` | L11 | Addressed: StoryMusicSettingsBar names ACE, MiniMax Music 3 local and MiniMax API from the effective model. |
 | `runtime_calls_omit_explicit_policy` | H-A | Addressed: runtime adapt_clip_plans_for_h3 now passes effective policy; ref2va quote path uses models-safe language tags. Default remains native when omitted. |
 | `audio_policy_contradictions` | H-B | Addressed: plan vs send recorded on existing Director provenance fields; quoted 'Qué silencio' is dialogue, not a mute order. |
 | `creative_does_not_add_dialogue_in_cited_tests` | H-C | Addressed: Creative extra lines come from the LLM transport, not a canned post-LLM sentence. Faithful and 'only these lines' keep extras out. |
@@ -59,7 +59,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `story.relationships.edit` | story | operativa | L9 | `update_story` | disponible | `updateFilledStory` | `ui/tests/storyLabResponsive.test.tsx` |
 | `story.structure.edit` | story | operativa | L9 | `update_story` | disponible | `updateFilledStory` | `ui/tests/storyLabResponsive.test.tsx` |
 | `story.music.configure` | story | operativa | L11 | `configure_story_song` | disponible | `configureStorySong` | `ui/tests/storyMusicModel.test.ts` |
-| `story.music.generate` | story | condicional | L11 | `generate_story_song` | registrada_defectuosa | `generateStorySong` | `ui/tests/storySongRecovery.test.mjs` |
+| `story.music.generate` | story | condicional | L11 | `generate_story_song` | disponible | `generateStorySong` | `ui/tests/storySongRecovery.test.mjs` |
 | `story.music.import` | story | operativa | L11 | `attach_videoclip_alternative_song` | registrada_fuera_de_contexto | `attachAlternativeSong` | `ui/tests/alternativeSongs.test.tsx` |
 | `story.trailer.recipe` | story | condicional | L9 | `update_story` | disponible | `updateFilledStory` | `ui/tests/trailerDefaults.test.mjs` |
 | `story.productions.comic` | story | condicional | L5 | `stage_story_comic` | registrada_fuera_de_contexto | `stageStoryComic` | `ui/tests/storyComicProgress.test.mjs` |
@@ -68,7 +68,7 @@ Status: freeze of current contracts. This document does not implement the later 
 | `story.productions.director` | story | operativa | L7 | `start_director_production` | disponible | `startDirectorProduction` | `ui/tests/storyProductionController.test.ts` |
 | `story.productions.quick_batch` | story | operativa | L9 | `—` | dominio_sin_capacidad | `startQuickVideoBatch` | `ui/tests/quickVideoBatchMode.test.tsx` |
 | `story.assembly.history` | story | operativa | L9 | `—` | dominio_sin_capacidad | `startDirectorProduction` | `tests/test_story_montage_clip_history_ui.py` |
-| `story.music.legacy_drawer` | story | no_expuesta | L11 | `—` | dominio_sin_capacidad | `StoryMusicProductionLegacyDrawer` | `ui/tests/storySongRecovery.test.mjs` |
+| `story.music.legacy_drawer` | story | no_expuesta | L11 | `—` | dominio_sin_capacidad | `—` | `ui/tests/storySongRecovery.test.mjs` |
 | `story.prepare.cancel_recover` | story | operativa | L6 | `resume_task` | registrada_fuera_de_contexto | `resumeStoryGeneration` | `ui/tests/storySongRecovery.test.mjs` |
 | `series.nav.open_section` | series | solo_navegacion | L8 | `open_series_section` | disponible | `open_series_section` | `ui/tests/seriesResponsive.test.tsx` |
 | `series.library.create` | series | condicional | L6 | `create_series_episode` | disponible | `create_series_project` | `tests/test_series_library.py` |
@@ -388,13 +388,13 @@ Status: freeze of current contracts. This document does not implement the later 
 - API: `generateStoryMusicCandidates / startStoryMusicCandidatesJob`
 - Wizard capability / schema: `generate_story_song` / `capabilityRegistry.generate_story_song.inputSchema`
 - In Wizard context snapshot: True
-- Available (strict): False
+- Available (strict): True
 - Preconditions: Configured cue; music model
 - Persistence: music job + candidates
 - Presentation: music tab / activity
 - Prompt fixture: `n/a`
-- Blocking defect: `ace_labelled_as_minimax`
-- Notes: StoryMusicSettingsBar labels ACE as MiniMax when isLocalMusicModel is true.
+- Blocking defect: `none`
+- Notes: ACE, MiniMax local and MiniMax API use distinct ready copy. Prompt limits come from musicGenerationSpec.
 
 #### `story.music.import` — Import MP3 / attach alternative song
 
@@ -534,20 +534,20 @@ Status: freeze of current contracts. This document does not implement the later 
 
 #### `story.music.legacy_drawer` — Legacy music production drawer
 
-- Control: StoryMusicProductionLegacyDrawer (hidden, aria-hidden)
-- UI handler: `StoryMusicProductionLegacyDrawer`
-- Domain: `StoryMusicProductionLegacyDrawer` in `ui/src/features/stories/StoryMusicProductionLegacyDrawer.tsx`
+- Control: removed; ManualSongPanel remains the visible editor
+- UI handler: `ManualSongPanel`
+- Domain: `` in ``
 - Adapter: `storyLab.stageMusicVideo`
 - API: `—`
 - Wizard capability / schema: `—` / `—`
 - In Wizard context snapshot: False
 - Available (strict): False
-- Preconditions: Mounted from Productions but not visible
-- Persistence: historical music candidates must be preserved if drawer is removed
-- Presentation: hidden
+- Preconditions: none
+- Persistence: cue candidates recover via storySongRecovery without the drawer
+- Presentation: hidden markup removed
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Residual markup. Remove only after proving no consumers.
+- Notes: Hidden drawer markup removed in L11. Create/import/cover/versions stay in ManualSongPanel; candidates are not deleted.
 
 #### `story.prepare.cancel_recover` — Cancel or recover Story generation
 
@@ -1027,7 +1027,7 @@ Status: freeze of current contracts. This document does not implement the later 
 
 #### `series.review.i18n` — Read Series Review action labels
 
-- Control: Generate missing / Approve all / Join clips / Edit & regenerate (hardcoded English)
+- Control: Generate missing / Play all / Join clips / Edit & regenerate (seriesLab.review.*)
 - UI handler: `SeriesReviewPanel copy`
 - Domain: `` in `ui/src/features/series/SeriesReviewPanel.tsx`
 - Adapter: `—`
@@ -1040,7 +1040,7 @@ Status: freeze of current contracts. This document does not implement the later 
 - Presentation: review labels
 - Prompt fixture: `n/a`
 - Blocking defect: `none`
-- Notes: Visible English labels. Do not translate user dialogue or internal option ids.
+- Notes: Visible labels come from catalogs. Internal option ids, user dialogue and prompts stay untranslated.
 
 #### `h3.prompt.finalization_fixture` — Freeze effective H3 prompts before UI and before queue
 

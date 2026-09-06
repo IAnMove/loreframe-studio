@@ -3,7 +3,10 @@ import * as api from '../../api/client'
 import { useUiTranslation } from '../../i18n'
 import { button, completeGenerationButton, input, panel, Field } from './storyLabChrome'
 import { clampStoryMusicDuration, storyMusicDurationMax, storyMusicGenerationReady } from './musicModel'
-import { MINIMAX_LYRIC_SECTION, miniMaxCuePayload, musicCandidateDisplayName } from './storyLabMusic'
+import {
+  MINIMAX_LYRIC_SECTION, miniMaxCuePayload, musicCandidateDisplayName, musicCueBlock,
+  musicPromptLimit, musicRequestTitleKey, musicRequiresLyricSections,
+} from './storyLabMusic'
 import type { StoryMusicCandidate, StoryMusicCue } from './types'
 import type { StoryMusicTabProps } from './StoryMusicTab'
 
@@ -24,6 +27,13 @@ export function MusicCueCard({
   const versioning = musicCueBusy === `version:${cue.id}`
   const queued = musicQueue?.ids.includes(cue.id)
   const cueBusy = Boolean(musicCueBusy || musicQueue)
+  const promptLimit = musicPromptLimit(project.music.model)
+  const promptLength = cue.style.trim().length
+  const blocked = musicCueBlock(cue, project.music.model)
+  const showLyricTagWarning = Boolean(
+    !cue.instrumental && cue.lyrics.trim() && musicRequiresLyricSections(project.music.model)
+    && !MINIMAX_LYRIC_SECTION.test(cue.lyrics),
+  )
   return (
     <article className={`${panel} space-y-3 ${generatingAudio ? 'border-pink-500/60' : ''}`}>
       <div className="flex items-start justify-between gap-2">
@@ -82,14 +92,19 @@ export function MusicCueCard({
           <div className="space-y-2.5 rounded-lg border border-pink-500/30 bg-pink-500/5 p-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h4 className="text-xs font-semibold text-pink-200">{t('music.minimaxRequest')}</h4>
-                <p className="mt-0.5 text-[9px] text-text-muted">{t('music.minimaxRequestHint')}</p>
+                <h4 className="text-xs font-semibold text-pink-200">{t(musicRequestTitleKey(project.music.model))}</h4>
+                <p className="mt-0.5 text-[9px] text-text-muted">{t('music.requestHint')}</p>
               </div>
               <span className="shrink-0 rounded border border-pink-500/30 px-2 py-1 text-[9px] text-pink-200">{project.music.model}</span>
             </div>
-            <Field required label={t('music.promptChars', { count: cue.style.trim().length })} value={cue.style}
+            <Field required label={t('music.promptChars', { count: promptLength, limit: promptLimit })} value={cue.style}
               onChange={style => patchMusicCue(cue.id, { style })} rows={3} />
-            <p className="text-[9px] text-text-muted">{t('music.promptHint')}</p>
+            <p className="text-[9px] text-text-muted">{t('music.promptHint', { limit: promptLimit })}</p>
+            {promptLength > promptLimit && (
+              <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[9px] text-amber-200">
+                {t('music.promptOverLimit', { count: promptLength, limit: promptLimit, title: cue.title })}
+              </p>
+            )}
             {!cue.instrumental && <Field required label={t('music.lyricsStructured')} value={cue.lyrics}
               onChange={lyrics => patchMusicCue(cue.id, { lyrics })} rows={10} />}
             {!cue.instrumental && (
@@ -106,7 +121,7 @@ export function MusicCueCard({
               </div>
             )}
             {!cue.instrumental && <p className="text-[9px] text-text-muted">{t('music.translateHint')}</p>}
-            {!cue.instrumental && cue.lyrics.trim() && !MINIMAX_LYRIC_SECTION.test(cue.lyrics) && (
+            {showLyricTagWarning && (
               <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[9px] text-amber-200">
                 {t('music.missingTags')}
               </p>
@@ -121,7 +136,7 @@ export function MusicCueCard({
                 onCopied(t('music.payloadCopied', { title: cue.title }))
               }}><Copy size={12} /> {t('music.copyPayload')}</button>
               <button className={`${button} ${completeGenerationButton}`}
-                disabled={cueBusy || !storyMusicGenerationReady(project.music.model, minimaxConfigured) || !cue.style.trim() || (!cue.instrumental && (!cue.lyrics.trim() || !MINIMAX_LYRIC_SECTION.test(cue.lyrics)))}
+                disabled={cueBusy || !storyMusicGenerationReady(project.music.model, minimaxConfigured) || Boolean(blocked)}
                 onClick={() => void generateMusicCueAudio(cue.id)}>
                 {generatingAudio ? <Loader2 size={13} className="animate-spin" /> : <Music size={13} />} {t('music.generateTrack')}
               </button>

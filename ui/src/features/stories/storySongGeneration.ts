@@ -11,7 +11,7 @@ import {
 } from './musicWorkflowState'
 import { pendingSongProvenance } from './provenance'
 import { songProviderLanguageIntent } from './songLanguage'
-import { nextMusicCandidateVersion } from './storyLabMusic'
+import { compiledMusicCuePrompt, musicCueBlock, musicPromptLimit, nextMusicCandidateVersion } from './storyLabMusic'
 import {
   patchSongCandidateJob,
   reusableInFlightSongCandidate,
@@ -174,6 +174,15 @@ function requireOpenCue(project: StoryProject | undefined, cueId: string): { pro
   if (!cue.instrumental && !cue.lyrics.trim()) {
     throw new Error(`“${cue.title}” necesita letra antes de generarse.`)
   }
+  const blocked = musicCueBlock(cue, project.music.model)
+  if (blocked?.key === 'music.promptOverLimit') {
+    throw new Error(
+      `“${cue.title}” supera el límite de ${musicPromptLimit(project.music.model)} caracteres del modelo seleccionado.`,
+    )
+  }
+  if (blocked?.key === 'notice.needsSectionTags') {
+    throw new Error(`“${cue.title}” necesita etiquetas de sección compatibles con MiniMax antes de generarse.`)
+  }
   return { project, cue }
 }
 
@@ -312,7 +321,7 @@ async function generateRemoteStorySong(
   const result = existingJobId
     ? await api.watchStoryMusicCandidatesJob(existingJobId, watchers)
     : await api.generateStoryMusicCandidates({
-      prompt: cue.style.trim().slice(0, 300),
+      prompt: compiledMusicCuePrompt(cue, model),
       lyrics: cue.instrumental ? '' : cue.lyrics,
       instrumental: cue.instrumental,
       count: 1,

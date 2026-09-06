@@ -35,7 +35,7 @@ import {
   STORY_VIDEO_ASPECTS, savedStoryVideoAspect, savedStoryVideoResolution,
 } from './storyLabVideoFormat'
 import {
-  MINIMAX_LYRIC_SECTION, musicCandidateDisplayName, nextMusicCandidateVersion, storyProjectPremise, storySongBrief,
+  musicCandidateDisplayName, musicCueBlock, nextMusicCandidateVersion, storyProjectPremise, storySongBrief,
 } from './storyLabMusic'
 import { readDirectorClipReplacementResult } from './directorClipHandoff'
 import { createStoryActivityLifecycle } from './activityLifecycle'
@@ -3237,15 +3237,9 @@ export function StoryLabPanel() {
     if (!current) return false
     const cue = current.music.cues.find(item => item.id === cueId)
     if (!cue) return false
-    if (!cue.style.trim() || (!cue.instrumental && !cue.lyrics.trim())) {
-      setNotice({ kind: 'error', text: cue.instrumental ? t('notice.reviewPromptFirst', { title: cue.title }) : t('notice.reviewPromptAndLyricsFirst', { title: cue.title }) })
-      return false
-    }
-    if (!cue.instrumental && !MINIMAX_LYRIC_SECTION.test(cue.lyrics)) {
-      setNotice({
-        kind: 'error',
-        text: t('notice.needsSectionTags', { title: cue.title }),
-      })
+    const blocked = musicCueBlock(cue, current.music.model)
+    if (blocked) {
+      setNotice({ kind: 'error', text: t(blocked.key, blocked.params) })
       return false
     }
     const usingAceStep = isAceStepMusicModel(current.music.model)

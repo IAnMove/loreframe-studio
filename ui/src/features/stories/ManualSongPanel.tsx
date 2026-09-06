@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Film, Languages, Music, Palette, RefreshCcw,
 import * as api from '../../api/client'
 import { useUiTranslation } from '../../i18n'
 import { button, completeGenerationButton, input, panel, Field } from './storyLabChrome'
-import { musicCandidateDisplayName, storySongBrief } from './storyLabMusic'
+import { musicCandidateDisplayName, musicPromptLimit, storySongBrief } from './storyLabMusic'
 import { clampStoryMusicDuration, storyMusicDurationMax, storyMusicGenerationReady } from './musicModel'
 import type { StoryMusicTabProps } from './StoryMusicTab'
 
@@ -59,7 +59,7 @@ export function ManualSongPanel({
             onClick={() => void adaptStoryLyrics()}><Sparkles size={13} /> {t('music.adaptLyrics')}</button>
         </div>
         <div className="space-y-2">
-          <Field required label={t('music.finalPrompt')} value={project.music.style}
+          <Field required label={t('music.finalPrompt', { limit: musicPromptLimit(project.music.model) })} value={project.music.style}
             onChange={style => patch({ music: { ...project.music, style } })} rows={3} />
           <Field required label={t('music.editableLyrics')} value={project.music.lyrics}
             onChange={lyrics => patch({ music: { ...project.music, lyrics } })} rows={8} />

@@ -54,6 +54,15 @@ export function storyMusicGenerationReady(
   return isLocalMusicModel(model) || minimaxConfigured
 }
 
+export function storyMusicReadyMessageKey(
+  model: string | undefined,
+  minimaxConfigured: boolean,
+): 'music.aceLocalReady' | 'music.minimaxLocalReady' | 'music.minimaxReady' | 'music.minimaxMissing' {
+  if (isAceStepMusicModel(model)) return 'music.aceLocalReady'
+  if (String(model || '') === MINIMAX_MUSIC3_LOCAL_MODEL) return 'music.minimaxLocalReady'
+  return minimaxConfigured ? 'music.minimaxReady' : 'music.minimaxMissing'
+}
+
 export function normalizeStoryMusicModel(model: unknown): StoryMusicDraft['model'] {
   const value = String(model || '')
   if (value === 'music-2.6' || value === 'music-3.0' || value === MINIMAX_MUSIC3_LOCAL_MODEL) return value
