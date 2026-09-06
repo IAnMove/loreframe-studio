@@ -3835,21 +3835,6 @@ def enhance_prompt(
     return result
 
 
-_H3_REF2VA_FIELDS = (
-    "subject_definitions",
-    "summary",
-    "retention_analysis",
-    "detailed_description",
-    "overall_soundscape",
-    "non_diegetic_music",
-)
-_H3_CONTEXT_FIELDS = (
-    "integrated_multimodal_description",
-    "overall_soundscape",
-    "non_diegetic_music",
-)
-
-
 def _extract_h3_quoted_dialogue(text: str) -> list[str]:
     """Extract explicit straight- or curly-quoted speech in source order."""
     from services.h3_story_contract import extract_locked_lines
@@ -3911,11 +3896,12 @@ def _build_h3_dialogue_requirement(
     planning_style: str = "faithful",
 ) -> str:
     from services.h3_story_contract import extract_locked_lines
+    from services.h3_prompt_policy import tagged_dialogue
     quotes = extract_locked_lines(prompt)
     timed_clause = _build_h3_timed_silence_clause(prompt, duration_seconds)
     if quotes:
         required = "\n".join(
-            f'- REQUIRED VERBATIM ({line["speaker"]}): <d>[{line["language"]}] {line["text"]}</d>' for line in quotes
+            f'- REQUIRED VERBATIM ({line["speaker"]}): {tagged_dialogue(line["language"], line["text"])}' for line in quotes
         )
         return (
             "IMMUTABLE H3 DIALOGUE CONTRACT: The user supplied the spoken lines below. "
@@ -3982,30 +3968,14 @@ def _h3_voice_binding_contract_satisfied(
 
 def _has_complete_h3_ref2va_structure(text: str) -> bool:
     """Return true only for one complete, ordered six-field Ref2VA prompt."""
-    if not text:
-        return False
-    import re
-    positions = []
-    for field in _H3_REF2VA_FIELDS:
-        matches = list(re.finditer(rf"(?mi)^\s*{re.escape(field)}\s*:", text))
-        if len(matches) != 1:
-            return False
-        positions.append(matches[0].start())
-    return positions == sorted(positions)
+    from services.h3_prompt_policy import has_complete_h3_fields
+    return bool(text) and has_complete_h3_fields(text, "ref2va")
 
 
 def _has_complete_h3_context_structure(text: str) -> bool:
     """Return true only for one complete, ordered three-field H3 prompt."""
-    if not text:
-        return False
-    import re
-    positions = []
-    for field in _H3_CONTEXT_FIELDS:
-        matches = list(re.finditer(rf"(?mi)^\s*{re.escape(field)}\s*:", text))
-        if len(matches) != 1:
-            return False
-        positions.append(matches[0].start())
-    return positions == sorted(positions)
+    from services.h3_prompt_policy import has_complete_h3_fields
+    return bool(text) and has_complete_h3_fields(text, "context")
 
 
 def _compile_h3_explicit_dialogue(prompt: str) -> str:
@@ -4016,6 +3986,7 @@ def _compile_h3_explicit_dialogue(prompt: str) -> str:
 def _inject_missing_h3_dialogue(result: str, prompt: str, *, ref2va: bool) -> str:
     """Deterministically append omitted literal dialogue to the correct H3 field."""
     from services.h3_story_contract import extract_locked_lines
+    from services.h3_prompt_policy import tagged_dialogue
     quotes = extract_locked_lines(prompt)
     if not quotes:
         return result
@@ -4024,7 +3995,7 @@ def _inject_missing_h3_dialogue(result: str, prompt: str, *, ref2va: bool) -> st
     if not missing:
         return result
     additions = " ".join(
-        f'{line["speaker"] or "The intended speaker"} (S{index}) says exactly once: <d>[{line["language"]}] {line["text"]}</d>.'
+        f'{line["speaker"] or "The intended speaker"} (S{index}) says exactly once: {tagged_dialogue(line["language"], line["text"])}.'
         for index, line in enumerate(missing, start=1)
     )
     field = "detailed_description" if ref2va else "integrated_multimodal_description"
