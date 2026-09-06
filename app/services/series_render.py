@@ -7,6 +7,8 @@ import math
 import re
 from typing import Any
 
+from .h3_prompt_policy import tagged_dialogue
+
 
 H3_RESOLUTIONS = {
     ("landscape", "480p"): "864x480",
@@ -115,7 +117,7 @@ def plan_series_shot_duration(series: dict, shot: dict) -> dict:
     if mode == "frame_lattice":
         native_params: dict[str, Any] = {
             "prompt": " ".join(
-                f"<d>[{segment['language']}] {segment['text']}</d>"
+                tagged_dialogue(segment["language"], segment["text"])
                 for segment in segments
             ),
             "video_length": round(float(updated.get("durationSeconds") or 0) * 24),
@@ -332,7 +334,7 @@ def _h3_dialogue_description(series: dict, shot: dict, character_names: dict[str
         dialogue = str(beat.get("text") or "").strip()
         lines.append(
             f"{speaker} ({speaker_ids[character_id]}), {emotion}, {delivery}: "
-            f"<d>[{language_tag}] {dialogue}</d>"
+            f"{tagged_dialogue(language_tag, dialogue)}"
         )
     return " ".join(lines)
 

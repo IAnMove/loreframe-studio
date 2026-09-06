@@ -13,8 +13,7 @@ Inventory (rule / owner after this cut / remaining duplicates):
 - writing_contract / sound_contract / apply_h3_audio_policy: already shared.
 - Last compiled-prompt gate: h3_prompt_finalization.finalize_h3_prompt
   (Studio enhance, window compile, official compile, dialect adapter).
-- Studio legacy no longer pre-blanks overall_soundscape; apply_h3_audio_policy
-  already does that. The weaker helper remains for isolated helper tests.
+- Studio legacy uses finalize_h3_prompt / apply_h3_audio_policy only.
 - extract/repair/enforce: already in h3_story_contract; Director compile is
   a different path and must stay different.
 - system_override and raw_enhancer_mode still skip H3 post-process.
@@ -135,6 +134,18 @@ def test_finalize_gate_matches_audio_policy_and_dialect_defaults():
         duration_seconds=0,
     )
     assert first == expected["dialect"]["first_frame"]
+    direct = expected["dialect"]["direct_structured"]
+    native_direct = format_minimax_h3_prompt({}, direct, reference_mode="direct")
+    explicit_native = format_minimax_h3_prompt(
+        {}, direct, reference_mode="direct", h3_audio_policy="native",
+    )
+    assert native_direct == explicit_native == direct
+    legacy_direct = format_minimax_h3_prompt(
+        {}, direct, reference_mode="direct", h3_audio_policy="legacy",
+    )
+    assert "Low mechanical hum" not in legacy_direct
+    assert "overall_soundscape:" in legacy_direct
+    assert "N/A" in legacy_direct.split("overall_soundscape:", 1)[1]
 
 
 def test_contracts_match_frozen_base():
@@ -322,7 +333,8 @@ def test_enhance_paths_with_frozen_llm_responses():
     assert "<d>[Spanish] He dejado el café para ahorrar</d>" in by_id["studio-spanish-repair"]
     assert "The Office" in by_id["studio-title-not-speech"]
     assert "EXIT" in by_id["studio-title-not-speech"]
-    assert "Qué silencio." in by_id["studio-silencio-in-dialogue"]
+    assert "<d>[Spanish] Qué silencio.</d>" in by_id["studio-silencio-in-dialogue"]
+    assert "<d>[English] Qué silencio.</d>" not in by_id["studio-silencio-in-dialogue"]
     assert "<d>" not in by_id["studio-silent-scene"]
     assert "field labels" not in by_id["wan-non-h3"]
     assert by_id["wan-non-h3"] == "A ginger cat walks slowly across a sunlit kitchen, tail high."

@@ -222,7 +222,6 @@ def _load_llm_enhance_helpers():
         "_inject_missing_h3_dialogue",
         "_inject_h3_generated_dialogue",
         "_strip_h3_untagged_dialogue_duplicates",
-        "_enforce_h3_soundscape_silence",
         "_enforce_h3_music_request",
         "_build_h3_ref2va_tagged_fallback",
         "_build_h3_context_fallback",
@@ -1151,10 +1150,8 @@ class TestMiniMaxH3Definition(unittest.TestCase):
             "non_diegetic_music: N/A",
             "non_diegetic_music: Epic orchestral score.",
         )
-        cleaned_sound = helpers["_enforce_h3_soundscape_silence"](
-            noisy,
-            'Blaine says, "Snap this, bitch" before punching.',
-        )
+        from services.h3_prompt_policy import apply_h3_audio_policy
+        cleaned_sound = apply_h3_audio_policy(noisy, "legacy")
         self.assertNotIn("grunts loudly", cleaned_sound)
         self.assertIn("overall_soundscape: N/A", cleaned_sound)
         self.assertNotIn("no human voices", cleaned_sound)

@@ -4234,6 +4234,11 @@ def rerun_h3_segment(
                     str(record.get("prompt") or ""),
                     reference_mode=segment_mode,
                     audio_direction=str(video_params.get("h3_audio_prompt") or ""),
+                    h3_audio_policy=_h3_format_audio_policy(
+                        segment_plan.get("audio_plan"),
+                        segment_plan.get("_director_audio_plan"),
+                        video_params,
+                    ),
                 )
             prompt = _saved_prompt_contract(state, prompt, "video")
             prompt = _h3_apply_portrait_composition_contract(
@@ -12685,6 +12690,16 @@ def _h3_authored_segment_windows(prompts: list[str], segment_count: int) -> list
     return windows
 
 
+def _h3_format_audio_policy(*sources) -> str:
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        value = source.get("h3_audio_policy") or source.get("minimax_h3_audio_policy")
+        if value:
+            return str(value)
+    return "native"
+
+
 def _minimax_h3_segment_prompt(
     plan: dict,
     segment_index: int,
@@ -12753,6 +12768,11 @@ def _minimax_h3_segment_prompt(
             prompt,
             reference_mode=reference_mode,
             audio_direction=global_audio_direction,
+            h3_audio_policy=_h3_format_audio_policy(
+                segment_plan.get("audio_plan"),
+                segment_plan.get("_director_audio_plan"),
+                plan,
+            ),
         )
 
     window_prompts = plan.get("window_prompts") or []
@@ -12771,6 +12791,11 @@ def _minimax_h3_segment_prompt(
         prompt,
         reference_mode=reference_mode,
         audio_direction=global_audio_direction,
+        h3_audio_policy=_h3_format_audio_policy(
+            segment_plan.get("audio_plan"),
+            segment_plan.get("_director_audio_plan"),
+            plan,
+        ),
     )
 
 
