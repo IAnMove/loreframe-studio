@@ -59,6 +59,9 @@ present, are compared and a mismatch is recorded; they do not replace samples.
 - `invalid` — samples exist but are unusable (wrong type, empty, all NaN/Inf)
 
 A missing duration is `null`. It is never reported as `0.0` to mean “unknown”.
+Clip-level `verified` requires every channel of that clip to verify; a blocked,
+sparse, over-limit, or invalid channel makes the clip `unknown` or `invalid`
+and clears `duration_seconds`.
 
 NaN, Infinity, and non-FLOAT component types are not converted into seconds.
 
@@ -75,8 +78,8 @@ that the clip is a dance.
 
 Only these payloads are decoded, under size limits:
 
-- the GLB BIN chunk, when a buffer has no URI
-- `data:` URIs with `;base64`
+- the GLB BIN chunk, only for buffer 0 when `uri` is omitted
+- `data:` URIs with `;base64`, clipped to `byteLength`
 
 Every other URI is reported and blocked. The inspector must not:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import socket
@@ -412,6 +413,7 @@ def test_file_uri_classifier_does_not_decode_traversal():
     assert classify_uri("file:///etc/passwd") == "file"
     assert classify_uri("../secret.bin") == "relative"
     assert classify_uri("%2e%2e/secret.bin") == "relative"
+    assert classify_uri("") == "relative"
     assert classify_uri("data:application/octet-stream;base64,AAAA") == "data_uri"
     assert classify_uri(None) == "embedded_bin"
     assert classify_uri(123) == "invalid"
@@ -458,6 +460,105 @@ def test_sparse_time_accessor_is_unknown_not_zero():
     assert report.animations[0].duration_seconds is None
     assert report.animations[0].duration_status == "unknown"
     assert "sparse_time_accessor" in _issue_codes(report)
+
+
+def test_deeply_nested_json_returns_a_report_instead_of_raising():
+    raw_json = ("[" * 4000 + "]" * 4000).encode("utf-8")
+    raw_json += b" " * ((4 - (len(raw_json) % 4)) % 4)
+    payload = struct.pack("<III", GLB_MAGIC, 2, 12 + 8 + len(raw_json))
+    payload += struct.pack("<II", len(raw_json), JSON_CHUNK) + raw_json
+    report = inspect_glb_bytes(payload)
+    assert report.status in {"corrupt", "unsupported"}
+
+
+def test_accessor_cap_stays_unsupported_not_corrupt():
+    document, blob = two_clip_scene()
+    report = inspect_glb_bytes(
+        pack_glb(document, blob),
+        limits=GlbInspectorLimits(max_accessors=1),
+    )
+    assert report.status == "unsupported"
+    assert "too_many_accessors" in _issue_codes(report)
+    assert report.animations[0].name == "Walk"
+    assert report.animations[0].duration_status == "unknown"
+    assert report.animations[0].duration_seconds is None
+
+
+def test_over_limit_time_samples_are_unknown_not_corrupt():
+    document, blob = two_clip_scene()
+    report = inspect_glb_bytes(
+        pack_glb(document, blob),
+        limits=GlbInspectorLimits(max_time_samples=1),
+    )
+    assert report.status == "unsupported"
+    assert "too_many_time_samples" in _issue_codes(report)
+    assert report.animations[0].duration_status == "unknown"
+    assert report.animations[0].duration_seconds is None
+
+
+def test_data_uri_payload_is_clipped_to_byte_length():
+    times = _f32(0.0, 1.0, 99.0)
+    trans = _f32(0, 0, 0, 1, 0, 0)
+    blob = times[:8] + trans
+    uri = "data:application/octet-stream;base64," + base64.b64encode(times).decode("ascii")
+    document = {
+        "asset": {"version": "2.0"},
+        "buffers": [{"byteLength": 8, "uri": uri}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 8},
+            {"buffer": 0, "byteOffset": 8, "byteLength": 24},
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 2, "type": "SCALAR"},
+            {"bufferView": 1, "componentType": 5126, "count": 2, "type": "VEC3"},
+        ],
+        "nodes": [{}],
+        "animations": [
+            {
+                "name": "Clipped",
+                "samplers": [{"input": 0, "output": 1}],
+                "channels": [{"sampler": 0, "target": {"node": 0, "path": "translation"}}],
+            }
+        ],
+    }
+    report = inspect_glb_bytes(pack_glb(document, blob))
+    # Output accessor is outside the clipped 8-byte buffer, but input times must
+    # not include the extra 99.0 float from the data URI.
+    assert report.animations[0].duration_seconds == 1.0
+    assert 99.0 not in (
+        [report.animations[0].duration_seconds] if report.animations[0].duration_seconds else []
+    )
+
+
+def test_partial_channel_failure_does_not_verify_clip_duration():
+    document, blob = two_clip_scene()
+    document["accessors"].append(
+        {
+            "bufferView": 4,
+            "componentType": 5126,
+            "count": 2,
+            "type": "SCALAR",
+            "sparse": {"count": 1, "indices": {}, "values": {}},
+        }
+    )
+    document["animations"][0]["samplers"].append({"input": 8, "output": 5})
+    document["animations"][0]["channels"].append(
+        {"sampler": 1, "target": {"node": 0, "path": "scale"}}
+    )
+    report = inspect_glb_bytes(pack_glb(document, blob))
+    walk = report.animations[0]
+    assert walk.duration_seconds is None
+    assert walk.duration_status == "unknown"
+    assert "sparse_time_accessor" in _issue_codes(report)
+
+
+def test_uri_less_non_zero_buffer_does_not_alias_bin_chunk():
+    document, blob = two_clip_scene()
+    document["buffers"].append({"byteLength": 4})
+    report = inspect_glb_bytes(pack_glb(document, blob))
+    assert report.status == "corrupt"
+    assert "buffer_missing_uri" in _issue_codes(report)
+    assert report.buffers[1].blocked is True
 
 
 def test_json_nan_is_corrupt():

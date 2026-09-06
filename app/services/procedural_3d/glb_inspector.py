@@ -306,7 +306,7 @@ def classify_uri(uri: object | None) -> str:
         return "invalid"
     stripped = uri.strip()
     if stripped == "":
-        return "embedded_bin"
+        return "relative"
     lower = stripped.lower()
     if lower.startswith("data:"):
         return "data_uri"
@@ -324,16 +324,17 @@ def _reject_json_constant(token: str) -> None:
 
 
 def _count_json_items(value: object, remaining: int) -> int:
-    if remaining <= 0:
-        raise ValueError("json_too_many_items")
-    remaining -= 1
-    if isinstance(value, dict):
-        for key, child in value.items():
-            remaining = _count_json_items(key, remaining)
-            remaining = _count_json_items(child, remaining)
-    elif isinstance(value, list):
-        for child in value:
-            remaining = _count_json_items(child, remaining)
+    stack = [value]
+    while stack:
+        if remaining <= 0:
+            raise ValueError("json_too_many_items")
+        remaining -= 1
+        current = stack.pop()
+        if isinstance(current, dict):
+            stack.extend(current.keys())
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
     return remaining
 
 
@@ -388,6 +389,7 @@ class _Inspector:
         self.extensions_used: list[str] = []
         self.extensions_required: list[str] = []
         self.accessor_bytes_used = 0
+        self._duration_reads = True
         self._payloads: list[bytes | None] = []
         self._accessors: list[Any] = []
         self._buffer_views: list[Any] = []
@@ -416,19 +418,23 @@ class _Inspector:
             return
         try:
             document = json.loads(raw_text, parse_constant=_reject_json_constant)
-        except ValueError as exc:
-            self.add_issue("invalid_json", "error", f"JSON chunk is not valid: {exc}")
+            _count_json_items(document, self.limits.max_json_items)
+        except RecursionError:
+            self.add_issue("json_too_deep", "error", "JSON chunk exceeded the decoder nesting limit")
             self.degrade("corrupt")
             return
-        try:
-            _count_json_items(document, self.limits.max_json_items)
-        except ValueError:
-            self.add_issue(
-                "json_too_many_items",
-                "error",
-                "glTF JSON exceeds the inspector item limit",
-            )
+        except MemoryError:
+            self.add_issue("json_too_large", "error", "JSON chunk exceeded available memory")
             self.degrade("unsupported")
+            return
+        except ValueError as exc:
+            code = "json_too_many_items" if str(exc) == "json_too_many_items" else "invalid_json"
+            if code == "json_too_many_items":
+                self.add_issue(code, "error", "glTF JSON exceeds the inspector item limit")
+                self.degrade("unsupported")
+            else:
+                self.add_issue(code, "error", f"JSON chunk is not valid: {exc}")
+                self.degrade("corrupt")
             return
         if not isinstance(document, dict):
             self.add_issue("gltf_root_not_object", "error", "glTF JSON root is not an object")
@@ -446,7 +452,7 @@ class _Inspector:
                 f"accessor count {len(self._accessors)} exceeds the inspector limit",
             )
             self.degrade("unsupported")
-            self._accessors = []
+            self._duration_reads = False
         self._inspect_resources(document)
         self._inspect_images(document)
         self._inspect_animations(document)
@@ -510,6 +516,7 @@ class _Inspector:
         if len(raw) > self.limits.max_named_resources:
             self.add_issue("too_many_buffers", "error", "buffer count exceeds the inspector limit")
             self.degrade("unsupported")
+            self._duration_reads = False
             self._payloads = []
             return
         payloads: list[bytes | None] = []
@@ -534,6 +541,7 @@ class _Inspector:
         if byte_length is None:
             self.add_issue("invalid_buffer_byte_length", "error", "buffer.byteLength is invalid", path)
             self.degrade("corrupt")
+            return None, BufferReport(index=index, byte_length=None, uri_kind="invalid", blocked=True)
         uri = item.get("uri")
         kind = classify_uri(uri)
         if kind == "invalid":
@@ -550,25 +558,58 @@ class _Inspector:
             self.degrade("unsupported")
             return None, BufferReport(index=index, byte_length=byte_length, uri_kind=kind, blocked=True)
         if kind == "data_uri":
-            payload = self._decode_data_uri(str(uri), path)
+            payload = self._clip_buffer_payload(
+                self._decode_data_uri(str(uri), path),
+                byte_length,
+                path,
+            )
             return payload, BufferReport(
                 index=index,
                 byte_length=byte_length,
                 uri_kind=kind,
                 blocked=payload is None,
             )
+        if index != 0:
+            self.add_issue(
+                "buffer_missing_uri",
+                "error",
+                "only buffer 0 may omit uri and use the GLB BIN chunk",
+                path,
+            )
+            self.degrade("corrupt")
+            return None, BufferReport(index=index, byte_length=byte_length, uri_kind=kind, blocked=True)
         if bin_bytes is None:
             self.add_issue("missing_bin_chunk", "error", "buffer has no URI and no BIN chunk", path)
             self.degrade("corrupt")
             return None, BufferReport(index=index, byte_length=byte_length, uri_kind=kind, blocked=True)
-        usable = bin_bytes
-        if byte_length is not None:
-            if byte_length > len(bin_bytes):
-                self.add_issue("bin_shorter_than_buffer", "error", "BIN chunk is shorter than byteLength", path)
-                self.degrade("corrupt")
-                return None, BufferReport(index=index, byte_length=byte_length, uri_kind=kind, blocked=True)
-            usable = bin_bytes[:byte_length]
-        return usable, BufferReport(index=index, byte_length=byte_length, uri_kind=kind, blocked=False)
+        payload = self._clip_buffer_payload(bin_bytes, byte_length, path)
+        return payload, BufferReport(
+            index=index,
+            byte_length=byte_length,
+            uri_kind=kind,
+            blocked=payload is None,
+        )
+
+    def _clip_buffer_payload(
+        self,
+        payload: bytes | None,
+        byte_length: int | None,
+        path: str,
+    ) -> bytes | None:
+        if payload is None:
+            return None
+        if byte_length is None:
+            return payload
+        if byte_length > len(payload):
+            self.add_issue(
+                "buffer_shorter_than_byte_length",
+                "error",
+                "buffer payload is shorter than byteLength",
+                path,
+            )
+            self.degrade("corrupt")
+            return None
+        return payload[:byte_length]
 
     def _decode_data_uri(self, uri: str, path: str) -> bytes | None:
         comma = uri.find(",")
@@ -883,6 +924,8 @@ class _Inspector:
                 "animation input contains NaN or Infinity; those samples are not times",
                 f"{channel_path}/sampler/input",
             )
+            self.degrade("corrupt")
+            return interpolation, (None, "invalid")
         if not finite:
             return interpolation, (None, "invalid")
         if any(later < earlier for earlier, later in zip(finite, finite[1:])):
@@ -924,6 +967,8 @@ class _Inspector:
         self,
         accessor_index: int,
     ) -> tuple[list[float], DurationStatus, str | None]:
+        if not self._duration_reads:
+            return [], "unknown", None
         try:
             accessor, count = self._time_accessor_fields(accessor_index)
             payload, start, byte_stride = self._time_accessor_layout(accessor, count)
@@ -950,9 +995,11 @@ class _Inspector:
             raise _TimeReadError("invalid", "accessor_not_object", "corrupt")
         if accessor.get("sparse") is not None:
             raise _TimeReadError("unknown", "sparse_time_accessor", "unsupported")
-        count = _as_nonneg_int(accessor.get("count"), maximum=self.limits.max_time_samples)
-        if count is None:
+        count = _as_int(accessor.get("count"))
+        if count is None or count < 0:
             raise _TimeReadError("invalid", "invalid_accessor_count", "corrupt")
+        if count > self.limits.max_time_samples:
+            raise _TimeReadError("unknown", "too_many_time_samples", "unsupported")
         if _as_int(accessor.get("componentType")) != _FLOAT_COMPONENT:
             raise _TimeReadError("invalid", "time_accessor_not_float", "corrupt")
         if (_as_str(accessor.get("type")) or "SCALAR") != "SCALAR":
@@ -1064,11 +1111,13 @@ def _combine_durations(
 ) -> tuple[float | None, DurationStatus]:
     if not durations:
         return None, "unknown"
-    verified = [value for value, status in durations if status == "verified" and value is not None]
-    if verified:
-        return max(verified), "verified"
+    if any(status == "unknown" for _, status in durations):
+        return None, "unknown"
     if any(status == "invalid" for _, status in durations):
         return None, "invalid"
+    verified = [value for value, status in durations if status == "verified" and value is not None]
+    if len(verified) == len(durations):
+        return max(verified), "verified"
     return None, "unknown"
 
 
@@ -1092,6 +1141,7 @@ def _accessor_message(code: str) -> str:
         "invalid_accessor_layout": "animation input accessor layout is invalid",
         "accessor_out_of_range": "animation input samples fall outside the bufferView",
         "accessor_work_limit": "decoding animation inputs would exceed the inspector work limit",
+        "too_many_time_samples": "animation input sample count exceeds the inspector limit",
     }
     return messages.get(code, code)
 
