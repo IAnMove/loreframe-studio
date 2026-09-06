@@ -112,6 +112,12 @@ def test_missing_or_invalid_ids_are_400():
         "/api/v1/procedural-3d/assets/asset_hero/inspection",
         params={"workspace": "../stage"},
     ).status_code == 400
+    oversized = client.get(
+        "/api/v1/procedural-3d/assets/asset_hero/inspection",
+        params={"workspace": "w" * 161},
+    )
+    assert oversized.status_code == 400
+    assert oversized.json() == {"detail": "Invalid request"}
 
 
 def test_unknown_workspace_or_asset_is_404_without_path(tmp_path: Path):

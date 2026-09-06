@@ -36,9 +36,11 @@ def create_procedural_3d_assets_router(
     @router.get("/api/v1/procedural-3d/assets/{asset_id}/inspection")
     def inspect_procedural_3d_asset(
         asset_id: str,
-        workspace: str | None = Query(default=None, max_length=160),
+        workspace: str | None = Query(default=None),
     ):
         if workspace is None or workspace == "":
+            raise HTTPException(status_code=400, detail=_GENERIC_BAD_REQUEST)
+        if len(workspace) > 160 or len(asset_id) > 180:
             raise HTTPException(status_code=400, detail=_GENERIC_BAD_REQUEST)
         if not _ASSET_ID.fullmatch(asset_id) or not _WORKSPACE_ID.fullmatch(workspace):
             raise HTTPException(status_code=400, detail=_GENERIC_BAD_REQUEST)
