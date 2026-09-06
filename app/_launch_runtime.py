@@ -2843,43 +2843,13 @@ def delete_lora_file(directory: str, filename: str):
 
 
 def _lora_is_compatible_with_model(model_def: dict, path: str) -> bool:
-    """Keep special adapters out of model selectors that cannot run them."""
-
-    del model_def, path
-    # MiniMax H3 Full/Pruned AdaLN conversion happens in the transformer
-    # preprocessor, so H3 adapters no longer need a checkpoint-size filter.
-    return True
+    from services.h3_runtime_policy import lora_compatible
+    return lora_compatible(model_def, path)
 
 
 def _minimax_h3_turbo_option(model_def: dict) -> dict | None:
-    """Return the managed Turbo preset exposed by a compatible H3 model."""
-
-    architecture = str((model_def or {}).get("architecture") or "")
-    if not architecture.startswith("minimax_h3"):
-        return None
-
-    from models.minimax_h3.turbo import (
-        MINIMAX_H3_TURBO_LORA_FILENAME,
-        MINIMAX_H3_TURBO_PRESET_STEPS,
-        MINIMAX_H3_TURBO_PRESET_WEIGHT,
-    )
-
-    return {
-        "filename": MINIMAX_H3_TURBO_LORA_FILENAME,
-        "label": "Turbo mode",
-        "experimental": True,
-        "steps": MINIMAX_H3_TURBO_PRESET_STEPS,
-        "weight": MINIMAX_H3_TURBO_PRESET_WEIGHT,
-        "guide": (
-            "Experimental MiniMax H3 accelerator for Full and Pruned "
-            "checkpoints. Maestro's one-click preset uses 6 steps and starts "
-            "at strength 0.50. Adjust its active LoRA strength in Advanced; "
-            "this speed preset can reduce prompt and style fidelity versus "
-            "the normal 20-step recipe. Disable Turbo for maximum quality. "
-            "The managed adapter and small compatibility data download "
-            "automatically on first use. Pruned is recommended on 16 GB GPUs."
-        ),
-    }
+    from services.h3_runtime_policy import turbo_option
+    return turbo_option(model_def)
 
 
 @api.get("/api/v1/loras/{model_type}")
@@ -2917,7 +2887,7 @@ def list_loras(model_type: str):
     # filename in the catalog makes it discoverable on a fresh install; the
     # generation preflight below performs the verified one-time download.
     if turbo_option:
-        names.add(turbo_option["filename"])
+        names.update(item["filename"] for item in turbo_option["presets"])
     loras = sorted(names)
 
     return {
@@ -3080,8 +3050,8 @@ def list_loras_details(model_type: str):
         ))
         loras.append(info)
 
-    if turbo_option:
-        filename = turbo_option["filename"]
+    for preset in (turbo_option or {}).get("presets", []):
+        filename = preset["filename"]
         info = next((item for item in loras if item["filename"] == filename), None)
         if info is None:
             info = {
@@ -3101,12 +3071,12 @@ def list_loras_details(model_type: str):
             "managed": True,
             "recommended_weights": {
                 "source": "default",
-                "default": turbo_option["weight"],
-                "min": 0.50,
-                "max": 1.00,
+                "default": preset["weight"],
+                "min": preset["weight_min"],
+                "max": preset["weight_max"],
             },
             "has_guide": True,
-            "guide": turbo_option["guide"],
+            "guide": preset["description"],
             "update_status": "current",
         })
         loras.sort(key=lambda item: item["filename"])
@@ -6601,6 +6571,8 @@ def get_model_options(model_type: str):
         "any_audio_prompt": md.get("any_audio_prompt", False),
         "audio_scale_name": md.get("audio_scale_name", ""),
         "lock_inference_steps": md.get("lock_inference_steps", False),
+        "inference_steps_min": md.get("inference_steps_min", 1),
+        "inference_steps_max": md.get("inference_steps_max", 50),
         "lock_guidance_scale": md.get("lock_guidance_scale", False),
         "no_negative_prompt": md.get("no_negative_prompt", False),
         "i2v_class": md.get("i2v_class", False),
@@ -6609,6 +6581,8 @@ def get_model_options(model_type: str):
         "supports_end_frame": "E" in md.get("image_prompt_types_allowed", ""),
         # Raw conditioning letters let Studio expose only compatible sub-modes.
         "image_prompt_types_allowed": md.get("image_prompt_types_allowed", ""),
+        "minimax_h3_semantic_bridge": md.get("minimax_h3_semantic_bridge", False),
+        "minimax_h3_fused_turbo": md.get("minimax_h3_fused_turbo", False),
         "omni_reference": md.get("omni_reference", False),
         "omni_reference_limits": md.get("omni_reference_limits"),
         "omni_reference_detail_choices": md.get("omni_reference_detail_choices"),
@@ -10687,6 +10661,9 @@ def _run_generation_with_preparation(job_id: str) -> bool:
                 has_end_image=bool(pending.get("has_end_image")),
                 image_paths=list(pending.get("image_paths") or []) or None,
                 nsfw=bool(nsfw),
+                planning_style=str(pending.get("planning_style") or "faithful"),
+                h3_audio_policy=str(pending.get("h3_audio_policy") or "native"),
+                reference_context=str(pending.get("reference_context") or ""),
             )
             prompts = result.get("window_prompts") if isinstance(result, dict) else None
             if (
@@ -10815,6 +10792,11 @@ async def generate(request: Request):
     except Exception:
         _base_model_type = body.get("model_type")
     _generation_model_def = wgp.get_model_def(body["model_type"]) or {}
+    try:
+        from services.h3_runtime_policy import normalize_optional_conditioning
+        normalize_optional_conditioning(body, _generation_model_def)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     if legacy_h3:
         character_sheet = _is_character_sheet_engine(body)
         body.setdefault("resolution", minimax_h3_service.DEFAULTS["resolution"])
@@ -10875,6 +10857,7 @@ async def generate(request: Request):
         dialogue_duration_contract = apply_h3_dialogue_duration(
             body,
             _generation_model_def,
+            preserve_requested=body.get("minimax_h3_audio_policy", "native") != "legacy",
         )
         if dialogue_duration_contract and dialogue_duration_contract.get("requires_split"):
             raise HTTPException(
@@ -10927,18 +10910,8 @@ async def generate(request: Request):
             )
         body["minimax_h3_text_encoder"] = selected_encoder
         try:
-            from models.minimax_h3.turbo import (
-                normalize_minimax_h3_turbo_request,
-            )
-
-            if normalize_minimax_h3_turbo_request(
-                body,
-                full_checkpoint=bool(
-                    _generation_model_def.get(
-                        "minimax_h3_full_checkpoint", False
-                    )
-                ),
-            ):
+            from services.h3_runtime_policy import normalize_h3_runtime_request
+            if normalize_h3_runtime_request(body, _generation_model_def):
                 print(
                     "[MiniMax H3 Turbo] Experimental preset enabled: "
                     f"{body['num_inference_steps']} steps, "
@@ -10998,10 +10971,13 @@ async def generate(request: Request):
             h3_total_frames = h3_window_frames = h3_overlap_frames = h3_discard_frames = 0
         h3_needs_storyboard = (
             h3_storyboard_enabled
-            and not _generation_model_def.get("omni_reference")
+            and (not _generation_model_def.get("omni_reference") or body.get("minimax_h3_reference_sequence") is True)
             and not h3_is_multi_clip
             and h3_total_frames > h3_window_frames > 0
         )
+        if h3_needs_storyboard and _generation_model_def.get("omni_reference"):
+            from services.h3_runtime_policy import reference_context
+            body["h3_reference_context"] = reference_context(body.get("minimax_h3_references") or [])
         if h3_needs_storyboard:
             from services.h3_window_planner import (
                 compute_h3_window_boundaries,
@@ -11024,6 +11000,9 @@ async def generate(request: Request):
                 fps=h3_fps,
                 has_start_image=h3_has_start,
                 has_end_image=h3_has_end,
+                planning_style=str(body.get("minimax_h3_planning_style") or "faithful"),
+                h3_audio_policy=str(body.get("minimax_h3_audio_policy") or "native"),
+                reference_context=str(body.get("h3_reference_context") or ""),
             )
             h3_expected_count = len(
                 compute_h3_window_boundaries(
@@ -11047,7 +11026,7 @@ async def generate(request: Request):
                 if isinstance(cached_plan, dict):
                     h3_window_plan_response = cached_plan
             else:
-                h3_images = []
+                h3_images = [ref["path"] for ref in (body.get("minimax_h3_references") or []) if ref.get("type") == "image" and ref.get("path") and os.path.isfile(ref["path"])]
                 for value in (h3_start_value, h3_end_value):
                     if isinstance(value, (list, tuple)):
                         value = value[0] if value else None
@@ -11058,6 +11037,9 @@ async def generate(request: Request):
                 # the API has returned a visible, cancellable canonical task.
                 body["_h3_window_plan_pending"] = {
                     "signature": h3_expected_signature,
+                    "planning_style": body.get("minimax_h3_planning_style", "faithful"),
+                    "h3_audio_policy": body.get("minimax_h3_audio_policy", "native"),
+                    "reference_context": body.get("h3_reference_context", ""),
                     "expected_count": h3_expected_count,
                     "model_type": str(body.get("model_type") or ""),
                     "resolution": str(body.get("resolution") or ""),
@@ -11596,6 +11578,9 @@ _MANAGED_LORAS = {
     },
 }
 
+
+from services.h3_runtime_policy import managed_turbo_downloads
+_MANAGED_LORAS.update(managed_turbo_downloads())
 
 def _ensure_managed_loras_present(activated_loras, model_type, progress=None):
     """Download any managed auto-download LoRA in `activated_loras` that is

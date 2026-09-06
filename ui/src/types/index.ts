@@ -198,6 +198,15 @@ export interface GenerateParams {
   minimax_h3_text_encoder?: 'nvfp4_awq' | 'gguf_q2_k' | 'gguf_q4_k_m' | 'int8' | 'bf16'
   /** One-click managed H3 Turbo recipe for Full or Pruned H3. */
   minimax_h3_turbo_mode?: boolean
+  override_attention?: string
+  minimax_h3_turbo_preset?: string
+  minimax_h3_planning_style?: 'faithful' | 'creative'
+  minimax_h3_audio_policy?: 'native' | 'legacy'
+  minimax_h3_reference_sequence?: boolean
+  minimax_h3_semantic_bridge_alpha?: number
+  minimax_h3_semantic_bridge_magnitude?: 'per_token' | 'global' | 'none'
+  minimax_h3_multi_window?: boolean
+  h3_reference_context?: string
   /** Automatically expand one long H3 concept into window-local prompts. */
   minimax_h3_window_storyboard?: boolean
   /** Compiled Context-IR prompts, one per continuation pass. */
@@ -238,6 +247,10 @@ export interface H3WindowPlanWindow {
 }
 
 export interface H3WindowPlan {
+  planning_style?: 'faithful' | 'creative'
+  audio_policy?: 'native' | 'legacy'
+  reference_context?: string
+  dialogue_ledger?: Array<{ id: string; text: string; speaker: string; speaker_id: string; language: string; window: number; locked: boolean; start_seconds: number; end_seconds: number }>
   source_prompt: string
   signature: string
   planned_by: 'llm' | 'deterministic_fallback' | 'not_needed'
@@ -710,6 +723,8 @@ export interface ModelOptions {
   returns_audio: boolean
   any_audio_prompt: boolean
   audio_scale_name: string
+  inference_steps_min?: number
+  inference_steps_max?: number
   lock_inference_steps: boolean
   lock_guidance_scale: boolean
   no_negative_prompt: boolean
@@ -736,7 +751,11 @@ export interface ModelOptions {
     recommended?: boolean
   }[] | null
   minimax_h3_text_encoder_default?: string
+  minimax_h3_semantic_bridge?: boolean
+  minimax_h3_fused_turbo?: boolean
   minimax_h3_turbo?: {
+    preset_id?: string
+    presets?: Array<{ id: string; label: string; filename: string; steps: number; weight: number; description: string; runtime: string; workflow: string }>
     filename: string
     label: string
     experimental: boolean

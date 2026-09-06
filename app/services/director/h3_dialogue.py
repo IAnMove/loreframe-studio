@@ -947,7 +947,7 @@ def compact_h3_visual_body(text: str) -> str:
 def compact_h3_soundscape(text: str) -> str:
     """Temporary: never describe sound. Schema value is always N/A."""
 
-    return H3_SOUND_FIELD_PLACEHOLDER
+    return _normalized_space(text) or H3_SOUND_FIELD_PLACEHOLDER
 
 
 def _trim_sentence(value: Any) -> str:
@@ -1801,7 +1801,8 @@ def compile_h3_official_prompt(
         )
         if header:
             compiled = f"{header}\n\n{compiled}"
-    return apply_h3_no_sound_description(normalize_h3_text(compiled).strip()), vocal_contract
+    from ..h3_prompt_policy import apply_h3_audio_policy
+    return apply_h3_audio_policy(normalize_h3_text(compiled).strip(), (audio_plan or {}).get("h3_audio_policy", "native")), vocal_contract
 
 
 def validate_h3_prompt_contract(

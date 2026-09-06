@@ -1,3 +1,4 @@
+import { h3ModelSwitchSettings, restoreSemanticBridgeSettings } from '../lib/h3OptionalSettings'
 import { create } from 'zustand'
 import type { GenerateParams, OutputFile, MediaFilter, AspectRatio, ResolutionPreset, ScailResolutionProfile, GenerationDetails, GenerationJob, ModelFamily, ModelDef, GenerationMode, ModelOptions, SystemConfig, SettingsTab, OutputMetadata, MultiClip, ServicesConfig, ProductionProfile, AudioAnalysisResult, PlannedClip, ClipPlan, DirectorClipImage, DirectorImageGenProgress, SpeakerMapping, DirectorSkill, DirectorShotImageGuidance, ShortFilmCharacter, ShortFilmPath, MusicVideoTreatment, CivitAIModel, CivitAIDownload, PipelineListItem, PipelineRepairState, SavedPipelineState, SystemDetectResponse, SystemStats, RecastCharacterMapping, RepaintRegionMapping, H3WindowPlan, DirectorV2PlanJob, DirectorV2PlanResponse } from '../types'
 import { DEFAULT_DIRECT_VIDEO_MASTER_PROMPT } from '../types'
@@ -769,6 +770,8 @@ const DEFAULT_ENABLED_MODELS = new Set([
   // MiniMax H3 Ref2VA: ordered image, video, and audio references.
   'minimax_h3_ref2va',
   'minimax_h3_ref2va_full',
+  'minimax_h3_fused_turbo',
+  'minimax_h3_ref2va_fused_turbo',
   // Audio — Speech
   'kugelaudio_0_open',
   'qwen3_tts_base',
@@ -796,7 +799,7 @@ const DEFAULT_ENABLED_MODELS = new Set([
  * a user who then disables them stays disabled forever. (This is
  * deliberately narrower than auto-enabling every unknown model — only
  * the curated list's own additions are pushed.) */
-const DEFAULTS_VERSION = 9
+const DEFAULTS_VERSION = 10
 const DEFAULTS_ADDED_IN: Record<number, string[]> = {
   // v1.2.0: the ACE-Step XL SFT pair; LM_4B becomes the music default.
   2: ['ace_step_v1_5_xl_sft', 'ace_step_v1_5_xl_sft_lm_4b'],
@@ -814,6 +817,7 @@ const DEFAULTS_ADDED_IN: Record<number, string[]> = {
   8: ['minimax_h3_full', 'minimax_h3_ref2va_full'],
   // Proven previous-Maestro INT8 ConvRot quality route.
   9: ['minimax_h3_legacy'],
+  10: ['minimax_h3_fused_turbo', 'minimax_h3_ref2va_fused_turbo'],
 }
 const DEFAULTS_VERSION_KEY = 'maestro_defaults_version'
 
@@ -2768,7 +2772,8 @@ export const useStore = create<AppState>((set, get) => {
     const prevImageMode = key === 'image_mode' ? ((get().params.image_mode as number) ?? 0) : null
     const invalidatesH3Plan = [
       'prompt', 'model_type', 'resolution', 'image_start', 'image_end',
-      'image_mode',
+      'image_mode', 'minimax_h3_planning_style', 'minimax_h3_audio_policy',
+      'minimax_h3_references', 'minimax_h3_reference_sequence',
     ].includes(String(key))
     set(s => ({
       params: { ...s.params, [key]: value },
@@ -4896,7 +4901,7 @@ export const useStore = create<AppState>((set, get) => {
         && state.durationSeconds > state.slidingWindowSeconds
       if (
         hasSlidingWindow
-        && state.modelOptions?.sliding_window_auto_prompt_pacing === true
+        && (state.modelOptions?.sliding_window_auto_prompt_pacing === true || params.minimax_h3_reference_sequence === true)
       ) {
         // H3's structured Context-IR prompt contains semantic line breaks;
         // they are not one prompt per continuation window. Keep the complete
@@ -5366,7 +5371,7 @@ export const useStore = create<AppState>((set, get) => {
       && state.params.image_mode !== 2
       && Number(params.video_length || 0) > Number(params.sliding_window_size || 0)
     )
-    if (state.modelOptions?.sliding_window_auto_prompt_pacing === true) {
+    if (state.modelOptions?.sliding_window_auto_prompt_pacing === true || params.minimax_h3_reference_sequence === true) {
       params.minimax_h3_window_storyboard = h3WindowStoryboardActive
       if (h3WindowStoryboardActive && state.h3WindowPlan) {
         params.h3_window_prompts = state.h3WindowPlan.windows.map(window => window.prompt)
@@ -5833,7 +5838,7 @@ export const useStore = create<AppState>((set, get) => {
     const phases = recastSinglePhase ? 1 : Math.max(1, modelOptions?.guidance_max_phases ?? 1)
     const removedTurboPreset = (
       idx >= 0
-      && filename === modelOptions?.minimax_h3_turbo?.filename
+      && (filename === modelOptions?.minimax_h3_turbo?.filename || modelOptions?.minimax_h3_turbo?.presets?.some(preset => preset.filename === filename))
     )
 
     if (idx >= 0) {
@@ -6245,7 +6250,7 @@ export const useStore = create<AppState>((set, get) => {
         // backend will enforce. This also closes a race where model defaults
         // (20 steps) arrive after the user checks Turbo (6 steps).
         if (get().params.minimax_h3_turbo_mode === true) {
-          paramUpdates.num_inference_steps = options.minimax_h3_turbo.steps
+          paramUpdates.num_inference_steps = options.minimax_h3_turbo.presets?.find(preset => preset.id === get().params.minimax_h3_turbo_preset)?.steps ?? options.minimax_h3_turbo.steps
         }
       } else {
         // Model switches preserve most Studio params. Never carry the Full-H3
@@ -8527,6 +8532,7 @@ export const useStore = create<AppState>((set, get) => {
       params: {
         ...s.params,
         model_type: modelType,
+        ...h3ModelSwitchSettings(s.params, modelType),
         activated_loras: [],
         loras_multipliers: '',
         minimax_h3_turbo_mode: false,
@@ -8742,6 +8748,13 @@ export const useStore = create<AppState>((set, get) => {
       p.minimax_h3_text_encoder as GenerateParams['minimax_h3_text_encoder']
     ) ?? undefined
     newParams.minimax_h3_turbo_mode = Boolean(p.minimax_h3_turbo_mode)
+    newParams.override_attention = typeof p.override_attention === 'string' ? p.override_attention : undefined
+    newParams.minimax_h3_turbo_preset = typeof p.minimax_h3_turbo_preset === 'string' ? p.minimax_h3_turbo_preset : undefined
+    newParams.minimax_h3_planning_style = p.minimax_h3_planning_style === 'creative' ? 'creative' : 'faithful'
+    newParams.minimax_h3_audio_policy = p.minimax_h3_audio_policy === 'legacy' ? 'legacy' : 'native'
+    newParams.minimax_h3_reference_sequence = p.minimax_h3_reference_sequence === true
+    Object.assign(newParams, restoreSemanticBridgeSettings(p, modelType))
+    newParams.h3_reference_context = typeof p.h3_reference_context === 'string' ? p.h3_reference_context : undefined
     newParams.self_refiner_setting = (p.self_refiner_setting as number) ?? undefined
     newParams.audio_guide = (p.audio_guide as string) || ''
     newParams.audio_guide2 = (p.audio_guide2 as string) || ''

@@ -331,16 +331,11 @@ def _prepare_director_generation_params(params: dict) -> None:
         params["sliding_window_memory_override"] = True
 
     if params.get("minimax_h3_turbo_mode") is True:
-        from models.minimax_h3.turbo import normalize_minimax_h3_turbo_request
+        from services.h3_runtime_policy import normalize_h3_runtime_request
 
         getter = getattr(_wgp, "get_model_def", None)
         model_def = getter(model_type) if callable(getter) else {}
-        normalize_minimax_h3_turbo_request(
-            params,
-            full_checkpoint=bool(
-                (model_def or {}).get("minimax_h3_full_checkpoint", False)
-            ),
-        )
+        normalize_h3_runtime_request(params, model_def or {})
 
 
 class _RepairCancelledError(RuntimeError):

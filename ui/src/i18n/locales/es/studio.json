@@ -777,5 +777,46 @@
     "chooseModel": "Elige primero un modelo de imagen capaz de usar referencias.",
     "generated": "Variación de panorama generada: {{name}}",
     "generateFailed": "No se pudo generar la variación de panorama."
+  },
+  "h3Adoption": {
+    "writing": "Escritura con IA",
+    "faithful": "IA Fiel",
+    "creative": "IA Creativa",
+    "faithfulHint": "Conserva tu escena y frases exactas. Escribe el diálogo solicitado cuando no hay guion.",
+    "creativeHint": "Desarrolla la escena y añade diálogo con sentido. Respeta las frases exactas y las peticiones de silencio.",
+    "enhance": "Planificar / mejorar prompt",
+    "audio": "Audio de la escena",
+    "native": "Ambiente y diálogo nativos",
+    "legacy": "Política anterior: sólo diálogo",
+    "sequence": "Continuar referencias entre ventanas",
+    "attention": "Atención",
+    "denseAuto": "Densa automática",
+    "fallback": "La atención dispersa vuelve a densa si no está disponible. Sol requiere Triton 3.6+.",
+    "turboPreset": "Preset de aceleración H3"
+  },
+  "h3Bridge": {
+    "label": "Semantic Bridge (experimental)",
+    "hint": "Adaptador opcional de fidelidad al prompt para First/Last. Apagado por defecto; intensidad inicial recomendada: 0.10. Descarga unos 11 MB al usarlo por primera vez.",
+    "strength": "Intensidad del adaptador",
+    "magnitude": "Ajuste de magnitud",
+    "perToken": "Por token (recomendado)",
+    "global": "Global",
+    "none": "Sin ajuste"
+  },
+  "h3Catalog": {
+    "fastName": "H3 · Modo rápido — {{workflow}}",
+    "frames": "Fotogramas",
+    "references": "Referencias",
+    "fastHint": "Fused · Experimental. Genera en 4 pasos; puede perder algo de calidad.",
+    "prunedHint": "Pruned · Modelo recortado. Menor tamaño de pesos que Full; el consumo depende de la configuración.",
+    "fullHint": "Full · Modelo completo. Opción avanzada: puede aumentar la presión de RAM sin mejorar necesariamente el resultado.",
+    "legacyHint": "Legacy · Implementación anterior para compatibilidad.",
+    "memory": "Memoria medida en las pruebas",
+    "measured": "Picos observados: RAM de procesos (PSS) {{ram}} GiB · VRAM de procesos {{vram}} GiB.",
+    "conditions": "RTX 4090 de 24 GB · RAM instalada 64 GB · 864×480 · 10,1 s · perfil {{profile}}. Pruned/Full: PDD 8 + Sol; Fused: 4 pasos + SLA.",
+    "warmOnly": "RAM de Fused Fotogramas: solo la segunda ejecución; la medición inicial tuvo una muestra anómala.",
+    "memoryLimit": "Son mediciones locales, no requisitos mínimos. Hubo uso de swap. El pico de todo el equipo puede ser mayor; cambia con resolución, duración, codificador y perfil.",
+    "unmeasured": "No se midió esta variante en la comparativa actual.",
+    "audioLimit": "En estas pruebas hubo habla inventada al final. El modo rápido no garantiza un diálogo limpio."
   }
 }
