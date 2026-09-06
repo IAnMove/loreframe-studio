@@ -24,11 +24,13 @@ Base: development `ebed43fd`, 2026-09-06. Complementa
   Payload versionado, validado y limitado a 2 MiB. Un fallo de reemplazo no
   recupera una copia anterior obsoleta. Guardar o descartar limpia la recuperación.
 - [x] Tests baratos de estado, interacción, persistencia y respuestas tardías:
-  13 casos específicos aprobados. Un E2E simulado abre el taller desde la
+  22 casos específicos aprobados. Un E2E simulado abre el taller desde la
   navegación real, revisa, guarda y recarga sin inferencia. No es generación real.
 - [x] Commit inicial `4cfc6cdd` y revisión independiente de código por Luna.
   Su hallazgo sobre recuperación de borradores se corrige antes de publicar.
-- [ ] Validación final del parche de recuperación y PR a development.
+- [x] Validación local final del parche de recuperación, incluida navegación
+  real con API simulada y desmontaje comprobado antes de recuperar el borrador.
+- [ ] PR a development; comprobar su estado remoto, no inferirlo de esta lista.
 - [ ] CI verde sobre HEAD exacto y revisión remota completada o dispensada.
 - [ ] Merge normal a development (no publicar main).
 - [ ] Prueba artística de un personaje hablando (pendiente, fuera de este PR).
@@ -120,3 +122,30 @@ La repetición completa con afinidad a dos CPUs y OMP/BLAS/MKL a un hilo pasó:
 2160 tests, 1 omitido, 79,32 s; se mantuvieron 3 GiB y swap 0. No se cambiaron
 ni omitieron esos tests para lograrlo. La corrección posterior de recuperación
 requiere una nueva tanda UI/ratchet/build/E2E; Python no se ha modificado.
+
+### Cierre local, 2026-09-07
+
+- UI final: **979 aprobados**, incluidos los 22 específicos. Lint, tipos, i18n,
+  clean-repo, dependencias, enlaces y marca aprobados.
+- Revisión de integración por Luna: hallazgo de recuperación corregido en
+  `6713ce7c`, re-revisado sin nuevos bloqueos. El helper delegado fue revisado
+  por el principal, no certificado independientemente por su propio autor.
+- Integrado `development` `c2794f6c` (Labs, sin cambios de producto superpuestos);
+  los 7 tests Python del contrato entrante pasan. No se repitió la suite Python
+  completa porque este PR no modifica Python y ya pasó la tanda anterior.
+- Ratchet contra esa base aprobado; score **53.0/100**. No es un certificado
+  de arquitectura limpia: conserva avisos, incluidos tres nuevos casos de
+  complejidad >=15 y Face Rig 84→85. No se alteraron baselines ni umbrales.
+- Build y presupuesto aprobados: entrada gzip 316154/327680 bytes.
+- **19 E2E simulados aprobados**. La primera tanda tuvo 18 aprobados y un fallo
+  de sincronización del test al navegar demasiado rápido entre paneles. Se
+  añadió comprobación de navegación/desmontaje, no una espera arbitraria ni
+  un cambio de producto para ocultarlo; repetición completa aprobada.
+- Todas las tandas finales bajo cgroup **3 GiB**, swap 0, timeout, en serie.
+  Pico agregado observado de la primera: 1806360576 bytes; último muestreo de
+  la repetición: 1761177600 bytes. Son muestras de MemoryPeak en vivo, no una
+  afirmación de pico final exacto. No se iniciaron modelos ni apps compartidas.
+
+Código validado: `b663912d` (contiene `6713ce7c`, ajuste E2E `27d68e7a` y base
+integrada). Commit documental posterior no cambia el producto. CI remoto,
+Cursor, merge y actuación con audio real siguen siendo evidencias separadas.
