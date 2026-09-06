@@ -59,6 +59,7 @@ _MODEL_SELECTOR_PATH = _ROOT / "ui" / "src" / "components" / "Sidebar" / "ModelS
 _LORA_SELECTOR_PATH = _ROOT / "ui" / "src" / "components" / "SettingsDrawer" / "LoraSelector.tsx"
 _STUDIO_EN_PATH = _ROOT / "ui" / "src" / "i18n" / "locales" / "en" / "studio.json"
 _ENHANCE_GUIDES_PATH = _APP / "services" / "enhance_guides.py"
+_GUIDE_RESOLUTION_PATH = _APP / "services" / "guide_resolution.py"
 _PROMPT_POLISH_PATH = _APP / "services" / "director" / "prompt_polish.py"
 _H3_ENHANCE_GUIDE_PATH = _APP / "services" / "llm_guides" / "enhance" / "minimax_h3_video.md"
 _H3_REF2VA_GUIDE_PATH = (
@@ -941,12 +942,11 @@ class TestMiniMaxH3Definition(unittest.TestCase):
         self.assertIn('md.get("returns_audio", False)', _read(_LAUNCH_PATH))
 
     def test_h3_prompt_guides_cover_native_audio_and_director(self):
-        self.assertIn('"minimax_h3": "minimax_h3_video.md"', _read(_ENHANCE_GUIDES_PATH))
-        self.assertIn('"minimax_h3": "minimax_h3_video"', _read(_PROMPT_POLISH_PATH))
-        self.assertIn(
-            '"minimax_h3_ref2va": "minimax_h3_ref2va_video"',
-            _read(_PROMPT_POLISH_PATH),
-        )
+        shared = _read(_GUIDE_RESOLUTION_PATH)
+        self.assertIn('"minimax_h3": "minimax_h3_video"', shared)
+        self.assertIn('"minimax_h3_ref2va": "minimax_h3_ref2va_video"', shared)
+        self.assertIn("VIDEO_GUIDE_STEMS", _read(_ENHANCE_GUIDES_PATH))
+        self.assertIn("match_guide_stem", _read(_PROMPT_POLISH_PATH))
         enhance_guide = _read(_H3_ENHANCE_GUIDE_PATH)
         dialect_guide = _read(_H3_DIALECT_GUIDE_PATH)
         ref2va_dialect_guide = _read(_H3_REF2VA_DIALECT_GUIDE_PATH)
@@ -987,8 +987,8 @@ class TestMiniMaxH3Definition(unittest.TestCase):
 
     def test_ref2va_prompt_guide_uses_official_labels_and_six_sections(self):
         self.assertIn(
-            '"minimax_h3_ref2va": "minimax_h3_ref2va_video.md"',
-            _read(_ENHANCE_GUIDES_PATH),
+            '"minimax_h3_ref2va": "minimax_h3_ref2va_video"',
+            _read(_GUIDE_RESOLUTION_PATH),
         )
         guide = _read(_H3_REF2VA_GUIDE_PATH)
         for required in (
