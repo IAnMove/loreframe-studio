@@ -12,6 +12,29 @@ Object.assign(globalThis, {
 })
 window.matchMedia = () => ({ matches: false })
 
+test('Story artwork reconciliation preserves scoped permission without Studio or inventory escalation', async () => {
+  const { reconcileAgentTurnWithRequest } = await import('../src/features/agent/agentActions.ts')
+  const character = { type: 'generate_story_visuals', scope: 'characters', targetNames: ['Nara'], targetStoryTitle: 'Entre dos mundos', confirm: true }
+  const location = { ...character, scope: 'locations', targetNames: ['Colina al crepúsculo'] }
+  const reconcile = (request, actions) => reconcileAgentTurnWithRequest(request, { reply: 'Ready', actions })
+  const partial = await reconcile('Genera las imágenes de Nara y Colina al crepúsculo en Story Lab. No generes el mundo general. No generes vídeo.', [character, location])
+  assert.deepEqual(partial.actions, [character, location])
+  const fallback = await reconcile('Genera la imagen de Nara en Story Lab con MiniMax.', [{ type: 'prepare_image', prompt: 'Nara' }, { type: 'start_generation', confirm: true }])
+  assert.deepEqual(fallback.actions, [])
+  for (const restriction of ['No generes el mundo general.', 'No generes localizaciones.', 'No generes a Nara.']) {
+    const actual = await reconcile(`Genera todas las imágenes de Story Lab. ${restriction}`, [{ ...character, scope: 'all', targetNames: [] }])
+    assert.deepEqual(actual.actions, [])
+  }
+  for (const request of ['Crea el proyecto Story Lab con el personaje Nara.']) {
+    assert.deepEqual((await reconcile(request, [character])).actions, [])
+  }
+  const comic = await reconcile('Crea un cómic con Nara.', [character])
+  assert.deepEqual(comic.actions, (await reconcile('Crea un cómic con Nara.', [])).actions)
+  assert.ok(comic.actions.every(action => action.type !== 'generate_story_visuals'))
+  const comicArtwork = await reconcile('Crea un cómic con Nara y genera sus imágenes.', [character])
+  assert.ok(comicArtwork.actions.some(action => action.type === 'create_comic'))
+})
+
 test('parses a filled Series Lab episode action without trusting unknown fields', async () => {
   const { parseAgentTurn } = await import('../src/features/agent/agentActions.ts')
   const turn = parseAgentTurn(JSON.stringify({

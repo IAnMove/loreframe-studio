@@ -262,6 +262,17 @@ export async function generateImageAsset(
   options?: LocalImageOptions,
 ): Promise<ComicAsset> {
   if (provider === 'minimax') {
+    const requestedWorkspace = useStore.getState().activeWorkspace
+    let subjectReference = reference
+    if (reference?.startsWith('/api/v1/file/')) {
+      const url = new URL(reference, 'http://reference.invalid')
+      const entries = [...url.searchParams.entries()]
+      if (url.hash || entries.some(([key, value]) => key !== 'workspace' || value !== requestedWorkspace) || entries.length > 1) {
+        throw new Error('MiniMax identity reference must belong to the requested workspace')
+      }
+      // Legacy servers resolve the job workspace but do not parse file queries.
+      subjectReference = url.pathname
+    }
     const providerPrompt = compactProviderPrompt(prompt)
     let job: api.MiniMaxImageJob
     if (options?.existingJobId) {
@@ -270,8 +281,8 @@ export async function generateImageAsset(
       job = await api.startMiniMaxImageJob({
         prompt: providerPrompt,
         aspect_ratio: options?.aspectRatio || '1:1',
-        subject_reference: reference,
-        workspace: useStore.getState().activeWorkspace,
+        subject_reference: subjectReference,
+        workspace: requestedWorkspace,
       })
       options?.onJobSubmitted?.(job.jobId)
     }
@@ -302,7 +313,20 @@ export async function generateImageAsset(
       }
     }
     if (job.status === 'completed' && job.result?.asset) {
-      return withTaskIdentity(job.result.asset, identity)
+      const asset = job.result.asset
+      // The job owns its output even after a tab/workspace change or recovery.
+      // Older API responses omit the workspace on their local file URLs.
+      const scopedUrl = (source?: string) => {
+        if (!source?.startsWith('/api/v1/file/')) return source
+        const url = new URL(source, 'http://reference.invalid')
+        url.searchParams.set('workspace', job.workspace || requestedWorkspace)
+        return url.pathname + url.search
+      }
+      return withTaskIdentity({
+        ...asset,
+        source: scopedUrl(asset.source) || asset.source,
+        ...(asset.thumbnail ? { thumbnail: scopedUrl(asset.thumbnail) } : {}),
+      }, identity)
     }
     if (job.status === 'cancelled') throw new Error('MiniMax image generation was cancelled')
     throw new Error(

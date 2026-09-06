@@ -1,7 +1,9 @@
 # Showcase con MiniMax/Wizard y tres canciones reales
 
 Encargo del usuario: 2026-09-06, después de P00-C2 y P00D/primer selector.
-Estado: preparación; no se han generado todavía las nuevas imágenes/videoclips.
+Estado: tres audios preservados y analizados por CPU; primeros retratos MiniMax
+reales generados mediante Wizard y primer matte con Tools. Galería nueva y
+videoclips finales todavía pendientes; originales coral siguen intactos.
 
 ## Alcance y límites
 
@@ -29,9 +31,12 @@ Estado: preparación; no se han generado todavía las nuevas imágenes/videoclip
   - asset_f5e0d1789b384ab6831a4b1e4693264c — “I crossed the Shire…”, MiniMax-Music3.
   - asset_f85ef3d27fa845928151dfffe369a6cc — “The screen says zero…”, ACE-Step.
   Son identificadores de fuente, no títulos nuevos ni renombrados.
-- [ ] Obtener metadata completa, duración y audio original; verificar que son
+- [x] Obtener metadata completa, duración y audio original; verificar que son
   canciones completas, no simulaciones, stems, speech ni versiones duplicadas.
-- [ ] Inspeccionar interfaz/API real de Wizard y MiniMax. Guardar conversación
+  Duraciones observadas: 90 s, 104.083447 s y 120 s. WAV originales con hashes
+  y manifests en el directorio de evidencia, fuera de Git. Las letras mixtas
+  de los dos últimos ya estaban en las fuentes; se conservan literalmente.
+- [x] Inspeccionar interfaz/API real de Wizard y MiniMax. Guardar conversación
   y decisiones auténticas, sin fabricar mensajes como si procedieran del Wizard.
 - [ ] Brief del Wizard por canción: ritmo, secciones, narrativa visual, personaje,
   fondos, encuadres y efectos compatibles. Prompts técnicos pueden estar en inglés;
@@ -67,3 +72,47 @@ Usar Pinokio para descubrir base URL actual antes de API, no asumir puertos.
 
 Originales intactos: /tmp/hocus-template-review.o8H5is/previews/ y publicación
 procedural-style-reference-v1. Nuevos outputs serán versiones hermanas fuera de Git.
+
+## Concurrencia y límites detectados durante la ejecución
+
+Se creó `procedural-showcase-v2` mediante API sin activarlo globalmente; el servidor
+sigue en `default`. La UI stock cambia un singleton al seleccionar workspace.
+La UI de prueba de esta sesión usa componentes reales desde este worktree, con
+contexto Zustand explícito sólo en ese navegador. Su guard bloquea mutaciones de
+settings/workspace global, inferencia local y vídeo IA; sólo permite peticiones
+del Wizard y Story Lab dirigidas al workspace nuevo y MiniMax Image-01 remoto.
+No es una nueva función de aislamiento ya publicada en producto.
+
+MiniMax chat está configurado y hay clave de Image-01 (sólo booleanos comprobados).
+Image-01 produce JPG opaco; su manifiesto no guarda actualmente la identidad de
+la referencia como parent. Mantener evidencia externa de requests/references.
+El capturador público de escenas admite MP4/WebM; el sandbox C2 es más restrictivo
+y no debe emplearse como si fuese el backend de montaje de canciones completas.
+
+Evidencia de sesión: `/tmp/hocus-minimax-media.CF3dwI`. El cliente de descarga
+portable está en `pinokio_agent/skills/api/Maestro-next.git/clients/asset_snapshot.mjs`.
+
+### Hallazgos y decisiones verificadas durante el piloto
+
+- El reconciliador convertía una petición explícita de Story/MiniMax en
+  Studio/Flux o la anulaba por una prohibición de otro medio. El navegador
+  bloqueó el intento local; no se ejecutó Flux. Corrección local y regresiones
+  acotadas en revisión, todavía no mezcladas.
+- Las respuestas antiguas de MiniMax omiten workspace en source/thumbnail.
+  La corrección local utiliza el workspace del job, también al recuperar.
+- Las referencias de personajes de Story Lab fuerzan un retrato de identidad;
+  no equivale a un recorte de cintura ni a un personaje articulado.
+- Un estilo demasiado largo puede truncar el contenido técnico, y el estilo de
+  personaje puede contaminar fondos. Los dos fondos piloto con personas se
+  conservan como evidencia rechazada, no como plates válidos. Para los fondos
+  finales el Wizard redacta prompts separados en inglés y el operador los envía
+  literalmente a la API pública de HocusPocus, con 16:9 explícito. Distinguir esta
+  ejecución del operador de una acción ejecutada por el Wizard.
+- El tercer inventario contenía nombres duplicados. La guarda de ambigüedad
+  impidió generar. El operador renombró los duplicados del borrador propio como
+  variantes sin eliminar entidades y volvió a pedir el personaje al Wizard.
+- El exportador actual no admite soundtrack de otro workspace. Se crearon
+  copias byte a byte mediante Upload; los tres SHA coinciden con los originales.
+  No se movió ningún audio. Análisis público con transcribe=false y
+  extract_vocals=false: 117.5, 86.1 y 99.4 BPM estimados. Downbeats heurísticos,
+  no compases garantizados ni alineación fonética.
