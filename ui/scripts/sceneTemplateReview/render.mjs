@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { chromium } from '@playwright/test'
 
 const catalog = await import(new URL('../../src/features/sceneTemplates/catalog.ts', import.meta.url))
@@ -14,7 +15,15 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 function gitSnapshot(repoRoot) {
   const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim()
   const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: repoRoot, encoding: 'utf8' }).trim().length > 0
-  return { headSha, dirty }
+  const diff = execFileSync('git', ['diff', 'HEAD', '--binary'], { cwd: repoRoot, maxBuffer: 20 * 1024 * 1024 })
+  return { headSha, dirty, trackedDiffSha256: sha256(diff) }
+}
+
+function runtimeVersions(browser) {
+  const require = createRequire(import.meta.url)
+  const version = executable => execFileSync(executable, ['-version'], { encoding: 'utf8' }).split('\n')[0]
+  return { node: process.version, playwright: require('@playwright/test/package.json').version,
+    chromium: browser.version(), ffmpeg: version('ffmpeg'), ffprobe: version('ffprobe') }
 }
 
 function assert(condition, message) {
@@ -60,7 +69,8 @@ async function saveEditableScene(page, server, template) {
   return { name: saved.name, snapshot }
 }
 
-async function renderOne({ browser, server, repoRoot, template }) {
+async function renderOne({ browser, server, repoRoot, template, runtime }) {
+  const source = gitSnapshot(repoRoot)
   const scene = demos.candidateDemoScene(template.id, 'coral')
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' })
   const page = await context.newPage()
@@ -136,7 +146,7 @@ async function renderOne({ browser, server, repoRoot, template }) {
     const posterPath = path.join(server.previewsDir, `${template.id}.png`)
     execFileSync('ffmpeg', ['-y', '-v', 'error', '-ss', '1.5', '-i', previewPath, '-frames:v', '1', posterPath], { cwd: repoRoot })
 
-    const source = gitSnapshot(repoRoot)
+    assert(JSON.stringify(gitSnapshot(repoRoot)) === JSON.stringify(source), 'Source changed during rendering; refusing to label this preview as reproducible.')
     const reviewMetadata = {
       catalogVersion: catalog.CATALOG_VERSION,
       templateId: template.id,
@@ -147,13 +157,18 @@ async function renderOne({ browser, server, repoRoot, template }) {
       sourceCommit: source.headSha,
       headSha: source.headSha,
       dirty: source.dirty,
-      sourceState: 'local candidate implementation; not yet merged',
+      trackedDiffSha256: source.trackedDiffSha256,
+      sourceState: source.dirty ? 'dirty local tree; untracked files are not content-addressed' : 'clean local commit; merge/release status not inferred',
+      runtime,
+      renderer: 'layer-compositor-v1',
       duration,
       width: scene.width,
       height: scene.height,
       fps: observedFps,
       sha256: sha256(bytes),
       bytes: bytes.length,
+      posterSha256: sha256(await fs.readFile(posterPath)),
+      inputReferences: scene.layers.filter(layer => layer.source).map(layer => ({ layerId: layer.id, referenceSha256: sha256(Buffer.from(layer.source)), inlineContent: layer.source.startsWith('data:') })),
       editableSceneFile: savedScene.name,
       editableSceneSha256: sha256(await fs.readFile(path.join(server.exportsDir, savedScene.name))),
       sceneSha256: sha256(Buffer.from(JSON.stringify(recordedScene))),
@@ -178,13 +193,15 @@ export async function renderTemplates({ server, repoRoot, templateIds = [] }) {
   if (unknownIds.length) throw new Error(`Unknown candidate scene template ID(s): ${unknownIds.join(', ')}`)
   const selected = catalog.CANDIDATE_SCENE_TEMPLATES.filter(template => !templateIds.length || templateIds.includes(template.id))
   if (!selected.length) throw new Error('No matching candidate scene templates were requested.')
+  assert(selected.every(template => /^[a-z0-9][a-z0-9-]*$/.test(template.id)), 'Unsafe template ID; no paths were created.')
   const browser = await chromium.launch({ args: ['--disable-gpu', '--disable-dev-shm-usage'] })
   const results = []
   const failures = []
   try {
+    const runtime = runtimeVersions(browser)
     for (const template of selected) {
       try {
-        results.push(await renderOne({ browser, server, repoRoot, template }))
+        results.push(await renderOne({ browser, server, repoRoot, template, runtime }))
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         failures.push({ id: template.id, error: message })

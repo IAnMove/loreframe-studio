@@ -4,6 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { createWriteBudget, REVIEW_HEADERS, validateReviewSnapshot } from './security.mjs'
 
 const MAX_REQUEST_BYTES = 40 * 1024 * 1024
 const MAX_BLOCKED_REQUESTS = 128
@@ -89,6 +90,11 @@ async function indexStaticUi(root) {
 async function sendFile(request, response, filename) {
   const stat = await fs.stat(filename)
   const range = request.headers.range?.match(/^bytes=(\d+)-(\d*)$/)
+  if (request.headers.range && !range) {
+    response.writeHead(416, { 'content-range': `bytes */${stat.size}` })
+    response.end()
+    return
+  }
   const baseHeaders = { 'content-type': contentType(filename), 'accept-ranges': 'bytes', 'cache-control': 'no-store' }
   if (!range) {
     response.writeHead(200, { ...baseHeaders, 'content-length': stat.size })
@@ -143,7 +149,7 @@ function outputName(kind, extension) {
  * HTTP sandbox. The returned server owns only the fresh output directory and
  * an in-memory output index; nothing is recovered after a process restart.
  */
-export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOST, port = 0 }) {
+export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOST, port = 0, limits }) {
   const listenHost = validateListenHost(host)
   const requestedPort = parsePort(port)
   const exportsDir = path.join(outputDir, 'exports')
@@ -158,6 +164,8 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
   const blocked = []
   const previewFiles = new Set()
   let closed = false
+  let writing = false
+  const budget = createWriteBudget(limits)
 
   const remember = ({ name, type, size, params, filename }) => {
     const item = {
@@ -177,6 +185,17 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
 
   const allowedOrigins = new Set()
   const allowedHosts = new Set()
+  const isIndexedSource = source => {
+    try {
+      const url = new URL(source, 'http://review.invalid')
+      const relative = source.startsWith('/') && !source.startsWith('//')
+      if (!relative && !allowedOrigins.has(url.origin)) return false
+      const file = url.pathname.match(/^\/api\/v1\/file\/([^/]+)$/)
+      if (file) return files.has(decodeURIComponent(file[1]))
+      const preview = url.pathname.match(PREVIEW_PATH)
+      return Boolean(preview && previewFiles.has(`${preview[1]}.${preview[2]}`))
+    } catch { return false }
+  }
   const addAllowedOrigins = actualPort => {
     allowedOrigins.add(publicOrigin(LOOPBACK_HOST, actualPort))
     allowedOrigins.add(publicOrigin('localhost', actualPort))
@@ -209,18 +228,29 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
   }
 
   const handler = async (request, response) => {
+    let ownsWrite = false
     try {
+      for (const [name, value] of Object.entries(REVIEW_HEADERS)) response.setHeader(name, value)
       const url = new URL(request.url || '/', 'http://127.0.0.1')
       const pathname = url.pathname
       if (rejectForeignHost(request, response)) return
       if (request.method !== 'GET' && request.method !== 'HEAD' && rejectForeignOrigin(request, response)) return
+      if (request.method === 'POST') {
+        if (request.socket.localAddress !== LOOPBACK_HOST) { json(response, { detail: 'LAN review is read-only; save from the loopback editor.' }, 403); return }
+        if (writing || closed) { json(response, { detail: 'Review write in progress; retry after it finishes.' }, 409); return }
+        writing = true
+        ownsWrite = true
+        if (Number(request.headers['content-length']) > MAX_REQUEST_BYTES) throw new RequestTooLargeError('Review sandbox request exceeds the 40 MB limit.')
+      }
 
       if (request.method === 'GET' && pathname === '/api/v1/scene-template-review/status') {
         json(response, {
           sandbox: true,
           providers: 'blocked',
           real_apps: 'untouched',
-          outputDir,
+          storage: 'temporary; no restart recovery',
+          writeScope: 'loopback-only',
+          quota: budget.snapshot(),
           outputCount: outputs.length,
           blocked: [...blocked],
         })
@@ -259,10 +289,12 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
       }
       if (request.method === 'POST' && pathname === '/api/v1/scenes') {
         const payload = JSON.parse((await readBody(request)).toString('utf8'))
-        if (!payload.scene || payload.scene.version !== 1 || !Array.isArray(payload.scene.layers)) throw new Error('Expected editable scene snapshot.')
+        validateReviewSnapshot(payload.scene, isIndexedSource)
+        if (payload.preview && !/^data:image\//i.test(payload.preview)) throw new Error('Preview must be an inline image.')
         const name = outputName('scene', 'json')
         const filename = path.join(exportsDir, name)
         const bytes = Buffer.from(JSON.stringify(payload.scene, null, 2))
+        budget.reserve(bytes.length + Buffer.byteLength(JSON.stringify(payload)))
         await fs.writeFile(filename, bytes, { flag: 'wx' })
         const saved = remember({ name, type: 'scene', size: bytes.length, params: { scene: payload.scene, preview: payload.preview }, filename })
         json(response, { ...saved, thumbnail_url: payload.preview || null })
@@ -278,11 +310,13 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
         const form = await formRequest.formData()
         const video = form.get('file')
         const params = JSON.parse(String(form.get('metadata') || '{}'))
-        if (!video || typeof video.arrayBuffer !== 'function' || !params.scene || !Array.isArray(params.scene.layers)) throw new Error('Expected recording and editable scene snapshot.')
+        if (!video || typeof video.arrayBuffer !== 'function') throw new Error('Expected recording and editable scene snapshot.')
+        validateReviewSnapshot(params.scene, isIndexedSource)
         const bytes = Buffer.from(await video.arrayBuffer())
         if (bytes.subarray(4, 8).toString('ascii') !== 'ftyp') throw new Error('Expected MP4 recording; no silent fake conversion is accepted.')
         const name = outputName('video', 'mp4')
         const filename = path.join(exportsDir, name)
+        budget.reserve(bytes.length + Buffer.byteLength(JSON.stringify({ params })))
         await fs.writeFile(filename, bytes, { flag: 'wx' })
         await fs.writeFile(path.join(exportsDir, `${name}.metadata.json`), JSON.stringify({ params }, null, 2), { flag: 'wx' })
         console.log(`RECORDED template=${params.scene.narrative?.templateId || 'unknown'} name=${name} bytes=${bytes.length}`)
@@ -302,13 +336,21 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
       }
       json(response, { detail: 'Not found.' }, 404)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const status = error instanceof RequestTooLargeError ? 413 : message.includes('ENOENT') ? 404 : 400
+      const message = error?.code ? 'Review file operation failed.' : error instanceof Error ? error.message : String(error)
+      const status = error instanceof RequestTooLargeError ? 413 : error?.code === 'ENOENT' ? 404 : 400
       json(response, { detail: message }, status)
+    } finally {
+      if (ownsWrite) writing = false
     }
   }
 
-  const makeHttpServer = () => http.createServer((request, response) => { void handler(request, response) })
+  const makeHttpServer = () => {
+    const server = http.createServer((request, response) => { void handler(request, response) })
+    server.requestTimeout = 30_000
+    server.headersTimeout = 10_000
+    server.maxHeadersCount = 64
+    return server
+  }
   const servers = [makeHttpServer()]
   let actualPort
   try {

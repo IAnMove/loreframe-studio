@@ -12,6 +12,7 @@ import {
 const scene = {
   version: 1,
   name: 'HTTP sandbox scene',
+  generationPolicy: 'provided_only',
   width: 1280,
   height: 720,
   fps: 30,
@@ -27,7 +28,9 @@ const scene = {
   narrative: { templateId: 'http-sandbox-test', variant: 'coral' },
 }
 const preview = 'data:image/png;base64,iVBORw0KGgo='
-const mp4Bytes = Buffer.from([
+// Transport fixture only: this deliberately has an ftyp header but is not a
+// playable MP4. Real compositor validity is covered by the local render smoke.
+const mp4TransportBytes = Buffer.from([
   0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0,
   0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
 ])
@@ -35,12 +38,19 @@ const mp4Bytes = Buffer.from([
 let outputDir
 let server
 
-before(async () => {
-  outputDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hocus-scene-template-review-test-'))
-  const uiDist = path.join(outputDir, 'ui')
+async function createSandbox(limits) {
+  const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hocus-scene-template-review-test-'))
+  const uiDist = path.join(sandboxDir, 'ui')
   await fs.mkdir(uiDist)
   await fs.writeFile(path.join(uiDist, 'index.html'), '<!doctype html><title>Test fixture</title>')
-  server = await startReviewServer({ uiDist, outputDir, host: '127.0.0.1', port: 0 })
+  const sandbox = await startReviewServer({ uiDist, outputDir: sandboxDir, host: '127.0.0.1', port: 0, limits })
+  return { directory: sandboxDir, server: sandbox }
+}
+
+before(async () => {
+  const sandbox = await createSandbox()
+  outputDir = sandbox.directory
+  server = sandbox.server
 })
 
 after(async () => {
@@ -63,6 +73,32 @@ const requestWithHeaders = (pathname, headers) => new Promise((resolve, reject) 
   })
   request.once('error', reject)
   request.end()
+})
+
+const postScene = (targetServer, payload) => fetch(`${targetServer.localOrigin}/api/v1/scenes`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(payload),
+})
+
+const outputCount = async targetServer => {
+  const response = await fetch(`${targetServer.localOrigin}/api/v1/outputs`)
+  return (await response.json()).total
+}
+
+test('publishes defensive headers and a bounded status contract without leaking its filesystem path', async () => {
+  const response = await fetch(url('/api/v1/scene-template-review/status'))
+  const body = await response.json()
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer')
+  assert.equal(response.headers.get('x-frame-options'), 'DENY')
+  assert.match(response.headers.get('content-security-policy'), /default-src 'none'/)
+  assert.equal(body.outputDir, undefined)
+  assert.equal(body.storage, 'temporary; no restart recovery')
+  assert.equal(body.writeScope, 'loopback-only')
+  assert.equal(body.quota.maxOutputs, 128)
+  assert.equal(body.quota.maxBytes, 256 * 1024 * 1024)
 })
 
 test('rejects unknown APIs with bounded blocked diagnostics', async () => {
@@ -96,6 +132,40 @@ test('rejects a foreign Origin before writing outputs', async () => {
   assert.equal(body.total, 0)
 })
 
+test('rejects malformed JSON, missing multipart recordings, invalid transport bytes and unsafe sources', async () => {
+  const malformed = await fetch(url('/api/v1/scenes'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{not-json',
+  })
+  assert.equal(malformed.status, 400)
+
+  const missingFile = new FormData()
+  missingFile.append('metadata', JSON.stringify({ scene }))
+  const missing = await fetch(url('/api/v1/scenes/recordings'), { method: 'POST', body: missingFile })
+  assert.equal(missing.status, 400)
+
+  const invalidTransport = new FormData()
+  invalidTransport.append('file', new Blob([Buffer.from('not-an-mp4')], { type: 'video/mp4' }), 'scene.mp4')
+  invalidTransport.append('metadata', JSON.stringify({ scene }))
+  const invalid = await fetch(url('/api/v1/scenes/recordings'), { method: 'POST', body: invalidTransport })
+  assert.equal(invalid.status, 400)
+
+  for (const source of [
+    'blob:http://127.0.0.1/temporary',
+    'https://example.com/remote.png',
+    'file:///tmp/scene.png',
+    '/tmp/scene.png',
+  ]) {
+    const unsafeScene = { ...scene, layers: [{ ...scene.layers[0], source }] }
+    const response = await postScene(server, { scene: unsafeScene, preview })
+    assert.equal(response.status, 400, source)
+  }
+  const externalPreview = await postScene(server, { scene, preview: 'https://example.com/poster.png' })
+  assert.equal(externalPreview.status, 400)
+  assert.equal(await outputCount(server), 0)
+})
+
 test('rejects a foreign Host header, including a loopback socket', async () => {
   const response = await requestWithHeaders('/api/v1/scene-template-review/status', { Host: 'evil.example' })
   assert.equal(response.statusCode, 403)
@@ -123,6 +193,9 @@ test('failure evidence has a safe indexed filename without overwriting a success
   const response = await fetch(url(`/scene-template-previews/${filename}`))
   assert.equal(response.status, 200)
   assert.equal((await response.json()).status, 'render-failed')
+  const invalidRange = await fetch(url(`/scene-template-previews/${filename}`), { headers: { range: 'not-a-range' } })
+  assert.equal(invalidRange.status, 416)
+  assert.equal(invalidRange.headers.get('content-range'), 'bytes */26')
   assert.throws(() => server.registerPreview('../outside.json'), /Unsafe/)
 })
 
@@ -145,9 +218,63 @@ test('saves an editable scene and returns exact metadata through the output endp
   assert.deepEqual(JSON.parse(await file.text()), scene)
 })
 
-test('records MP4 with compositor mode and supports range and HEAD reads', async () => {
+test('enforces a lower HTTP write budget without allocating large fixtures', async () => {
+  const sandbox = await createSandbox({ maxOutputs: 1, maxBytes: 8_000 })
+  try {
+    const first = await postScene(sandbox.server, { scene, preview })
+    assert.equal(first.status, 200)
+    await first.json()
+
+    const second = await postScene(sandbox.server, { scene, preview })
+    assert.equal(second.status, 400)
+    assert.match((await second.json()).detail, /quota/i)
+    assert.equal(await outputCount(sandbox.server), 1)
+
+    const status = await fetch(`${sandbox.server.localOrigin}/api/v1/scene-template-review/status`)
+    assert.deepEqual((await status.json()).quota, {
+      outputs: 1,
+      bytes: Buffer.byteLength(JSON.stringify(scene, null, 2)) + Buffer.byteLength(JSON.stringify({ scene, preview })),
+      maxOutputs: 1,
+      maxBytes: 8_000,
+    })
+  } finally {
+    await sandbox.server.close()
+    await fs.rm(sandbox.directory, { recursive: true, force: true })
+  }
+})
+
+test('returns conflict while another loopback write is still receiving its body', async () => {
+  const target = new URL(url('/api/v1/scenes'))
+  const body = JSON.stringify({ scene, preview })
+  let request
+  const firstResponse = new Promise((resolve, reject) => {
+    request = http.request({
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname,
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'transfer-encoding': 'chunked' },
+    }, response => {
+      response.resume()
+      response.once('end', () => resolve(response))
+    })
+    request.once('error', reject)
+  })
+  request.write(body)
+  await new Promise(resolve => setTimeout(resolve, 20))
+  try {
+    const concurrent = await postScene(server, { scene, preview })
+    assert.equal(concurrent.status, 409)
+    assert.match((await concurrent.json()).detail, /in progress/i)
+  } finally {
+    request.end()
+  }
+  assert.equal((await firstResponse).statusCode, 200)
+})
+
+test('records the MP4 transport contract and supports range and HEAD reads', async () => {
   const form = new FormData()
-  form.append('file', new Blob([mp4Bytes], { type: 'video/mp4' }), 'scene.mp4')
+  form.append('file', new Blob([mp4TransportBytes], { type: 'video/mp4' }), 'scene.mp4')
   form.append('metadata', JSON.stringify({ scene, workspace: 'default' }))
   const response = await fetch(url('/api/v1/scenes/recordings'), { method: 'POST', body: form })
   assert.equal(response.status, 200)
@@ -163,11 +290,11 @@ test('records MP4 with compositor mode and supports range and HEAD reads', async
     headers: { Range: 'bytes=4-7' },
   })
   assert.equal(range.status, 206)
-  assert.equal(range.headers.get('content-range'), `bytes 4-7/${mp4Bytes.length}`)
+  assert.equal(range.headers.get('content-range'), `bytes 4-7/${mp4TransportBytes.length}`)
   assert.deepEqual(Buffer.from(await range.arrayBuffer()), Buffer.from('ftyp'))
 
   const head = await fetch(url(`/api/v1/file/${encodeURIComponent(saved.name)}`), { method: 'HEAD' })
   assert.equal(head.status, 200)
-  assert.equal(Number(head.headers.get('content-length')), mp4Bytes.length)
+  assert.equal(Number(head.headers.get('content-length')), mp4TransportBytes.length)
   assert.equal((await head.arrayBuffer()).byteLength, 0)
 })

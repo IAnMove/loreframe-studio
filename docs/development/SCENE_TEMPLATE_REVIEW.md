@@ -61,6 +61,9 @@ npm --prefix ui run scene:review -- --host YOUR_LOCAL_PRIVATE_IPV4
 Replace `YOUR_LOCAL_PRIVATE_IPV4` with an address on your own local interface;
 omit `--port` to avoid collisions. This is a local development tool, not a public
 server: do not expose it through port forwarding or an internet tunnel.
+LAN access is **read-only and unauthenticated**, for a trusted network only.
+Use the loopback editor to save scenes or recordings. It is not a secure
+multi-user service or the application's Library backend.
 Dependencies must already be installed with the repository's UI setup. Rendering
 requires the Playwright Chromium browser, plus `ffmpeg` and `ffprobe` on PATH.
 The tool does not install them or download anything automatically.
@@ -85,6 +88,18 @@ also prints `REVIEW_URL_LAN`.
 - Request bodies are capped at 40 MB. Saved scene and recording names are
   generated UUIDs; file reads resolve through the server's in-memory index, not
   arbitrary paths supplied by a URL.
+- Writes are serialized and restricted to the loopback listening socket. The
+  conservative write budget is 128 outputs / 256 MiB (including metadata);
+  partial I/O failures do not refund reservations. A request times out after
+  30 seconds; incomplete headers after 10 seconds. Start a fresh sandbox when
+  its budget is exhausted. Generated files remain for inspection, not auto-deleted.
+- Snapshots require `provided_only`, valid Scene v1 layer types, a safe template
+  ID, at most 24 layers, 1920×1080, 30 seconds, and no audio tracks. Asset sources
+  must be inline or resolve to this sandbox's indexed files. External URLs,
+  unregistered local references, blob URLs and disk paths are refused on save.
+- CSP restricts interactive browser media/network requests to this origin,
+  data and blob sources; additional no-referrer/nosniff/frame-denial headers
+  are sent. The production application's API remains outside this tool.
 - Scene saves and MP4 recordings are written only below the run's `exports/`
   directory. Render previews and metadata are written only below `previews/`.
 - The editable scene is saved and read back before each MP4 export. Each
@@ -94,6 +109,10 @@ also prints `REVIEW_URL_LAN`.
   duration, measured FPS, editable-scene filename/hash, and the exact scene
   snapshot sent to the recording endpoint. A preview is published only after
   page-error, `ffprobe` dimensions/FPS/duration, and metadata checks pass.
+- Metadata also records Node/Playwright/Chromium/ffmpeg/ffprobe versions, poster
+  hash and input-reference hashes. Git HEAD and tracked-diff digest are checked
+  before/after render. Dirty/untracked content is explicitly not fully reproducible;
+  a URL hash is not a hash of remote media bytes. Merge/release state is not inferred.
 - Failed renders receive a uniquely named `*.failure-<uuid>.json` record. The
   failure path never overwrites a success record or masks the original error
   when a same-name write is not available.
@@ -104,3 +123,7 @@ The HTTP status endpoint is available at
 `/api/v1/scene-template-review/status` while the process is running. It reports
 the blocked API paths and the current in-memory output count without claiming
 durable persistence.
+
+The HTTP recording test uses a synthetic `ftyp` header and checks **transport and
+metadata only**, not a decodable MP4. Actual local render verification separately
+uses ffprobe and the browser exporter. CI must not call models or require weights.

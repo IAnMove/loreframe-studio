@@ -77,6 +77,7 @@ async function main() {
   if (server.lanOrigin) console.log(`REVIEW_URL_LAN=${server.lanOrigin}/scene-template-review`)
   console.log('REVIEW_PROVIDERS=blocked')
   console.log('REVIEW_PERSISTENCE=in-memory index; fresh temporary directory; no restart recovery')
+  console.log('REVIEW_LIMITS=128 outputs / 256 MiB write budget / one concurrent write; LAN is read-only, unauthenticated and for trusted networks only')
 
   if (options.render) {
     try {
