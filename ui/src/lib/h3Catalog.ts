@@ -22,3 +22,39 @@ const entries: Record<string, H3CatalogEntry> = {
 export function h3CatalogEntry(modelType: string): H3CatalogEntry | undefined {
   return Object.hasOwn(entries, modelType) ? entries[modelType] : undefined
 }
+
+/** Frames-workflow ID for a variant. Series stores this and L1 maps strategy. */
+export function h3FramesModelId(modelType: string): string {
+  const entry = h3CatalogEntry(modelType)
+  if (!entry) return modelType
+  const match = Object.entries(entries).find(([, item]) => (
+    item.variant === entry.variant && item.workflow === 'frames'
+  ))
+  return match?.[0] || modelType
+}
+
+export function h3FusedStepRange(modelType: string): { min: number; max: number; fallback: number } | null {
+  return h3CatalogEntry(modelType)?.variant === 'fast'
+    ? { min: 4, max: 8, fallback: 4 }
+    : null
+}
+
+export const SERIES_SETUP_VIDEO_MODELS = [
+  { id: 'minimax_h3_legacy', labelKey: 'providers.h3Legacy' as const },
+  { id: 'minimax_h3', labelKey: 'providers.h3Pruned' as const },
+  { id: 'minimax_h3_full', labelKey: 'providers.h3Full' as const },
+  { id: 'minimax_h3_fused_turbo', labelKey: 'providers.h3Fused' as const },
+] as const
+
+export function seriesSetupVideoUnavailableReason(modelType: string): string | null {
+  if (h3CatalogEntry(modelType) || SERIES_SETUP_VIDEO_MODELS.some(item => item.id === modelType)) {
+    return null
+  }
+  return 'unknown_model'
+}
+
+export function seriesStepsForVideoModel(modelType: string, currentSteps: number): number {
+  const range = h3FusedStepRange(modelType)
+  if (!range) return currentSteps
+  return currentSteps < range.min || currentSteps > range.max ? range.fallback : currentSteps
+}

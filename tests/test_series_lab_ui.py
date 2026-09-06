@@ -38,9 +38,16 @@ def test_setup_has_required_aura_explicit_models_and_canvas_choices():
     assert catalog["setup"]["prepareImages"] == "Prepare canon + up to 4 images"
     assert "t('setup.needImageModel')" in setup
     assert "will not silently select or download a recommended model" in catalog["setup"]["needImageModel"]
-    assert "minimax_h3" in setup and "minimax_h3_full" in setup
-    assert "480p" in setup and "720p" in setup
-    assert "t('providers.landscape')" in setup and "t('providers.portrait')" in setup
+    catalog_ts = (ROOT / "ui" / "src" / "lib" / "h3Catalog.ts").read_text(encoding="utf-8")
+    video_fields = source("SeriesSetupVideoFields.tsx")
+    assert "SERIES_SETUP_VIDEO_MODELS" in video_fields
+    assert "SeriesSetupVideoFields" in setup
+    assert "applySeriesGlobalProvider" in setup
+    assert "minimax_h3_legacy" in catalog_ts
+    assert "minimax_h3_full" in catalog_ts
+    assert "minimax_h3_fused_turbo" in catalog_ts
+    assert "480p" in video_fields and "720p" in video_fields
+    assert "t('providers.landscape')" in video_fields and "t('providers.portrait')" in video_fields
     assert catalog["providers"]["landscape"].startswith("Landscape")
     assert catalog["providers"]["portrait"].startswith("Portrait")
     assert "t('setup.knownTitle')" in setup
@@ -87,6 +94,8 @@ def test_review_is_thumbnail_first_and_exposes_ordered_editable_attempt_history(
     assert "Saved generation request and result metadata" in review
     assert "Approve this attempt" in review and "Reject</button>" in review
     assert "Approve all" in review and "approveSeriesAttemptsBulk" in review
+    assert "bulkApproveSelections" in review
+    assert "Replace finals with latest" in review
     assert "Play all" in review and "if (playingAll) advancePlayAll()" in review
     assert "orderedTimelineShots" in review and "safeTimelineAttempt" in review
     assert "Edit & regenerate" in review and "Save and regenerate in this slot" in review

@@ -190,7 +190,7 @@ const storyVisualScopes = new Set(['world', 'locations', 'characters', 'all'])
 const storyVisualTargetKinds = new Set(['world', 'location', 'character'])
 const seriesPlanScopes = new Set(['outline', 'script', 'shots', 'complete'])
 const seriesRenderModes = new Set(['selected', 'missing', 'failed', 'all'])
-const seriesReviewScopes = new Set(['selected_latest', 'all_latest'])
+const seriesReviewScopes = new Set(['selected_latest', 'all_latest', 'replace_latest'])
 const seriesReviewDecisions = new Set(['approve', 'reject'])
 const seriesCanonDecisions = new Set(['accept_all', 'reject_all', 'accept_selected', 'reject_selected'])
 
@@ -785,12 +785,12 @@ defineCapability<AgentRenderSeriesShotsAction>({
 defineCapability<AgentReviewSeriesAttemptsAction>({
   name: 'review_series_attempts', title: 'Review exact Series Lab attempts', description: 'Approve or reject only reproducible attempts belonging to the exact canonical episode.',
   useWhen: 'The user explicitly asks to approve or reject rendered Series Lab shots.', parameters: ['series_title', 'target_episode_title', 'review_decision', 'review_scope', 'shot_numbers', 'attempt_id', 'confirm'],
-  inputSchema: { type: 'object', additionalProperties: false, properties: { type: { const: 'review_series_attempts' }, review_decision: { type: 'string', enum: ['approve', 'reject'] }, review_scope: { type: 'string', enum: ['selected_latest', 'all_latest'] }, confirm: { const: true } }, required: ['type', 'review_decision', 'review_scope', 'confirm'] }, risk: 'edit', confirmation: 'required', progress: 'Revisando intentos reproducibles de Series Lab…',
+  inputSchema: { type: 'object', additionalProperties: false, properties: { type: { const: 'review_series_attempts' }, review_decision: { type: 'string', enum: ['approve', 'reject'] }, review_scope: { type: 'string', enum: ['selected_latest', 'all_latest', 'replace_latest'] }, confirm: { const: true } }, required: ['type', 'review_decision', 'review_scope', 'confirm'] }, risk: 'edit', confirmation: 'required', progress: 'Revisando intentos reproducibles de Series Lab…',
   resolve(raw) {
     if (raw.confirm !== true) return null
     const decision = text(raw.review_decision, 30); const scope = text(raw.review_scope, 30)
     const shotNumbers = [...new Set(Array.isArray(raw.shot_numbers) ? raw.shot_numbers.slice(0, 200).flatMap(value => typeof value === 'number' && Number.isInteger(value) && value > 0 ? [value] : []) : [])]
-    if (!seriesReviewDecisions.has(decision) || !seriesReviewScopes.has(scope) || (scope === 'selected_latest' && !shotNumbers.length) || (scope === 'all_latest' && decision !== 'approve')) return null
+    if (!seriesReviewDecisions.has(decision) || !seriesReviewScopes.has(scope) || (scope === 'selected_latest' && !shotNumbers.length) || ((scope === 'all_latest' || scope === 'replace_latest') && decision !== 'approve')) return null
     return { type: 'review_series_attempts', seriesTitle: text(raw.series_title, 300), targetEpisodeTitle: text(raw.target_episode_title, 300), decision: decision as AgentReviewSeriesAttemptsAction['decision'], scope: scope as AgentReviewSeriesAttemptsAction['scope'], shotNumbers, attemptId: text(raw.attempt_id, 160), confirm: true }
   },
   validate(action) { return action.confirm === true ? [] : ['confirmation is required'] }, async prepare(action) { return action }, async execute(action, context) { return context.adapters.seriesLab.reviewAttempts(action) }, correlate(_action, outcome) { return outcome.target }, async track(_action, outcome) { return outcome }, report: { targetKind: 'series_episode', successState: 'completed' }, summarize(_action, outcome) { return outcome.message }, presentation: { destination: 'series_lab', anchors: ['review'], replay: 'atomic' },

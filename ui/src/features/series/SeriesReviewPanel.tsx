@@ -10,6 +10,7 @@ import { greenButton, primaryButton, secondaryButton } from './styles'
 import type { SeriesAssemblyJob, SeriesEpisode, SeriesJobStatus, SeriesProject, SeriesRenderAttempt, SeriesShot } from './types'
 import { listenForAgentSeriesAssemblyJob, listenForAgentSeriesReviewView } from '../../lib/uiBus'
 import { useUiTranslation } from '../../i18n'
+import { bulkApproveSelections } from './shotReviewPolicy'
 
 function AttemptPreview({ series, attempt, approved, onApprove, onReject }: {
   series: SeriesProject; attempt: SeriesRenderAttempt; approved: boolean; onApprove: () => void; onReject: () => void
@@ -139,18 +140,14 @@ export function SeriesReviewPanel({
       const asset = selected?.outputAssetIds.map(id => series.assets[id]).find(Boolean)
       return selected && asset ? [{ shotId: shot.id, shot, attempt: selected, asset }] : []
     }), [episode.shots, series.assets])
-  const approvable = useMemo(() => episode.shots
-    .slice()
-    .sort((left, right) => left.order - right.order)
-    .flatMap(shot => {
-      const attempt = [...shot.attempts].reverse().find(item => (
-        item.status === 'completed'
-        && item.reviewDecision !== 'rejected'
-        && item.outputAssetIds.some(id => Boolean(series.assets[id]))
-      ))
-      return attempt && attempt.id !== shot.approvedAttemptId
-        ? [{ shotId: shot.id, attemptId: attempt.id }] : []
-    }), [episode.shots, series.assets])
+  const pendingApprovals = useMemo(
+    () => bulkApproveSelections(episode.shots, id => Boolean(series.assets[id]), { replaceFinals: false }),
+    [episode.shots, series.assets],
+  )
+  const replaceApprovals = useMemo(
+    () => bulkApproveSelections(episode.shots, id => Boolean(series.assets[id]), { replaceFinals: true }),
+    [episode.shots, series.assets],
+  )
   const playbackCursor = reconcilePlaybackCursor(playbackShotId, playable)
   const playIndex = playbackCursor.index
   const currentPlayback = playIndex >= 0 ? playable[playIndex] : undefined
@@ -207,20 +204,21 @@ export function SeriesReviewPanel({
     try { await api.approveSeriesAttempt(workspace, series.id, episode.id, shotId, attemptId); await reload() }
     catch (reason) { setError((reason as Error).message) }
   }
-  const approveAll = async () => {
-    if (!approvable.length || approvalProgress) return
+  const approveBulk = async (selections: Array<{ shotId: string; attemptId: string }>, label: string) => {
+    if (!selections.length || approvalProgress) return
     setError(null)
-    setApprovalProgress({ current: 0, total: approvable.length })
+    setApprovalProgress({ current: 0, total: selections.length })
     try {
-      await api.approveSeriesAttemptsBulk(workspace, series.id, episode.id, approvable)
-      setApprovalProgress({ current: approvable.length, total: approvable.length })
+      await api.approveSeriesAttemptsBulk(workspace, series.id, episode.id, selections)
+      setApprovalProgress({ current: selections.length, total: selections.length })
       await reload()
     } catch (reason) {
-      setError(`Approve all did not change any shot: ${(reason as Error).message}`)
+      setError(`${label} did not change any shot: ${(reason as Error).message}`)
     } finally {
       setApprovalProgress(null)
     }
   }
+  const approveAll = () => void approveBulk(pendingApprovals.selections, 'Approve pending')
   const stopPlayAll = () => {
     playerRef.current?.pause()
     setPlayingAll(false)
@@ -342,15 +340,18 @@ export function SeriesReviewPanel({
 
     {reviewView === 'assembly' && <SectionCard title={t('review.assemblyTitle')} description={t('review.assemblyDescription', { ready: playable.length, total: episode.shots.length })}>
       <div className="flex flex-wrap gap-2">
-        <button className={greenButton} disabled={!approvable.length || Boolean(approvalProgress)} onClick={() => void approveAll()}>
+        <button className={greenButton} disabled={!pendingApprovals.selections.length || Boolean(approvalProgress)} onClick={() => void approveAll()}>
           {approvalProgress ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-          {approvalProgress ? `Approving ${approvalProgress.current}/${approvalProgress.total}` : `Approve all (${approvable.length})`}
+          {approvalProgress ? `Approving ${approvalProgress.current}/${approvalProgress.total}` : `Approve all (${pendingApprovals.selections.length})`}
+        </button>
+        <button className={secondaryButton} disabled={!replaceApprovals.replaced || Boolean(approvalProgress)} onClick={() => void approveBulk(replaceApprovals.selections, 'Replace finals')}>
+          Replace finals with latest ({replaceApprovals.replaced})
         </button>
         <button className={primaryButton} disabled={!playable.length || playingAll} onClick={startPlayAll}><Play size={13} />Play all</button>
         {playingAll && <button className={secondaryButton} onClick={stopPlayAll}><Square size={13} />Stop</button>}
         <button className={greenButton} disabled={approved.length !== episode.shots.length || Boolean(assemblyJob && ['queued', 'running', 'cancelling'].includes(assemblyJob.status))} onClick={() => void joinApproved()}>{assemblyJob && ['queued', 'running', 'cancelling'].includes(assemblyJob.status) ? <Loader2 size={13} className="animate-spin" /> : <Film size={13} />}Join clips</button>
       </div>
-      <p className="mt-2 text-[10px] text-text-muted">Approve all skips incomplete and explicitly rejected attempts. Existing approvals are kept.</p>
+      <p className="mt-2 text-[10px] text-text-muted">Approve all fills empty finals only. Existing approved takes stay unless you explicitly replace finals. Incomplete, rejected, or missing media are omitted ({pendingApprovals.kept} kept · {pendingApprovals.omitted} omitted).</p>
       <div className="mt-3 grid min-h-[28rem] overflow-hidden rounded-xl border border-border lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="max-h-[70vh] overflow-y-auto border-b border-border bg-bg-secondary p-2 lg:border-b-0 lg:border-r">{sortedShots.map(shot => { const safe = playable.find(item => item.shot.id === shot.id); const queuedItem = job?.items?.find(item => item.shotId === shot.id && ['queued', 'running', 'cancelling'].includes(item.status)); const selected = displayPlayback?.shot.id === shot.id; return <button key={shot.id} onClick={() => focusSlot(shot.id)} className={`mb-2 w-full rounded-lg border p-2 text-left ${selected ? 'border-violet-400 bg-violet-500/20' : 'border-border bg-bg-primary hover:bg-bg-hover'}`}><div className="flex items-center gap-2"><Pill tone={selected && playingAll ? 'violet' : shot.approvedAttemptId ? 'green' : safe ? 'blue' : 'neutral'}>Shot {shot.order}</Pill>{queuedItem && <Pill tone="violet">{queuedItem.status}</Pill>}<span className="ml-auto text-[9px] text-text-muted">{shot.durationSeconds}s · {shot.attempts.length} tries</span></div><p className="mt-1 line-clamp-2 text-[10px] text-text-secondary">{shot.action || shot.prompt || 'Empty shot'}</p><div className="mt-2 flex gap-1"><span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[9px] text-text-muted">{safe ? 'playable' : 'missing'}</span>{shot.approvedAttemptId && <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[9px] text-green-300">final</span>}{queuedItem && <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[9px] text-violet-200">will replace this slot</span>}</div></button> })}</div>
       {displayPlayback ? <div className="min-w-0 bg-black">
