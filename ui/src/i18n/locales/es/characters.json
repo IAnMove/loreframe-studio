@@ -239,6 +239,39 @@
       "mouthTooLow": "En un recorte de cuerpo entero las bocas suelen quedar por encima del pecho. Mueve Abajo/Arriba hasta tapar los labios y luego bloquea las bocas."
     }
   },
+  "facePatch": {
+    "title": "Parche raster de sustitución de boca",
+    "experimental": "Parche de sustitución experimental: importa una variante de imagen completa generada con la misma referencia del personaje. La variante debe quedar alineada con esta pose y conservar exactamente las mismas dimensiones en píxeles. No se incluye generador automático.",
+    "alignment": "La preparación se ejecuta de forma privada en este dispositivo. No se sube nada hasta que elijas Guardar parche pendiente. Guardar el parche no guarda el kit; usa también Guardar del Character Kit.",
+    "promptLabel": "Prompt de referencia de solo lectura para este estado de boca",
+    "variantLabel": "Variante de imagen completa alineada (PNG, JPEG o WebP)",
+    "variantHint": "Usa la misma referencia, pose, encuadre y dimensiones. Esta imagen sustituye una región del cuerpo aprobado; no es un sprite de boca transparente.",
+    "poseAlt": "Pose base aprobada de {{name}}",
+    "previewAlt": "Vista previa del parche de boca {{state}} preparado",
+    "savePending": "Guardar parche pendiente",
+    "keepTexture": "No elimines el fondo de este parche: su piel o barba cubre la boca original.",
+    "stalePose": "Este parche pertenece a otra pose o a una imagen anterior. Prepáralo de nuevo.",
+    "wipedPending": "Hay una nueva imagen sin boca lista. Revisa y aprueba la pose antes de montarla.",
+    "disabled": {
+      "external": "La edición de parches faciales está desactivada.",
+      "eyes": "Los parches de sustitución raster solo se aplican a los estados de boca cerrada, pequeña, abierta o redonda. Los ojos se gestionan aparte.",
+      "pose": "Aprueba esta pose base antes de preparar un parche facial.",
+      "rotation": "Devuelve la caja de la boca a 0° antes de preparar un parche facial."
+    },
+    "status": {
+      "preparing": "Preparando el parche localmente…",
+      "saving": "Subiendo el parche…",
+      "prepared": "Parche preparado localmente. Revisa la vista previa antes de guardarlo.",
+      "savedPending": "Parche guardado como pendiente. Revísalo y guarda el Character Kit por separado.",
+      "cancelled": "Operación de parche obsoleta cancelada. Se conservó la pose o el borrador más reciente."
+    },
+    "errors": {
+      "fileType": "Elige una variante de imagen completa PNG, JPEG o WebP.",
+      "prepare": "No se pudo preparar este parche facial.",
+      "noPrepared": "Prepara una variante antes de guardar el parche pendiente.",
+      "upload": "No se pudo subir o registrar este parche facial."
+    }
+  },
   "creator": {
     "title": "Character Creator",
     "subtitle": "Turnaround 3D: sube una foto. MiniMax o el LLM interno describen el sujeto si dejas el A Prompt vacío. Sale un vídeo 360 y, si quieres, un mesh Hunyuan. No es el puppet 2D de Face Rig.",

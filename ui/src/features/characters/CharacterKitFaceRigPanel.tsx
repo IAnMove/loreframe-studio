@@ -13,6 +13,7 @@ import {
   characterKitPosePrompt,
   classifyCharacterKitAlpha,
   composeCharacterKitLook,
+  facePatchControls,
   faceRigAnchorFor,
   faceRigAnchorFromRegion,
   faceRigRegionFromAnchor,
@@ -36,6 +37,9 @@ import {
 } from '../../lib/characterKitFaceRig'
 import { registerGeneratedKitPose, registerWipedKitPose, type CharacterFaceAnchor, type CharacterKit, type CharacterKitAsset, type CharacterMouthState } from '../../lib/characterKit'
 import { characterKitNextStep, characterKitPoseLabel } from './characterKitGuide'
+import { FacePatchOptions, FacePatchTextureNotice } from './FacePatchOptions'
+import { useFaceRigOperationGuard } from './useFaceRigOperationGuard'
+import { isFacePatchCompatible } from '../../lib/characterFacePatch'
 import { useStore } from '../../stores/useStore'
 import i18n, { useUiTranslation } from '../../i18n'
 
@@ -135,6 +139,9 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
       ? kit.eyes.blink ?? selectedAsset
       : kit.mouth[playbackState] ?? selectedAsset
   const playbackAnchor = holdBlink || liveViseme ? faceRigAnchorFor(kit, poseId, playbackState) : draftAnchor
+  const patchCompatible = isFacePatchCompatible(playbackAsset, poseId, poseSource)
+  const patchControls = facePatchControls(kit, selectedAsset, disabled, busyState)
+  const captureWipeScope = useFaceRigOperationGuard({ kit, poseId, workspace, anchor: draftAnchor, disabled })
   const draftAnchorRef = useRef(draftAnchor)
   draftAnchorRef.current = draftAnchor
   const poseApproved = Boolean((poseId === 'base' ? kit.base : kit.poses[poseId])?.reviewState === 'approved')
@@ -462,6 +469,8 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
   }
 
   const wipeMouthZone = async () => {
+    if (patchControls.wipeDisabled) return
+    const isCurrent = captureWipeScope()
     if (!poseSource) throw new Error(t('faceRig.errors.approvePoseBeforeWipe'))
     setBusyState('wipe'); setError(null)
     try {
@@ -469,6 +478,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
       if (!response.ok) throw new Error(t('faceRig.errors.loadPose'))
       const bitmap = await createImageBitmap(await response.blob())
       try {
+        if (!isCurrent()) return
         const canvas = document.createElement('canvas')
         canvas.width = bitmap.width
         canvas.height = bitmap.height
@@ -495,7 +505,9 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(value => value ? resolve(value) : reject(new Error(t('faceRig.errors.encodeWiped'))), 'image/png')
         })
+        if (!isCurrent()) return
         const uploaded = await uploadImage(new File([blob], `${kit.id}-${poseId || 'base'}-mouthless.png`, { type: 'image/png' }))
+        if (!isCurrent()) return
         const current = poseId === 'base' ? kit.base : kit.poses[poseId]
         const next = registerWipedKitPose(persistLook(kit), poseId || 'base', {
           id: current?.id || `${kit.id}-${poseId || 'base'}`,
@@ -506,13 +518,12 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
           reviewState: current?.reviewState ?? 'pending',
           workspace,
         })
-        const locked = lockFaceRigMouthPlacement(next, poseId || 'base', draftAnchorRef.current, false)
+        const locked = lockFaceRigMouthPlacement(next, poseId || 'base', draftAnchor, false)
         onChange(locked)
-        onCommit?.(locked)
-        onStatus?.(t('faceRig.status.wiped', { pose: poseName }))
+        onStatus?.(t('facePatch.wipedPending'))
       } finally { bitmap.close() }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('faceRig.errors.wipeFailed'))
+      if (isCurrent()) setError(cause instanceof Error ? cause.message : t('faceRig.errors.wipeFailed'))
     } finally { setBusyState(null) }
   }
 
@@ -545,11 +556,13 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
     <p className="text-[10px] font-medium text-emerald-100">{t('faceRig.mouthsOnPose', { pose: poseName })}</p>
     <ol className="list-decimal space-y-0.5 pl-4 text-[9px] leading-relaxed text-text-secondary">
       <li>{t('faceRig.steps.box')}</li>
-      <li>{t('faceRig.steps.wipe')}</li>
+      <li>{t(patchControls.instruction)}</li>
       <li>{t('faceRig.steps.eyes')}</li>
       <li>{t('faceRig.steps.scene')}</li>
     </ol>
     <p className="text-[9px] text-amber-100">{nextStep.title}</p>
+    <FacePatchOptions kit={kit} poseId={poseId} state={selectedState} anchor={draftAnchor} workspace={workspace}
+      disabled={patchControls.disabled} onChange={onChange} onStatus={onStatus} />
     <details className="rounded border border-border/70 bg-black/10 px-1.5 py-1">
       <summary className="cursor-pointer text-[9px] text-text-muted">{t('faceRig.createNew.summary')}</summary>
       <div className="mt-1 space-y-1">
@@ -576,7 +589,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
         className={`relative aspect-square overflow-hidden rounded border border-border ${checkerboard ? 'bg-[linear-gradient(45deg,#1c2330_25%,transparent_25%),linear-gradient(-45deg,#1c2330_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1c2330_75%),linear-gradient(-45deg,transparent_75%,#1c2330_75%)] bg-[length:12px_12px]' : 'bg-bg-primary'}`}
       >
         <img src={poseSource} alt={t('faceRig.poseAlt', { name: kit.name })} className="absolute inset-0 h-full w-full object-contain" draggable={false} />
-        {showOverlay && playbackAsset && <img
+        {showOverlay && playbackAsset && patchCompatible && <img
           src={playbackAsset.source}
           alt={t('faceRig.overlayAlt', { name: kit.name, state: stateLabel(playbackState) })}
           className={`absolute object-contain ${liveViseme || holdBlink ? '' : 'cursor-grab active:cursor-grabbing'}`}
@@ -603,7 +616,7 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
       </div>
       <p className="text-[8px] text-text-secondary">{t('faceRig.dragBoxHint')}</p>
       <div className="grid grid-cols-2 gap-1">
-        <button type="button" disabled={disabled || Boolean(busyState)} onClick={() => void wipeMouthZone()} className="rounded border border-amber-300/50 bg-amber-400/10 px-1 py-1.5 text-[10px] text-amber-100 disabled:opacity-40">{busyState === 'wipe' ? t('faceRig.wiping') : t('faceRig.wipeMouth')}</button>
+        <button type="button" disabled={patchControls.wipeDisabled} onClick={() => void wipeMouthZone()} className="rounded border border-amber-300/50 bg-amber-400/10 px-1 py-1.5 text-[10px] text-amber-100 disabled:opacity-40">{busyState === 'wipe' ? t('faceRig.wiping') : t('faceRig.wipeMouth')}</button>
         <button type="button" disabled={disabled || Boolean(busyState)} onClick={lockMouths} className="rounded border border-emerald-300/40 bg-emerald-400/10 px-1 py-1.5 text-[10px] text-emerald-100 disabled:opacity-40">{t('faceRig.lockMouths')}</button>
       </div>
     </div>}
@@ -615,7 +628,8 @@ export function CharacterKitFaceRigPanel({ kit, poseId, disabled = false, onChan
     {assetFor(kit, selectedState) && <div className="space-y-1 rounded border border-emerald-300/20 bg-[linear-gradient(45deg,#1c2330_25%,transparent_25%),linear-gradient(-45deg,#1c2330_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1c2330_75%),linear-gradient(-45deg,transparent_75%,#1c2330_75%)] bg-[length:12px_12px] p-1.5">
       <img src={assetFor(kit, selectedState)!.source} alt={`${kit.name} ${stateLabel(selectedState)}`} className="mx-auto h-28 w-full object-contain" />
       <div className="flex items-center justify-between text-[7px]"><span className="truncate text-text-secondary">{assetFor(kit, selectedState)!.name}</span><span className="text-emerald-100">{t(`alpha.${assetFor(kit, selectedState)!.alphaStatus}`)} · {t(`review.${assetFor(kit, selectedState)!.reviewState}`)}</span></div>
-      <button type="button" disabled={disabled || Boolean(busyState)} onClick={() => void cleanSelected()} className="w-full rounded border border-cyan-300/40 bg-cyan-400/10 px-1 py-1 text-[8px] text-cyan-100 disabled:opacity-40">{busyState === 'cleanup' ? t('faceRig.cleaningCutout') : t('faceRig.cleanMouthBackground')}</button>
+      <FacePatchTextureNotice asset={selectedAsset} />
+      <button type="button" disabled={patchControls.cleanupDisabled} onClick={() => void cleanSelected()} className="w-full rounded border border-cyan-300/40 bg-cyan-400/10 px-1 py-1 text-[8px] text-cyan-100 disabled:opacity-40">{busyState === 'cleanup' ? t('faceRig.cleaningCutout') : t('faceRig.cleanMouthBackground')}</button>
       <div className="flex gap-1 text-[7px] text-text-muted">
         <button type="button" onClick={() => setShowOverlay(value => !value)} className="rounded border border-border px-1 py-0.5">{showOverlay ? t('faceRig.hideMouth') : t('faceRig.showMouth')}</button>
         <button type="button" onClick={() => setCheckerboard(value => !value)} className="rounded border border-border px-1 py-0.5">{checkerboard ? t('faceRig.solidBackground') : t('faceRig.checkerboard')}</button>

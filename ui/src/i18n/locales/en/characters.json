@@ -239,6 +239,39 @@
       "mouthTooLow": "Mouths on a full-body cutout usually sit above the chest. Nudge Down/Up until the overlay covers the lips, then lock all mouths."
     }
   },
+  "facePatch": {
+    "title": "Raster mouth replacement patch",
+    "experimental": "Experimental replacement patch: import a full-image mouth variant generated from the same character reference. The variant must stay aligned to this pose and keep the exact same pixel dimensions. No automatic generator is included.",
+    "alignment": "Preparation runs privately on this device. Nothing is uploaded until you choose Save pending patch. Saving the patch does not save the kit; use the normal Character Kit Save too.",
+    "promptLabel": "Readonly reference prompt for this mouth state",
+    "variantLabel": "Aligned full-image variant (PNG, JPEG or WebP)",
+    "variantHint": "Use the same reference, pose, framing and dimensions. This image replaces a region of the approved base; it is not a transparent mouth sprite.",
+    "poseAlt": "{{name}} approved base pose",
+    "previewAlt": "Prepared {{state}} mouth patch preview",
+    "savePending": "Save pending patch",
+    "keepTexture": "Do not remove this patch’s background: its skin or beard covers the original mouth.",
+    "stalePose": "This patch belongs to a different pose or an earlier image. Prepare it again.",
+    "wipedPending": "A new mouth-cleaned image is ready. Review and approve the pose before mounting it.",
+    "disabled": {
+      "external": "Face patch editing is disabled.",
+      "eyes": "Raster replacement patches apply only to closed, small, wide, or round mouth states. Eyes are handled separately.",
+      "pose": "Approve this base pose before preparing a facial patch.",
+      "rotation": "Rotate the mouth box back to 0° before preparing a facial patch."
+    },
+    "status": {
+      "preparing": "Preparing patch locally…",
+      "saving": "Uploading patch…",
+      "prepared": "Patch prepared locally. Review the preview before saving.",
+      "savedPending": "Patch saved as pending. Review it, then save the Character Kit separately.",
+      "cancelled": "Cancelled stale patch operation. The newer pose or draft was kept."
+    },
+    "errors": {
+      "fileType": "Choose a PNG, JPEG or WebP full-image variant.",
+      "prepare": "Could not prepare this facial patch.",
+      "noPrepared": "Prepare a variant before saving the pending patch.",
+      "upload": "Could not upload or register this facial patch."
+    }
+  },
   "creator": {
     "title": "Character Creator",
     "subtitle": "3D turnaround: upload a photo. MiniMax or the internal LLM describe the subject if you leave the A Prompt empty. You get a 360 video and, if you want, a Hunyuan mesh. This is not the 2D Face Rig puppet.",
