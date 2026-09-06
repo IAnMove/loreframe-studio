@@ -3824,13 +3824,13 @@ def enhance_prompt(
         result = _inject_missing_h3_dialogue(result, prompt, ref2va=is_h3_ref2va)
     if is_h3_structured:
         result = _strip_h3_untagged_dialogue_duplicates(result, prompt)
-        if h3_audio_policy == "legacy":
-            result = _enforce_h3_soundscape_silence(result, prompt)
         from services.h3_story_contract import enforce_single_dialogue
         result = enforce_single_dialogue(result, prompt, planning_style)
         result = _enforce_h3_music_request(result, prompt, reference_context)
-        from services.h3_prompt_policy import apply_h3_audio_policy
-        result = apply_h3_audio_policy(result, h3_audio_policy, duration_seconds or 0)
+        from services.h3_prompt_finalization import finalize_h3_prompt
+        result = finalize_h3_prompt(
+            result, policy=h3_audio_policy, duration_seconds=duration_seconds or 0,
+        )
 
     return result
 
@@ -4074,7 +4074,7 @@ def _strip_h3_untagged_dialogue_duplicates(result: str, prompt: str) -> str:
 
 
 def _enforce_h3_soundscape_silence(result: str, prompt: str) -> str:
-    """Temporary: never describe sound. Keep the required label; value is N/A."""
+    """Weaker soundscape blanker. Live enhance uses finalize_h3_prompt / legacy policy."""
     import re
     return re.sub(
         r"(?ms)^\s*overall_soundscape\s*:.*?(?=^\s*non_diegetic_music\s*:)",

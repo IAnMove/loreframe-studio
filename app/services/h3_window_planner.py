@@ -252,11 +252,13 @@ def compile_h3_window_prompts(
         # Each sliding-window pass has its own local clock. Rebuild the vocal
         # schedule against that exact pass duration so a short line cannot
         # leak gibberish into the unused part of the window.
-        from .h3_prompt_policy import apply_h3_audio_policy
+        from .h3_prompt_finalization import finalize_h3_prompt
         from .h3_story_contract import reference_window_prompt
         if reference_context:
             prompt = reference_window_prompt(prompt, reference_context)
-        prompt = apply_h3_audio_policy(prompt, h3_audio_policy, duration)
+        prompt = finalize_h3_prompt(
+            prompt, policy=h3_audio_policy, duration_seconds=duration,
+        )
         compiled.append(
             {
                 **span,
