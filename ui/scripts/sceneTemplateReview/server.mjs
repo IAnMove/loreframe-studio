@@ -188,8 +188,9 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
   const isIndexedSource = source => {
     try {
       const url = new URL(source, 'http://review.invalid')
-      const relative = source.startsWith('/') && !source.startsWith('//')
-      if (!relative && !allowedOrigins.has(url.origin)) return false
+      // Relative references work from both the loopback editor and LAN preview
+      // without violating the browser's same-origin CSP or render interceptor.
+      if (!source.startsWith('/') || source.startsWith('//')) return false
       const file = url.pathname.match(/^\/api\/v1\/file\/([^/]+)$/)
       if (file) return files.has(decodeURIComponent(file[1]))
       const preview = url.pathname.match(PREVIEW_PATH)
@@ -316,9 +317,10 @@ export async function startReviewServer({ uiDist, outputDir, host = LOOPBACK_HOS
         if (bytes.subarray(4, 8).toString('ascii') !== 'ftyp') throw new Error('Expected MP4 recording; no silent fake conversion is accepted.')
         const name = outputName('video', 'mp4')
         const filename = path.join(exportsDir, name)
-        budget.reserve(bytes.length + Buffer.byteLength(JSON.stringify({ params })))
+        const sidecar = JSON.stringify({ params }, null, 2)
+        budget.reserve(bytes.length + Buffer.byteLength(sidecar))
         await fs.writeFile(filename, bytes, { flag: 'wx' })
-        await fs.writeFile(path.join(exportsDir, `${name}.metadata.json`), JSON.stringify({ params }, null, 2), { flag: 'wx' })
+        await fs.writeFile(path.join(exportsDir, `${name}.metadata.json`), sidecar, { flag: 'wx' })
         console.log(`RECORDED template=${params.scene.narrative?.templateId || 'unknown'} name=${name} bytes=${bytes.length}`)
         json(response, remember({ name, type: 'video', size: bytes.length, params, filename }))
         return

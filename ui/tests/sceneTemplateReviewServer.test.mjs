@@ -272,6 +272,39 @@ test('returns conflict while another loopback write is still receiving its body'
   assert.equal((await firstResponse).statusCode, 200)
 })
 
+test('indexed references stay relative for CSP on every served origin', async () => {
+  server.registerPreview('indexed-test.png')
+  const relative = '/scene-template-previews/indexed-test.png'
+  const withSource = source => ({ scene: { ...scene, layers: [{ ...scene.layers[0], source }] } })
+  assert.equal((await postScene(server, withSource(relative))).status, 200)
+  for (const origin of [server.localOrigin, `http://localhost:${server.port}`, 'http://review.invalid']) {
+    const rejected = await postScene(server, withSource(`${origin}${relative}`))
+    assert.equal(rejected.status, 400)
+    assert.match((await rejected.json()).detail, /inline or indexed/i)
+  }
+})
+
+test('recording quota reserves the exact formatted sidecar bytes before writing', async () => {
+  const params = { scene, workspace: 'default' }
+  const exactBytes = mp4TransportBytes.length + Buffer.byteLength(JSON.stringify({ params }, null, 2))
+  for (const allowance of [exactBytes - 1, exactBytes]) {
+    const sandbox = await createSandbox({ maxBytes: allowance })
+    try {
+      const form = new FormData()
+      form.append('file', new Blob([mp4TransportBytes], { type: 'video/mp4' }), 'scene.mp4')
+      form.append('metadata', JSON.stringify(params))
+      const response = await fetch(`${sandbox.server.localOrigin}/api/v1/scenes/recordings`, { method: 'POST', body: form })
+      assert.equal(response.status, allowance < exactBytes ? 400 : 200)
+      const names = await fs.readdir(sandbox.server.exportsDir)
+      const sizes = await Promise.all(names.map(async name => (await fs.stat(path.join(sandbox.server.exportsDir, name))).size))
+      assert.equal(sizes.reduce((total, size) => total + size, 0), allowance < exactBytes ? 0 : exactBytes)
+    } finally {
+      await sandbox.server.close()
+      await fs.rm(sandbox.directory, { recursive: true, force: true })
+    }
+  }
+})
+
 test('records the MP4 transport contract and supports range and HEAD reads', async () => {
   const form = new FormData()
   form.append('file', new Blob([mp4TransportBytes], { type: 'video/mp4' }), 'scene.mp4')

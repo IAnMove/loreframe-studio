@@ -34,7 +34,7 @@ export function createWriteBudget({ maxOutputs = MAX_OUTPUTS, maxBytes = MAX_OUT
 function validateSource(source, isIndexedSource) {
   if (typeof source !== 'string' || source.length > 2_000_000) throw new Error('Invalid review asset reference.')
   if (/^data:(?:image\/|model\/gltf-binary;)/i.test(source)) return
-  const indexedShape = /^(?:https?:\/\/[^/]+)?\/(?:api\/v1\/file\/|scene-template-previews\/)/i
+  const indexedShape = /^\/(?:api\/v1\/file\/|scene-template-previews\/)/i
   if (indexedShape.test(source) && isIndexedSource(source)) return
   throw new Error('Review assets must be inline or indexed in this sandbox; external, blob and disk sources are blocked.')
 }

@@ -89,13 +89,17 @@ also prints `REVIEW_URL_LAN`.
   generated UUIDs; file reads resolve through the server's in-memory index, not
   arbitrary paths supplied by a URL.
 - Writes are serialized and restricted to the loopback listening socket. The
-  conservative write budget is 128 outputs / 256 MiB (including metadata);
+  conservative HTTP write budget is 128 outputs / 256 MiB (including the exact
+  recording-sidecar bytes);
   partial I/O failures do not refund reservations. A request times out after
   30 seconds; incomplete headers after 10 seconds. Start a fresh sandbox when
   its budget is exhausted. Generated files remain for inspection, not auto-deleted.
+  This is not a quota for the entire temporary directory: the trusted local CLI's
+  build, preview copies and failure records are outside this HTTP write budget.
 - Snapshots require `provided_only`, valid Scene v1 layer types, a safe template
   ID, at most 24 layers, 1920×1080, 30 seconds, and no audio tracks. Asset sources
-  must be inline or resolve to this sandbox's indexed files. External URLs,
+  must be inline or relative references to this sandbox's indexed files. Absolute URLs
+  (including another loopback hostname),
   unregistered local references, blob URLs and disk paths are refused on save.
 - CSP restricts interactive browser media/network requests to this origin,
   data and blob sources; additional no-referrer/nosniff/frame-denial headers

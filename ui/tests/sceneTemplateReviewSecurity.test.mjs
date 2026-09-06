@@ -100,7 +100,7 @@ test('accepts only an indexed same-application source through the explicit callb
   const absoluteScene = makeScene({
     layers: [{ ...scene.layers[0], source: absoluteSource }],
   })
-  assert.strictEqual(validateReviewSnapshot(absoluteScene, value => value === absoluteSource), absoluteScene)
+  assert.throws(() => validateReviewSnapshot(absoluteScene, value => value === absoluteSource), /inline or indexed/i)
 
   assert.throws(() => validateReviewSnapshot(scene, () => false), /inline or indexed/i)
 })
