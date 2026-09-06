@@ -46,8 +46,13 @@ Son referencias de diseño; no son dependencias instaladas ni integraciones hech
 - [x] Tests locales de R1 sobre su base inicial: UI 931/931 y Python 2127
   aprobados, 1 omitido; E2E simulado 17/17. Lint/build/i18n/bundle, contratos de
   repositorio y ratchet contra la base inicial aprobados.
-- [ ] Commit y PR a development; registrar enlaces en el informe de entrega.
-- [ ] Revisión independiente final y CI sobre el HEAD exacto del PR.
+- [x] Commit de implementación `cac47459`, integrado con development en `4f8028df`.
+  [PR #193](https://github.com/IAnMove/hocuspocus/pull/193) abierto a development.
+- [x] Revisión independiente final de agentes Luna; hallazgos corregidos.
+- [x] Revalidación `validate_local.sh --full` en `4f8028df`, contra development
+  `f9fbeb8a`: Python 2155 aprobados/1 omitido, UI 940, E2E 17; ratchet y demás
+  controles aprobados. i18n también aprobado por separado.
+- [ ] CI de GitHub sobre el HEAD exacto del PR: pendiente al escribir esta nota.
   Cursor dispensado temporalmente por cuota; no desactivar checks requeridos.
 - [ ] Merge normal a development. No publicar main ni reiniciar apps compartidas.
 - [ ] Validación artística de un pack hablante real: **no conseguida** en este
@@ -56,6 +61,8 @@ Son referencias de diseño; no son dependencias instaladas ni integraciones hech
 Aceptación: un parche raster importable y visible sobre el personaje, montado en
 escena con la geometría correcta, sin alterar el fichero base. Evidencia separada
 de implementación, tests, commit, PR, CI, merge y resultado artístico.
+Al reanudar, releer #193 para actualizar CI/merge: este fichero conserva el
+snapshot previo a su resultado remoto; no abrir otro PR por esas casillas.
 
 ## R2 — Generación guiada de piezas coherentes
 
