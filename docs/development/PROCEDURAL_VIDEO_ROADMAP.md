@@ -24,6 +24,7 @@ espejo, zoom, LUT o cambio de objeto no aumenta el contador de plantillas.
 - [50 composiciones 2D/2,5D](procedural-video/SCENES_2D_25D.md)
 - [50 escenarios 3D](procedural-video/SCENES_3D.md)
 - [50 técnicas de acabado](procedural-video/FILTERS.md)
+- [Bloque AN: 30 técnicas expresivas de animación limitada](procedural-video/ANIME_LIMITED_ANIMATION.md)
 
 ## Estado de partida y decisiones del usuario
 
@@ -125,6 +126,7 @@ CI / Cursor / development / render real / aprobado visualmente / main.
 | P02 | evaluación determinista | P01 | misma evaluación temporal en preview/export |
 | P03 | cámaras 2D | P02 | movimientos y encuadres reutilizables |
 | P04 | composición 2,5D | P03 | grupos, máscaras y profundidad por capas |
+| AN0–AN4 | animación limitada tipo anime | P01/P02/P03/P04; montaje P07; poses P14 | 30 técnicas/recetas con requisitos R0–R3, priorizando personajes fijos en plano medio |
 | P05 | catálogo 2D A–E | P04 | 5 lotes de 10 propuestas distintas |
 | P06 | Wizard declarativo | P05-A; resto aditivo | crea/abre/edita con permisos y IDs |
 | P07 | montaje durable | P06 | escenas → secuencia → vídeo recuperable |
