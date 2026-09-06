@@ -275,9 +275,9 @@ class TestH3DirectorDialogueCompiler(unittest.TestCase):
             duration_seconds=5.167,
         )
 
-        self.assertNotIn("VOCAL TIMELINE LOCK", prompt)
-        self.assertNotIn("spoken exactly once", prompt)
-        self.assertNotIn("remain silent", prompt.casefold())
+        self.assertIn("VOCAL TIMELINE LOCK", prompt)
+        self.assertIn("spoken exactly once", prompt)
+        self.assertIn("remain silent", prompt.casefold())
         self.assertIn("<d>[Spanish] Ya están aquí.</d>", prompt)
         self.assertEqual(
             validate_h3_prompt_contract(
@@ -331,8 +331,8 @@ class TestH3DirectorDialogueCompiler(unittest.TestCase):
         soundscape = prompt.split("overall_soundscape:", 1)[1].split(
             "non_diegetic_music:", 1,
         )[0]
-        self.assertIn("N/A", soundscape)
-        self.assertNotIn("Footsteps and room tone", prompt)
+        self.assertIn("Footsteps and room tone", soundscape)
+        self.assertIn("Footsteps and room tone", prompt)
         self.assertNotIn("the first tagged line", prompt)
 
     def test_no_sound_description_keeps_dialogue_and_blanks_audio_fields(self):
@@ -845,7 +845,7 @@ class TestH3DirectorDialogueCompiler(unittest.TestCase):
                 "spoken_text": "Vamos, Luigi. Camina.",
             }],
             mode="t2va",
-            audio_plan={"spoken_language": "Español de España"},
+            audio_plan={"spoken_language": "Español de España", "h3_audio_policy": "legacy"},
         )
 
         self.assertIn("<d>[Spanish] Vamos, Luigi. Camina.</d>", prompt)

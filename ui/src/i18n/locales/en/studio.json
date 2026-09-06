@@ -777,5 +777,21 @@
     "chooseModel": "Choose a reference-capable image model first.",
     "generated": "Generated panorama variation: {{name}}",
     "generateFailed": "Could not generate panorama variation."
+  },
+  "h3Adoption": {
+    "writing": "AI writing",
+    "faithful": "AI Faithful",
+    "creative": "AI Creative",
+    "faithfulHint": "Preserve your scene and exact lines. Write dialogue when requested without a script.",
+    "creativeHint": "Develop the scene and add meaningful dialogue. Exact lines and silence requests stay protected.",
+    "enhance": "Plan / enhance prompt",
+    "audio": "Scene audio",
+    "native": "Native ambience and dialogue",
+    "legacy": "Previous dialogue-only policy",
+    "sequence": "Continue references across windows",
+    "attention": "Attention",
+    "denseAuto": "Automatic dense",
+    "fallback": "Sparse attention falls back to dense if unavailable. Sol requires Triton 3.6+.",
+    "turboPreset": "H3 acceleration preset"
   }
 }

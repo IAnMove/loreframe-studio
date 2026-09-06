@@ -30,6 +30,7 @@ import { VoiceRefSection } from './VoiceRefSection'
 import { ToolsPanel } from './ToolsPanel'
 import { Hunyuan3DPanel } from './Hunyuan3DPanel'
 import { HardwareStatusBar } from './HardwareStatusBar'
+import { H3PromptControls } from './H3PromptControls'
 import { MiniMaxH3TurboToggle } from './MiniMaxH3TurboToggle'
 import { PanoramaLoopPanel } from './PanoramaLoopPanel'
 import { BrandIdentity } from '../BrandIdentity'
@@ -191,6 +192,7 @@ export function Sidebar() {
             start/end ImageUpload don't apply there. */}
         {isVideo && !isBlend && <DurationSlider />}
         {isVideo && <MiniMaxH3TurboToggle />}
+        {isVideo && <H3PromptControls />}
         {/* Frames (image_mode 0) AND Extend (image_mode 3) both use the unified
             InputsPanel. In Extend mode its first tile is the source video to
             continue from; otherwise it's the start frame. */}

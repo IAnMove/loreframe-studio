@@ -133,7 +133,7 @@ def _install_h3_fakes(monkeypatch, planner) -> None:
     )
     duration_module = _module(
         "services.minimax_h3_duration",
-        apply_h3_dialogue_duration=lambda _body, _model_def: None,
+        apply_h3_dialogue_duration=lambda _body, _model_def, **_kwargs: None,
         apply_h3_vocal_timeline=lambda _body, _model_def: None,
         h3_dialogue_split_error=lambda _contract: "dialogue split required",
     )

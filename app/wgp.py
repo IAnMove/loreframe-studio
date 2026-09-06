@@ -44,7 +44,7 @@ from shared.utils.audio_video import save_image_metadata, read_image_metadata, e
 from shared.utils.audio_metadata import save_audio_metadata, read_audio_metadata, extract_creation_datetime_from_metadata, resolve_audio_creation_datetime
 from shared.utils.video_metadata import save_video_metadata
 from shared.match_archi import match_nvidia_architecture
-from shared.attention import get_attention_modes, get_supported_attention_modes
+from shared.attention import get_override_attention_modes as get_attention_modes, get_supported_override_attention_modes as get_supported_attention_modes
 from shared.utils.utils import truncate_for_filesystem, sanitize_file_name, process_images_multithread, get_default_workers
 from shared.utils.process_locks import acquire_GPU_ressources, release_GPU_ressources, any_GPU_process_running, gen_lock
 from shared.loras_migration import migrate_loras_layout
@@ -7349,6 +7349,12 @@ def generate_video(
     # planner. Kept as a real list so semantic newlines inside each prompt are
     # never mistaken for prompt boundaries.
     h3_window_prompts=None,
+    minimax_h3_planning_style="faithful",
+    minimax_h3_audio_policy="native",
+    minimax_h3_turbo_preset="",
+    minimax_h3_reference_sequence=False,
+    minimax_h3_multi_window=True,
+    h3_reference_context="",
 ):
 
 
@@ -7524,6 +7530,8 @@ def generate_video(
     overridden_attention = override_attention if len(override_attention) else get_overridden_attention(model_type)
     # if overridden_attention is not None and overridden_attention !=  attention_mode: print(f"Attention mode has been overriden to {overridden_attention} for model type '{model_type}'")
     attn = overridden_attention if overridden_attention is not None else attention_mode
+    from services.h3_runtime_policy import resolve_model_attention, release_special_loras
+    attn = resolve_model_attention(attn, model_def, attention_modes_supported)
     if attn == "auto":
         attn = get_auto_attention()
     elif not attn in attention_modes_supported:
@@ -7775,6 +7783,8 @@ def generate_video(
 
     if hasattr(wan_model, "validate_loras"):
         wan_model.validate_loras(loras_selected)
+    if hasattr(wan_model, "configure_special_loras"):
+        wan_model.configure_special_loras(loras_selected, loras_list_mult_choices_nums)
 
     if hasattr(wan_model, "get_trans_lora"):
         trans_lora, trans2_lora = wan_model.get_trans_lora()
@@ -8100,6 +8110,7 @@ def generate_video(
         """Release preparation/runtime state on success, failure, or abort."""
         clear_status(state)
         trans.cache = None
+        release_special_loras(wan_model)
         offload.unload_loras_from_model(trans_lora)
         if trans2_lora is not None:
             offload.unload_loras_from_model(trans2_lora)
@@ -8403,6 +8414,8 @@ def generate_video(
             aligned_guide_start_frame = guide_start_frame - alignment_shift
             aligned_guide_end_frame = guide_end_frame - alignment_shift
             aligned_window_start_frame = window_start_frame - alignment_shift  
+            if model_def.get("audio_guide_window_slicing", False) and pre_audio_guide is not None:
+                input_waveform, input_waveform_sample_rate = pre_audio_guide, pre_audio_guide_sample_rate
             if audio_guide is not None and model_def.get("audio_guide_window_slicing", False):
                 audio_start_frame = aligned_window_start_frame
                 if reset_control_aligment:
@@ -8977,6 +8990,7 @@ def generate_video(
                 trans.cache = None 
                 if trans2 is not None: 
                     trans2.cache = None 
+                release_special_loras(wan_model)
                 offload.unload_loras_from_model(trans_lora)
                 if trans2_lora is not None: 
                     offload.unload_loras_from_model(trans2_lora)

@@ -304,7 +304,7 @@ def plan_h3_vocal_timeline(
     }
 
 
-def inject_h3_vocal_timeline(prompt: Any, duration_seconds: float) -> tuple[str, dict[str, Any]]:
+def inject_h3_vocal_timeline(prompt: Any, duration_seconds: float, *, audio_policy: str = "native") -> tuple[str, dict[str, Any]]:
     """Insert one idempotent vocal schedule before H3's sound fields."""
 
     source = str(prompt or "").strip()
@@ -330,9 +330,14 @@ def inject_h3_vocal_timeline(prompt: Any, duration_seconds: float) -> tuple[str,
         duration_seconds,
         mapped_driving_audio=mapped_driving_audio,
     )
-    # Keep the schedule as metadata only. Writing "remain silent" / "spoken
-    # exactly once" into the picture description makes H3 say those notes.
-    return re.sub(r"[ \t]+", " ", clean).strip(), timeline
+    if audio_policy == "legacy":
+        return re.sub(r"[ \t]+", " ", clean).strip(), timeline
+    # The native recipe carries the schedule to the audiovisual model, not just metadata.
+    lock = " VOCAL TIMELINE LOCK: " + timeline["text"] + "\n\n"
+    field = _SOUND_FIELD.search(clean)
+    offset = field.start() if field else len(clean)
+    return (clean[:offset].rstrip() + lock + clean[offset:].lstrip()).strip(), timeline
+
 
 
 def apply_h3_vocal_timeline(
@@ -353,7 +358,7 @@ def apply_h3_vocal_timeline(
         return None
     if duration <= 0 or not str(params.get("prompt") or "").strip():
         return None
-    prompt, contract = inject_h3_vocal_timeline(params.get("prompt"), duration)
+    prompt, contract = inject_h3_vocal_timeline(params.get("prompt"), duration, audio_policy=params.get("minimax_h3_audio_policy", "native"))
     params["prompt"] = prompt
     if contract:
         params["_h3_vocal_timeline_contract"] = contract
@@ -381,6 +386,7 @@ def _align_up(frames: int, modulus: int, remainder: int) -> int:
 def apply_h3_dialogue_duration(
     params: MutableMapping[str, Any],
     model_def: Mapping[str, Any] | None = None,
+    *, preserve_requested: bool = False,
 ) -> dict[str, Any] | None:
     """Replace an H3 job's clip length with its calculated dialogue length.
 
@@ -419,9 +425,11 @@ def apply_h3_dialogue_duration(
     raw_frames = max(1, math.ceil(float(estimate["estimated_seconds"]) * fps))
     aligned_frames = _align_up(raw_frames, modulus, remainder)
     effective_frames = max(minimum, min(maximum, aligned_frames))
-    effective_seconds = round(effective_frames / fps, 3)
     requested_before = params.get("video_length")
-    overflow = aligned_frames > maximum
+    if preserve_requested:
+        effective_frames = max(minimum, _positive_int(requested_before, effective_frames))
+    effective_seconds = round(effective_frames / fps, 3)
+    overflow = aligned_frames > (effective_frames if preserve_requested else maximum)
     minimum_limited = aligned_frames < minimum
 
     contract: dict[str, Any] = {

@@ -777,5 +777,21 @@
     "chooseModel": "Elige primero un modelo de imagen capaz de usar referencias.",
     "generated": "Variación de panorama generada: {{name}}",
     "generateFailed": "No se pudo generar la variación de panorama."
+  },
+  "h3Adoption": {
+    "writing": "Escritura con IA",
+    "faithful": "IA Fiel",
+    "creative": "IA Creativa",
+    "faithfulHint": "Conserva tu escena y frases exactas. Escribe el diálogo solicitado cuando no hay guion.",
+    "creativeHint": "Desarrolla la escena y añade diálogo con sentido. Respeta las frases exactas y las peticiones de silencio.",
+    "enhance": "Planificar / mejorar prompt",
+    "audio": "Audio de la escena",
+    "native": "Ambiente y diálogo nativos",
+    "legacy": "Política anterior: sólo diálogo",
+    "sequence": "Continuar referencias entre ventanas",
+    "attention": "Atención",
+    "denseAuto": "Densa automática",
+    "fallback": "La atención dispersa vuelve a densa si no está disponible. Sol requiere Triton 3.6+.",
+    "turboPreset": "Preset de aceleración H3"
   }
 }
