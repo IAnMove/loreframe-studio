@@ -41,6 +41,21 @@ export function latestApprovableAttempt<T extends ReviewableShot['attempts'][num
   ))
 }
 
+export function missingAssemblyShotOrders(
+  shots: Array<{
+    order: number
+    approvedAttemptId?: string
+    attempts: Array<{ id: string; status?: string; outputAssetIds?: string[] }>
+  }>,
+  hasAsset: (assetId: string) => boolean,
+): number[] {
+  return shots.flatMap(shot => {
+    const approved = shot.attempts.find(attempt => attempt.id === shot.approvedAttemptId)
+    const playable = approved?.status === 'completed' && hasReproducibleAsset(approved, hasAsset)
+    return playable ? [] : [shot.order]
+  })
+}
+
 export function bulkApproveSelections(
   shots: ReviewableShot[],
   hasAsset: (assetId: string) => boolean,

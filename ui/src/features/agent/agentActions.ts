@@ -1991,6 +1991,14 @@ export function isHowToGenerateQuestion(request: string): boolean {
   return /[?]/.test(text) || /^(?:c[oó]mo|how)\b/i.test(text)
 }
 
+const LABS_INVENTORY = /(?:¿\s*)?(?:qu[eé]\s+puedes\s+hacer|what\s+can\s+you\s+do)(?:\s+(?:en|in|con|with))?\s+(?:el\s+)?(?:series\s+lab|story\s+lab)/i
+
+export function isLabsInventoryQuestion(request: string): boolean {
+  const text = request.trim()
+  if (!text || text.length > 240) return false
+  return LABS_INVENTORY.test(text)
+}
+
 const EDITORIAL_COMMIT_TYPES = new Set([
   'apply_story_proposal',
   'approve_story_section',
@@ -2152,6 +2160,9 @@ export async function reconcileAgentTurnWithRequest(
       ].join('\n\n'),
       actions: [{ type: 'open_tab', tab: 'comics' }],
     }
+  }
+  if (isLabsInventoryQuestion(request)) {
+    return { ...turn, actions: [] }
   }
   if (isHowToGenerateQuestion(request)) {
     return {

@@ -1281,3 +1281,26 @@ Each inventory component has a classification and a phase destination. Labels in
 - Effective prompts reuse `tests/fixtures/h3_prompt_fase1_expected.json`; later L4/L12/H-* PRs must not silently regenerate it.
 
 This freeze does not execute models and does not change runtime behaviour.
+
+## L12 verification (2026-09-06)
+
+Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L11 suites it reuses. Desktop Story Lab shells are also in `ui/e2e/specs/labs-wizard-l12-shells.spec.ts` against the simulated API.
+
+| Mandatory case | Result in this PR |
+|---|---|
+| «¿Qué puedes hacer en Series Lab?» | `isLabsInventoryQuestion` strips every action. Availability lists capabilities with reasons. No mutation. |
+| «¿Cómo genero un capítulo?» | How-to filter keeps only navigation. Does not enqueue render/create. |
+| «Abre los personajes de este clip rápido» | `open_story_section` / `resolveStoryLabNavigation` opens overview (equivalent), never claims a hidden characters tab. |
+| Create episode with pending canon | L7 policy: `shouldApproveCanonForExplicitEpisodeCreate` is false. |
+| «He descubierto ChatGPT» | `syncShotsFromScript` keeps the literal and marks the speaking shot stale. |
+| Generate pending shots in quick mode | Wizard parses `render_series_shots` `missing`. Fused 4-step payload is covered by `tests/test_series_render.py`. This PR did **not** run a GPU generation. |
+| Choose latest pending takes | `bulkApproveSelections({ replaceFinals: false })` keeps existing finals. |
+| Use take 2 for this shot | `review_series_attempts` `selected_latest` with `shot_numbers: [2]`. |
+| Make a comic of this episode | `stage_series_comic` remains the existing operation. |
+| Assemble without enough takes | `missingAssemblyShotOrders` lists missing shot numbers; assemble throws `Faltan`. |
+| Workspace change in flight | Covered by `ui/tests/storyAsyncOwnership.test.mjs`. |
+| Reload with pending question | `pending_question.id` is `question:workflow:step` and stays stable. |
+| Reload with live generation | `reusableInFlightSongCandidate` reuses the pending job candidate. |
+| Invalid provider action/fields | Unknown types and invalid `render_mode` parse to no actions. |
+
+Remaining documented gaps, not claimed tested by this suite: `fused_dropped_by_model_for_manifest`, `approve_all_replaces_chosen_takes` (UI “use pending takes” now keeps finals; `all_latest` vs `replace_latest` still exist), `script_shots_dialogue_desync`. No real audiovisual generation was repeated here.

@@ -23,7 +23,7 @@ import type {
   UpdateSeriesEpisodeCommand,
 } from './commands'
 import { shouldApproveCanonForExplicitEpisodeCreate } from './canonPolicy'
-import { bulkApproveSelections } from './shotReviewPolicy'
+import { bulkApproveSelections, missingAssemblyShotOrders } from './shotReviewPolicy'
 
 function seriesEpisodeResult(
   workspaceId: string,
@@ -742,13 +742,12 @@ export async function assembleSeriesEpisode(action: AssembleSeriesEpisodeCommand
     ? `No existe el episodio “${action.targetEpisodeTitle}” en “${series.title}”.`
     : `“${series.title}” necesita un episodio activo o único.`)
   if (!episode.shots.length) throw new Error(`“${episode.title}” no tiene shots que ensamblar.`)
-  const incomplete = episode.shots.filter(shot => {
-    const approved = shot.attempts.find(attempt => attempt.id === shot.approvedAttemptId)
-    return !approved || approved.status !== 'completed'
-      || !approved.outputAssetIds.some(id => Boolean(series.assets[id]))
-  })
+  const incomplete = missingAssemblyShotOrders(
+    episode.shots,
+    id => Boolean(series.assets[id]),
+  )
   if (incomplete.length) {
-    throw new Error(`Aprueba primero un vídeo reproducible para todos los shots. Faltan: ${incomplete.map(shot => shot.order).join(', ')}.`)
+    throw new Error(`Aprueba primero un vídeo reproducible para todos los shots. Faltan: ${incomplete.join(', ')}.`)
   }
 
   await useSeriesStore.getState().openSeries(series.id)

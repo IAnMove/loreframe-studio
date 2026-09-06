@@ -109,6 +109,32 @@ def test_known_gaps_and_unregistered_series_comic_are_frozen():
     assert wizard["wizard_available"] is True
 
 
+def test_l12_mandatory_cases_have_an_executable_suite():
+    path = ROOT / "ui" / "tests" / "labsWizardL12.test.mjs"
+    assert path.is_file()
+    source = path.read_text(encoding="utf-8")
+    for needle in (
+        "Qué puedes hacer en Series Lab",
+        "Cómo genero un capítulo",
+        "quick_video",
+        "canon ajeno",
+        "He descubierto ChatGPT",
+        "selected_latest",
+        "stage_series_comic",
+        "missingAssemblyShotOrders",
+        "not_a_real_action",
+        "question:workflow-1:step-2",
+        "song-live",
+    ):
+        assert needle in source, needle
+    doc = MATRIX_DOC.read_text(encoding="utf-8")
+    assert "## L12 verification" in doc
+    assert "did **not** run a GPU generation" in doc
+    e2e = ROOT / "ui" / "e2e" / "specs" / "labs-wizard-l12-shells.spec.ts"
+    assert e2e.is_file()
+    assert "Story Lab full-story shell" in e2e.read_text(encoding="utf-8")
+
+
 def test_h3_prompt_fixtures_are_reused_not_copied():
     data = _matrix()
     expected = "tests/fixtures/h3_prompt_fase1_expected.json"
