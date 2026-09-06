@@ -453,6 +453,52 @@ test('a failed job persist still watches the accepted MiniMax job', { concurrenc
   assert.equal(savedLibrary.value.projects[project.id].music.cues[0].candidates[0].status, 'ready')
 })
 
+test('phase persist does not restore other Stories from the persist snapshot', { concurrency: false }, async t => {
+  const workspace = 'story-job-live-library'
+  const { createStoryProject, normalizeStoryProject, useStoryStore } = await import('../src/features/stories/store.ts')
+  const base = createStoryProject('music_video')
+  const otherBase = createStoryProject('music_video')
+  const cue = cueFixture(base)
+  const project = normalizeStoryProject({
+    ...base,
+    title: 'Generating',
+    music: { ...base.music, model: 'music-3.0', cues: [cue] },
+  })
+  const other = normalizeStoryProject({
+    ...otherBase,
+    title: 'Sibling story',
+  })
+  const savedLibrary = {
+    value: {
+      version: 2,
+      revision: 1,
+      activeId: project.id,
+      projects: { [project.id]: project, [other.id]: other },
+    },
+  }
+  mockStoryFetch(t, workspace, savedLibrary, {
+    onPostJob: () => {
+      const current = useStoryStore.getState()
+      const liveOther = { ...current.projects[other.id], title: 'Edited sibling' }
+      useStoryStore.setState({
+        projects: { ...current.projects, [other.id]: liveOther },
+        dirty: true,
+      })
+    },
+  })
+  await installStory(workspace, project, 1, { [other.id]: other })
+  const { generateStoryCueSong } = await import('../src/features/stories/storySongGeneration.ts')
+  await generateStoryCueSong({
+    workspace,
+    projectId: project.id,
+    cueId: cue.id,
+    actor: 'user',
+    capability: 'generate_story_song',
+  })
+  assert.equal(useStoryStore.getState().projects[other.id].title, 'Edited sibling')
+  assert.equal(useStoryStore.getState().dirty, true)
+})
+
 test('phase persist keeps cue edits typed while the job is running', { concurrency: false }, async t => {
   const workspace = 'story-job-keep-edits'
   const { createStoryProject, normalizeStoryProject, useStoryStore } = await import('../src/features/stories/store.ts')

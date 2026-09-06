@@ -130,6 +130,7 @@ async function persistCueCandidate(
   const saved = library.projects[projectId]
   const savedCandidate = cueCandidate(saved, cueId, candidateId)
   const latest = useStoryStore.getState()
+  if (latest.workspace !== workspace) return saved
   const live = latest.projects[projectId] || before.projects[projectId] || saved
   const merged = savedCandidate
     ? overlayCueMusicCandidate(live, cueId, savedCandidate)
@@ -139,11 +140,9 @@ async function persistCueCandidate(
     ? overlayCueMusicCandidate(latest.project, cueId, savedCandidate)
     : latest.project
   useStoryStore.setState({
-    workspace,
     project: visible,
     projects: {
       ...latest.projects,
-      ...library.projects,
       [projectId]: merged,
       [visibleId]: visible,
     },
@@ -154,7 +153,7 @@ async function persistCueCandidate(
     saveError: null,
     libraryConflicts: latest.libraryConflicts,
   })
-  noteStoryLibraryPersisted()
+  noteStoryLibraryPersisted({ onlyIfClean: true })
   return merged
 }
 

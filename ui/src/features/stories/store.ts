@@ -571,9 +571,10 @@ let saveTimer: number | undefined
 let backendSaveChain: Promise<void> = Promise.resolve()
 const lastPersistedLibrary = new Map<string, string>()
 
-export function noteStoryLibraryPersisted(): void {
+export function noteStoryLibraryPersisted(options?: { onlyIfClean?: boolean }): void {
   if (typeof window !== 'undefined') window.clearTimeout(saveTimer)
   const state = useStoryStore.getState()
+  if (options?.onlyIfClean && state.dirty) return
   lastPersistedLibrary.set(
     state.workspace,
     JSON.stringify(buildLibrary(state.project, state.projects, state.libraryRevision)),
