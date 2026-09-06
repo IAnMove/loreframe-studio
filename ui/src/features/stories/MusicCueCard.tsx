@@ -210,7 +210,9 @@ function CueCandidateRow({
   const { t } = useUiTranslation('storyLab')
   const playable = Boolean(candidate.source.trim())
   const phase = candidate.executionPhase
-  const phaseLabel = t(`music.executionPhase.${phase || 'prepared'}`)
+  const phaseLabel = candidate.status === 'failed'
+    ? t('music.candidateFailed')
+    : t(`music.executionPhase.${phase || 'prepared'}`)
   const meta = playable && candidate.durationSeconds
     ? `${candidate.durationSeconds.toFixed(1)}s`
     : (playable ? t('music.durationOnPlayback') : phaseLabel)

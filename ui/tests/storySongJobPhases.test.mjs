@@ -124,6 +124,15 @@ function mockStoryFetch(t, workspace, savedLibrary, options = {}) {
     }
     if (url.endsWith('/api/v1/stories/library') && method === 'PUT') {
       const body = JSON.parse(String(init.body))
+      const pendingJob = Object.values(body.library?.projects || {}).flatMap(project => (
+        (project.music?.cues || []).flatMap(cue => cue.candidates || [])
+      )).find(item => item.status === 'pending' && item.provenance?.jobId)
+      if (options.failJobPersist && pendingJob) {
+        events.push('put-fail')
+        return new Response(JSON.stringify({ detail: 'library persist failed' }), {
+          status: 500, headers: { 'content-type': 'application/json' },
+        })
+      }
       putBodies.push(body.library)
       events.push('put')
       savedLibrary.value = { ...body.library, revision: body.baseRevision + 1 }
@@ -399,6 +408,94 @@ test('MusicCueCard shows execution phases and hides audio until a source exists'
   const source = readFileSync(new URL('../src/features/stories/MusicCueCard.tsx', import.meta.url), 'utf8')
   assert.match(source, /CueCandidateRow/)
   assert.match(source, /music\.executionPhase/)
+  assert.match(source, /music\.candidateFailed/)
   assert.match(source, /const playable = Boolean\(candidate\.source\.trim\(\)\)/)
   assert.match(source, /\{playable \? \(\s*<audio/)
+})
+
+test('a failed job persist still watches the accepted MiniMax job', { concurrency: false }, async t => {
+  const workspace = 'story-job-persist-fail'
+  const { createStoryProject, normalizeStoryProject } = await import('../src/features/stories/model.ts')
+  const base = createStoryProject('music_video')
+  const cue = cueFixture(base)
+  const project = normalizeStoryProject({
+    ...base,
+    title: 'Persist fail',
+    music: { ...base.music, model: 'music-3.0', cues: [cue] },
+  })
+  const savedLibrary = {
+    value: { version: 2, revision: 1, activeId: project.id, projects: { [project.id]: project } },
+  }
+  const mock = mockStoryFetch(t, workspace, savedLibrary, {
+    failJobPersist: true,
+    postJob: completedJob(workspace, {
+      status: 'queued',
+      phase: 'queued',
+      message: 'Music generation accepted',
+      current: 0,
+      progress: 0,
+      candidates: [],
+    }),
+    pollJob: completedJob(workspace),
+  })
+  await installStory(workspace, project, 1)
+  const { generateStoryCueSong } = await import('../src/features/stories/storySongGeneration.ts')
+  const generated = await generateStoryCueSong({
+    workspace,
+    projectId: project.id,
+    cueId: cue.id,
+    actor: 'user',
+    capability: 'generate_story_song',
+  })
+  assert.ok(mock.events.includes('put-fail'))
+  assert.ok(mock.events.includes('get-job'))
+  assert.equal(generated.candidate.status, 'ready')
+  assert.equal(savedLibrary.value.projects[project.id].music.cues[0].candidates[0].status, 'ready')
+})
+
+test('phase persist keeps cue edits typed while the job is running', { concurrency: false }, async t => {
+  const workspace = 'story-job-keep-edits'
+  const { createStoryProject, normalizeStoryProject, useStoryStore } = await import('../src/features/stories/store.ts')
+  const base = createStoryProject('music_video')
+  const cue = cueFixture(base)
+  const project = normalizeStoryProject({
+    ...base,
+    title: 'Keep edits',
+    music: { ...base.music, model: 'music-3.0', cues: [cue] },
+  })
+  const savedLibrary = {
+    value: { version: 2, revision: 1, activeId: project.id, projects: { [project.id]: project } },
+  }
+  mockStoryFetch(t, workspace, savedLibrary, {
+    onPostJob: () => {
+      const current = useStoryStore.getState()
+      const live = current.projects[project.id]
+      const next = {
+        ...live,
+        music: {
+          ...live.music,
+          cues: live.music.cues.map(item => item.id === cue.id
+            ? { ...item, purpose: 'Edited while generating' }
+            : item),
+        },
+      }
+      useStoryStore.setState({
+        project: next,
+        projects: { ...current.projects, [project.id]: next },
+        dirty: true,
+      })
+    },
+  })
+  await installStory(workspace, project, 1)
+  const { generateStoryCueSong } = await import('../src/features/stories/storySongGeneration.ts')
+  await generateStoryCueSong({
+    workspace,
+    projectId: project.id,
+    cueId: cue.id,
+    actor: 'user',
+    capability: 'generate_story_song',
+  })
+  const kept = useStoryStore.getState().projects[project.id].music.cues[0]
+  assert.equal(kept.purpose, 'Edited while generating')
+  assert.equal(useStoryStore.getState().dirty, true)
 })

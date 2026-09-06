@@ -299,6 +299,7 @@
       "cancelling": "Cancelando",
       "terminal": "Terminada"
     },
+    "candidateFailed": "Fallida",
     "useInTrailer": "Usar en tráiler musical",
     "emptyTitle": "Aún no hay biblia musical",
     "emptyHint": "Genera la Story completa o pulsa “Generar sugerencias del LLM” aquí. En esta fase no se usan créditos de MiniMax Music.",

@@ -6,6 +6,7 @@ import {
   buildPendingSongCandidate,
   patchSongCandidateFailed,
   patchSongCandidateReady,
+  overlayCueMusicCandidate,
   upsertCueMusicCandidate,
 } from './musicWorkflowState'
 import { pendingSongProvenance } from './provenance'
@@ -16,7 +17,13 @@ import {
   reusableInFlightSongCandidate,
   songJobIdentityChanged,
 } from './storySongJobPhases'
-import { normalizeStoryProject, saveStoryProjectMutation, storyId, useStoryStore } from './store'
+import {
+  commitStoryProjectMutation,
+  normalizeStoryProject,
+  noteStoryLibraryPersisted,
+  storyId,
+  useStoryStore,
+} from './store'
 import type { StoryMusicCandidate, StoryMusicCue, StoryProject } from './types'
 
 export interface GenerateStoryCueSongInput {
@@ -102,10 +109,10 @@ async function persistCueCandidate(
   candidateId: string,
   patch: (source: StoryProject) => StoryMusicCandidate,
 ): Promise<StoryProject> {
-  const current = useStoryStore.getState()
-  return saveStoryProjectMutation(
+  const before = useStoryStore.getState()
+  const library = await commitStoryProjectMutation(
     workspace,
-    current,
+    before,
     projectId,
     source => {
       const latestCue = source.music.cues.find(item => item.id === cueId)
@@ -120,6 +127,35 @@ async function persistCueCandidate(
       return normalizeStoryProject(next)
     },
   )
+  const saved = library.projects[projectId]
+  const savedCandidate = cueCandidate(saved, cueId, candidateId)
+  const latest = useStoryStore.getState()
+  const live = latest.projects[projectId] || before.projects[projectId] || saved
+  const merged = savedCandidate
+    ? overlayCueMusicCandidate(live, cueId, savedCandidate)
+    : saved
+  const visibleId = latest.project.id
+  const visible = visibleId === projectId && savedCandidate
+    ? overlayCueMusicCandidate(latest.project, cueId, savedCandidate)
+    : latest.project
+  useStoryStore.setState({
+    workspace,
+    project: visible,
+    projects: {
+      ...latest.projects,
+      ...library.projects,
+      [projectId]: merged,
+      [visibleId]: visible,
+    },
+    libraryRevision: library.revision,
+    dirty: latest.dirty,
+    hydrated: true,
+    loading: false,
+    saveError: null,
+    libraryConflicts: latest.libraryConflicts,
+  })
+  noteStoryLibraryPersisted()
+  return merged
 }
 
 function requireOpenCue(project: StoryProject | undefined, cueId: string): { project: StoryProject; cue: StoryMusicCue } {
@@ -227,13 +263,17 @@ async function persistJobOnCandidate(
     pending.id,
   ) || pending
   if (!songJobIdentityChanged(live, patchSongCandidateJob(live, job))) return
-  await persistCueCandidate(
-    input.workspace,
-    input.projectId,
-    input.cueId,
-    pending.id,
-    source => patchSongCandidateJob(cueCandidate(source, input.cueId, pending.id) || pending, job),
-  )
+  try {
+    await persistCueCandidate(
+      input.workspace,
+      input.projectId,
+      input.cueId,
+      pending.id,
+      source => patchSongCandidateJob(cueCandidate(source, input.cueId, pending.id) || pending, job),
+    )
+  } catch {
+    // The provider already accepted the job; keep polling and retry persist later.
+  }
 }
 
 function remoteSongWatchers(

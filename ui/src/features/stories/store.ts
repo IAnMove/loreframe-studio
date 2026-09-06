@@ -570,6 +570,15 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 let saveTimer: number | undefined
 let backendSaveChain: Promise<void> = Promise.resolve()
 const lastPersistedLibrary = new Map<string, string>()
+
+export function noteStoryLibraryPersisted(): void {
+  if (typeof window !== 'undefined') window.clearTimeout(saveTimer)
+  const state = useStoryStore.getState()
+  lastPersistedLibrary.set(
+    state.workspace,
+    JSON.stringify(buildLibrary(state.project, state.projects, state.libraryRevision)),
+  )
+}
 useStoryStore.subscribe(state => {
   if (typeof window === 'undefined') return
   try {
@@ -658,12 +667,12 @@ useStoryStore.subscribe(state => {
   }, 750)
 })
 
-export async function saveStoryProjectMutation(
+export async function commitStoryProjectMutation(
   workspace: string,
   current: { libraryRevision: number; projects: Record<string, StoryProject> },
   projectId: string,
   mutate: (project: StoryProject) => StoryProject,
-): Promise<StoryProject> {
+): Promise<NonNullable<Awaited<ReturnType<typeof api.saveStoryLibrary>>>> {
   let baseline = current
   let library: Awaited<ReturnType<typeof api.saveStoryLibrary>> | null = null
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -689,6 +698,16 @@ export async function saveStoryProjectMutation(
     }
   }
   if (!library?.projects[projectId]) throw new Error('Story Lab guardó la biblioteca sin devolver la historia editada.')
+  return library
+}
+
+export async function saveStoryProjectMutation(
+  workspace: string,
+  current: { libraryRevision: number; projects: Record<string, StoryProject> },
+  projectId: string,
+  mutate: (project: StoryProject) => StoryProject,
+): Promise<StoryProject> {
+  const library = await commitStoryProjectMutation(workspace, current, projectId, mutate)
   const visibleId = useStoryStore.getState().project.id
   useStoryStore.setState({
     workspace,

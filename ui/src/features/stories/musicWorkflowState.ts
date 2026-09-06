@@ -113,6 +113,28 @@ function keepSelectedCandidateId(current: string | undefined, candidateId: strin
   return current || candidateId
 }
 
+export function overlayCueMusicCandidate(
+  project: StoryProject,
+  cueId: string,
+  candidate: StoryMusicCandidate,
+): StoryProject {
+  return {
+    ...project,
+    music: {
+      ...project.music,
+      cues: project.music.cues.map(item => item.id === cueId ? {
+        ...item,
+        candidates: item.candidates.some(existing => existing.id === candidate.id)
+          ? item.candidates.map(existing => existing.id === candidate.id
+            ? { ...existing, ...candidate, id: candidate.id }
+            : existing)
+          : [...item.candidates, candidate],
+        selectedCandidateId: keepSelectedCandidateId(item.selectedCandidateId, candidate.id),
+      } : item),
+    },
+  }
+}
+
 export function upsertCueMusicCandidate(
   project: StoryProject,
   cueId: string,
