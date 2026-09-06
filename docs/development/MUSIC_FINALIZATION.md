@@ -24,6 +24,10 @@ If the cue already has `selectedCandidateId` pointing at another song,
 finalization still marks the reserved candidate `ready` and does **not**
 steal the selection.
 
+A `ready` row that already has another job's audio is not replaced. A late
+duplicate reservation for the same candidate ID fails closed instead of
+swapping the published take.
+
 ## Cancel
 
 Cancel before bytes: no candidate publish. Cancel after bytes: existing

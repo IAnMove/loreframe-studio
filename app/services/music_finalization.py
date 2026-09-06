@@ -17,6 +17,7 @@ from .generation_record import build_generation_record
 from .music_submission import MusicSubmissionError, MusicSubmissionStore
 from .story_library import (
     StoryLibraryRevisionConflict,
+    StorySongAttachConflict,
     attach_story_song_candidate,
     read_story_library,
 )
@@ -247,9 +248,14 @@ def _stage_candidate(store: MusicSubmissionStore, record: dict[str, Any], worksp
         _attach_candidate_row(workspace_dir, record, select=select, revision=int(revision))
     except StoryLibraryRevisionConflict:
         latest = read_story_library(workspace_dir)
-        _attach_candidate_row(
-            workspace_dir, record, select=select, revision=int(latest.get("revision") or 0),
-        )
+        try:
+            _attach_candidate_row(
+                workspace_dir, record, select=select, revision=int(latest.get("revision") or 0),
+            )
+        except StorySongAttachConflict as exc:
+            raise MusicFinalizationError(str(exc), 409) from exc
+    except StorySongAttachConflict as exc:
+        raise MusicFinalizationError(str(exc), 409) from exc
     publication = _publication(record)
     publication["stage"] = "candidate"
     record = dict(record)

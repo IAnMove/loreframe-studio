@@ -6,6 +6,58 @@ import re
 STYLES = {"faithful", "creative"}
 AUDIO_POLICIES = {"native", "legacy"}
 
+# Official MiniMax Context-IR / Ref2VA field order. Studio enhance, Director
+# compile and the dialect adapter all mint these labels; keep one owner.
+CONTEXT_IR_FIELDS = (
+    "integrated_multimodal_description",
+    "overall_soundscape",
+    "non_diegetic_music",
+)
+REF2VA_FIELDS = (
+    "subject_definitions",
+    "summary",
+    "retention_analysis",
+    "detailed_description",
+    "overall_soundscape",
+    "non_diegetic_music",
+)
+_REF2VA_KINDS = {"ref2va", "references", "omni"}
+
+
+def h3_fields_for_kind(kind: str | None) -> tuple[str, ...]:
+    key = str(kind or "context").strip().lower()
+    return REF2VA_FIELDS if key in _REF2VA_KINDS else CONTEXT_IR_FIELDS
+
+
+def h3_field_labels(kind: str | None) -> tuple[str, ...]:
+    return tuple(f"{name}:" for name in h3_fields_for_kind(kind))
+
+
+def tagged_dialogue(language: str, text: str) -> str:
+    """Canonical ``<d>[Language] words</d>`` block; surrounding prose stays with callers."""
+    return f"<d>[{language}] {text}</d>"
+
+
+def h3_field_structure_errors(text: str, kind: str | None = "context") -> list[str]:
+    """Exact-once, ordered official fields. Surrounding headers are the caller's dialect."""
+    source = str(text or "")
+    fields = h3_fields_for_kind(kind)
+    errors: list[str] = []
+    positions: list[int] = []
+    for field in fields:
+        matches = list(re.finditer(rf"(?mi)^\s*{re.escape(field)}\s*:", source))
+        if len(matches) != 1:
+            errors.append(f"expected one {field} field, found {len(matches)}")
+        elif matches:
+            positions.append(matches[0].start())
+    if len(positions) == len(fields) and positions != sorted(positions):
+        errors.append("Context-IR fields are out of order")
+    return errors
+
+
+def has_complete_h3_fields(text: str, kind: str | None = "context") -> bool:
+    return not h3_field_structure_errors(text, kind)
+
 
 def planning_style(value: str | None) -> str:
     style = str(value or "faithful").strip().lower()

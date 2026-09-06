@@ -9,7 +9,7 @@ from collections import Counter
 import re
 from typing import Any
 
-from .h3_prompt_policy import planning_style, writing_contract
+from .h3_prompt_policy import planning_style, tagged_dialogue, writing_contract
 from .director.spoken_language import infer_h3_spoken_language, h3_language_tag
 
 _TAG = re.compile(r"<d>\s*\[([^\]]+)\]\s*(.*?)</d>", re.I | re.S)
@@ -251,7 +251,7 @@ def tag_source_dialogue(source: str) -> str:
             return match.group(0)
         used[line["id"]] += 1
         ordinal = locked.index(line) + 1
-        return f'{line["speaker"] or "The intended speaker"} (S{ordinal}) <d>[{line["language"]}] {line["text"]}</d>'
+        return f'{line["speaker"] or "The intended speaker"} (S{ordinal}) {tagged_dialogue(line["language"], line["text"])}'
     return _QUOTE.sub(replace, source)
 
 
@@ -270,5 +270,5 @@ def repair_literal_tags(result: str, source: str, *, bind_speakers: bool = False
             return match.group(0)
         name = literal["speaker"] or "Speaker"
         binding = f'{name} ({speakers[name]}) ' if bind_speakers and not re.search(r"\(S\d+\)", result) else ""
-        return binding + f'<d>[{literal["language"]}] {literal["text"]}</d>'
+        return binding + tagged_dialogue(literal["language"], literal["text"])
     return _TAG.sub(repair, str(result or ''))
