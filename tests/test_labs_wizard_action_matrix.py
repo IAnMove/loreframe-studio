@@ -1,0 +1,131 @@
+"""L0 freeze: Labs ↔ Wizard action matrix.
+
+No functional change. Do not treat a documented defect as the desired
+behaviour. H3 prompt bytes stay in h3_prompt_fase1_expected.json.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURE = ROOT / "tests" / "fixtures" / "labs_wizard_action_matrix.json"
+H3_FIXTURE = ROOT / "tests" / "fixtures" / "h3_prompt_fase1_expected.json"
+MATRIX_DOC = ROOT / "docs" / "development" / "LABS_WIZARD_ACTION_MATRIX.md"
+
+REQUIRED_FIELDS = (
+    "id", "lab", "surface", "user_operation", "control", "ui_handler",
+    "domain_function", "domain_module", "adapter", "api", "wizard_capability",
+    "wizard_schema", "in_wizard_context", "wizard_status", "wizard_available",
+    "classification", "phase", "preconditions", "persistence", "presentation",
+    "test", "notes", "prompt_fixture", "blocking_defect",
+)
+
+
+def _matrix() -> dict:
+    return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_matrix_fixture_and_doc_exist():
+    data = _matrix()
+    assert data["schema"] == "hocuspocus.labs_wizard_action_matrix"
+    assert data["version"] == 1
+    assert data["base"]["sha"] == "e465a56ebbdcc979c73578655b6965b69db9976e"
+    assert data["base"]["prs"]["179"] == "merged"
+    assert data["base"]["prs"]["180"] == "merged"
+    assert MATRIX_DOC.is_file()
+    doc = MATRIX_DOC.read_text(encoding="utf-8")
+    assert "tests/fixtures/labs_wizard_action_matrix.json" in doc
+    for row in data["operations"]:
+        assert f"`{row['id']}`" in doc, row["id"]
+
+
+def test_every_operation_is_classified_with_a_phase():
+    data = _matrix()
+    classes = set(data["classifications"])
+    phases = set(data["phases"])
+    ids = []
+    for row in data["operations"]:
+        missing = [key for key in REQUIRED_FIELDS if key not in row]
+        assert missing == [], (row.get("id"), missing)
+        assert row["classification"] in classes, row["id"]
+        assert row["phase"] in phases, row["id"]
+        ids.append(row["id"])
+        if row["wizard_capability"]:
+            assert row["domain_function"], (
+                f"Wizard-promised {row['wizard_capability']} on {row['id']} "
+                "has no identified function"
+            )
+        if row["blocking_defect"]:
+            assert row["wizard_available"] is False, row["id"]
+        if row["domain_module"] and row["domain_function"]:
+            path = ROOT / row["domain_module"]
+            assert path.is_file(), (row["id"], row["domain_module"])
+            assert row["domain_function"] in path.read_text(encoding="utf-8"), (
+                row["id"], row["domain_function"], row["domain_module"]
+            )
+        if row["test"]:
+            assert (ROOT / row["test"]).is_file(), (row["id"], row["test"])
+    assert len(ids) == len(set(ids))
+    assert len(ids) >= 60
+
+
+def test_every_audited_control_group_has_classification_and_phase():
+    data = _matrix()
+    classes = set(data["classifications"])
+    phases = set(data["phases"])
+    op_ids = {row["id"] for row in data["operations"]}
+    groups = data["audited_control_groups"]
+    assert len(groups) == 60
+    names = []
+    for group in groups:
+        assert group["classification"] in classes, group["component"]
+        assert group["phase"] in phases, group["component"]
+        assert group["operation_ids"], group["component"]
+        missing = [oid for oid in group["operation_ids"] if oid not in op_ids]
+        assert missing == [], (group["component"], missing)
+        names.append(group["component"])
+    assert len(names) == len(set(names))
+    assert "SeriesShotsPanel.tsx" in names
+    assert "StoryMusicProductionLegacyDrawer.tsx" in names
+
+
+def test_known_gaps_and_unregistered_series_comic_are_frozen():
+    data = _matrix()
+    gap_ids = {gap["id"] for gap in data["known_gaps"]}
+    assert "fused_dropped_by_model_for_manifest" in gap_ids
+    assert "approve_all_replaces_chosen_takes" in gap_ids
+    assert "script_shots_dialogue_desync" in gap_ids
+    assert "stage_series_comic_unregistered" in gap_ids
+    assert "blocked_always_empty" in gap_ids
+    comic = next(row for row in data["operations"] if row["id"] == "series.comic.stage")
+    assert comic["domain_function"] == "stageSeriesComic"
+    assert comic["wizard_capability"] == ""
+    assert comic["classification"] == "no_expuesta"
+    assert comic["phase"] == "L6"
+    assert data["wizard_context"]["blocked"] == []
+    wizard = next(row for row in data["operations"] if row["id"] == "wizard.context.blocked")
+    assert wizard["blocking_defect"] == "blocked_always_empty"
+
+
+def test_h3_prompt_fixtures_are_reused_not_copied():
+    data = _matrix()
+    expected = "tests/fixtures/h3_prompt_fase1_expected.json"
+    assert data["h3_prompt_fixtures"]["before_ui"] == expected
+    assert data["h3_prompt_fixtures"]["before_queue"] == expected
+    assert data["h3_prompt_fixtures"]["reuse_tests"] == [
+        "tests/test_h3_prompt_finalization.py",
+    ]
+    assert H3_FIXTURE.is_file()
+    payload = json.loads(H3_FIXTURE.read_text(encoding="utf-8"))
+    assert payload["provenance"]["base_sha"]
+    assert payload["speech_matrix"], "frozen H3 speech prompts must remain"
+    assert (ROOT / "tests" / "test_h3_prompt_finalization.py").is_file()
+    prompt_ops = [row for row in data["operations"] if row["prompt_fixture"] == expected]
+    assert {row["id"] for row in prompt_ops} >= {
+        "h3.prompt.finalization_fixture",
+        "series.shots.render",
+        "h3.policy.e2e",
+        "h3.audio.contradictions",
+        "h3.creative.extra_line",
+    }
