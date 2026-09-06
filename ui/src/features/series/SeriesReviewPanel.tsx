@@ -140,13 +140,12 @@ export function SeriesReviewPanel({
       const asset = selected?.outputAssetIds.map(id => series.assets[id]).find(Boolean)
       return selected && asset ? [{ shotId: shot.id, shot, attempt: selected, asset }] : []
     }), [episode.shots, series.assets])
-  const hasAsset = (assetId: string) => Boolean(series.assets[assetId])
   const pendingApprovals = useMemo(
-    () => bulkApproveSelections(episode.shots, hasAsset, { replaceFinals: false }),
+    () => bulkApproveSelections(episode.shots, id => Boolean(series.assets[id]), { replaceFinals: false }),
     [episode.shots, series.assets],
   )
   const replaceApprovals = useMemo(
-    () => bulkApproveSelections(episode.shots, hasAsset, { replaceFinals: true }),
+    () => bulkApproveSelections(episode.shots, id => Boolean(series.assets[id]), { replaceFinals: true }),
     [episode.shots, series.assets],
   )
   const playbackCursor = reconcilePlaybackCursor(playbackShotId, playable)

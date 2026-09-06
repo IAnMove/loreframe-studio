@@ -144,7 +144,7 @@ export function SeriesLabPanel() {
       setTab('review')
     } catch (reason) { setActionError((reason as Error).message) }
     finally { setActionBusy(false) }
-  }, [episode, saveNow, series, workspace])
+  }, [episode, saveNow, series, t, workspace])
   const handleRecovery = async (job: SeriesJobStatus, kind: 'plan' | 'render', discard = false) => {
     await runAction(async () => {
       if (discard) {
