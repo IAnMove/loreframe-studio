@@ -42,36 +42,36 @@ selección: ni un render correcto ni un PR las convierten en catálogo aprobado.
 - [x] Impedir el atajo de vídeo generativo en peticiones explícitas de compositor;
   ante assets ausentes se conserva el preflight de recetas.
 - [x] Ofrecer instrucciones concretas ES/EN y decisiones visibles para el usuario.
-- [ ] Tests baratos: negaciones, política no degradable, capas/activos ausentes,
+- [x] Tests baratos: negaciones, política no degradable, capas/activos ausentes,
   ruta Wizard→adaptador→Video3D sin modelos.
 - [ ] Pruebas locales, commit, PR contra development, Cursor, CI y merge normal.
 
 ## PR B — Catálogo de escenas candidatas, no aprobado
 
-- [ ] Contrato separado de plantilla: ID/versión, familia, estado de revisión,
+- [x] Contrato separado de plantilla: ID/versión, familia, estado de revisión,
   slots y tipos admitidos, parámetros acotados, duración, coste y límites.
-- [ ] Compilar a escenas ordinarias editables, sin nuevos motores de render.
-- [ ] Preparar 24 candidatos diferenciados: cine narrativo, videoclip y espacio.
-- [ ] Cubrir naves, persecución, intercambio de disparos, impacto y explosión
+- [x] Compilar a escenas ordinarias editables, sin nuevos motores de render.
+- [x] Preparar 24 candidatos diferenciados: cine narrativo, videoclip y espacio.
+- [x] Cubrir naves, persecución, intercambio de disparos, impacto y explosión
   estilizada mediante assets/efectos programáticos; no prometer física realista.
-- [ ] Assets de demostración originales y reemplazables; probar dos bindings
+- [x] Assets de demostración originales y reemplazables; probar dos bindings
   diferentes para verificar que una plantilla no está fijada a un personaje.
-- [ ] Validación de slots, referencias, límites, determinismo y escenas sin vídeo IA.
+- [x] Validación de slots, referencias, límites, determinismo y escenas sin vídeo IA.
 - [ ] Pruebas locales, commit, PR, Cursor, CI y merge del mecanismo experimental,
   manteniendo los candidatos fuera de las recomendaciones aprobadas por defecto.
 
 ## PR C — Galería visual y «Abrir en editor»
 
-- [ ] Galería con ficha, preview real, finalidad, slots, límites y ejemplos de pedido.
-- [ ] Abrir cada escena de muestra en el editor real con su configuración intacta.
-- [ ] Recuperar escenas desde sus resultados/metadata cuando exista un snapshot;
+- [x] Galería con ficha, preview real, finalidad, slots, límites y ejemplos de pedido.
+- [x] Abrir cada escena de muestra en el editor real con su configuración intacta.
+- [x] Recuperar escenas desde sus resultados/metadata cuando exista un snapshot;
   si falta, informar, no reconstruir una escena inventada a partir del MP4.
-- [ ] Elegir pendiente / conservar / descartar; exportar decisiones con versión
+- [x] Elegir pendiente / conservar / descartar; exportar decisiones con versión
   de catálogo para que un agente no confunda selección local con aprobación global.
-- [ ] E2E sin proveedores: abrir, editar, guardar/reabrir y navegar a escena correcta.
-- [ ] Render local en serie, resolución moderada y CPU/software cuando sea posible;
+- [x] E2E sin proveedores: abrir, editar, guardar/reabrir y navegar a escena correcta.
+- [x] Render local en serie, resolución moderada y CPU/software cuando sea posible;
   registrar fallos reales y no reemplazar clips fallidos con placeholders aprobados.
-- [ ] Publicar una URL local/LAN de revisión y entregar inventario verificable.
+- [x] Publicar una URL local/LAN de revisión y entregar inventario verificable.
 - [ ] Pruebas locales, commit, PR, Cursor, CI y merge según dependencias.
 
 ## Dependencias y parada honesta
@@ -104,7 +104,34 @@ genuinamente distintas por bloque; no inflar el número con variaciones de zoom
 o color. Separar encuadre, ángulo, trayectoria, óptica y montaje. No vender
 «sin VRAM»: el render puede usar GPU aunque no use inferencia de vídeo.
 
-Esta ampliación está **solicitada, pendiente de desglose e implementación**.
+Esta ampliación está **diseñada en [PROCEDURAL_VIDEO_ROADMAP.md](PROCEDURAL_VIDEO_ROADMAP.md),
+pendiente de implementación P01 en adelante**. Incluye inventarios de 50 propuestas
+2D/2,5D, 50 3D y 50 técnicas de acabado, no funcionalidades ya entregadas.
 No se mezcla ahora un motor nuevo ni se declara que estas 24 candidatas la
 resuelvan. La propuesta recomendada es un editor con dos tipos de escena y
 contratos compartidos; no dos editores ni herramientas de modelado tipo Blender.
+
+## Bloqueo de revisión y evidencia local
+
+PR #168, HEAD `3aaa65cb5b3e5c74e62f99a3856a81279bf12a41`: 120 tests locales
+en checkout de ese HEAD y build pasan; CI required verde. Se corrigieron dos
+hallazgos iniciales de Cursor, pero su nueva revisión no ha podido ejecutarse por límite
+de uso/gasto. No se ha mezclado ni sustituido el revisor sin autorización.
+
+Piloto local: 27 tests de catálogo/compilación/arte/decisiones; 3 E2E descubiertos
+y ejecutados en `ui/e2e/specs`. Galería con 24 MP4 reales, reproducción/seek y
+guardado del snapshot probado contra servidor aislado. Son 4 s, 1280×720/30,
+sin audio; ningún proveedor de vídeo IA se ha usado. La herramienta reproducible
+también exportó una composición y una escena GLB con la UI construida: 2/2.
+
+La herramienta sirve build estático en carpeta temporal con API cerrada, Host/
+Origin validados e índice de archivos. No usa el servidor de desarrollo ni proxy
+al backend. Las pruebas de contrato HTTP usan una cabecera MP4 mínima: eso prueba
+el transporte/metadata, no un MP4 válido. Los renders reales se verifican con ffprobe.
+
+No empezar PRs dependientes apilados mientras #168 no tenga revisión completada.
+Guardar por separado commits B/C/plan para reanudarlos desde development actualizado.
+
+Para mantener revisables los cambios, C se divide en **C1 galería/editor** y
+**C2 herramienta reproducible**. No se mezclan ~1.800 líneas de UI, pruebas y
+servidor de QA en un único PR. Ver [handoff de sesión](PROCEDURAL_VIDEO_SESSION_HANDOFF.md).
