@@ -38,6 +38,71 @@ const capabilities = {
   active_jobs: 0,
 }
 
+test('3D model switching retains but disables unsupported views and never sends stale Hunyuan controls', { concurrency: false }, async () => {
+  const { render, screen, fireEvent, waitFor, cleanup, act } = await import('@testing-library/react')
+  const { Hunyuan3DPanel } = await import('../src/components/Sidebar/Hunyuan3DPanel.tsx')
+  const { useStore } = await import('../src/stores/useStore.ts')
+  const originalFetch = globalThis.fetch
+  const models = [
+    { ...capabilities.models[0], id: 'hunyuan3d-2mv', multiview: true, supports_text: false },
+    { ...capabilities.models[0], id: 'trellis2', engine: 'trellis2', supports_text: false,
+      resolutions: [512, 1024, 1536], supports_low_vram: false, supports_camera_fov: false,
+      runtime: { installed: true, install_hint: null } },
+    { ...capabilities.models[0], id: 'pixal3d', engine: 'pixal3d', supports_text: false,
+      resolutions: [1024, 1536], supports_low_vram: true, supports_camera_fov: true,
+      multiview_reason: 'camera_contract', runtime: { installed: true, install_hint: null } },
+  ]
+  let submitted: Record<string, unknown> = {}
+  useStore.setState(state => ({
+    activeWorkspace: 'default',
+    productionProfile: { ...state.productionProfile, model3d: { provider: 'local', model: '' } },
+    params: { ...state.params, model_type: 'hunyuan3d-2mv', prompt: 'stale prompt' },
+    maybeRefreshGallery: async () => undefined,
+  }))
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    let result: unknown = {}
+    if (url.includes('/model3d/capabilities')) result = { ...capabilities, models }
+    else if (url.includes('/outputs')) result = { outputs: [{ name: 'reference.png', type: 'image', url: '/reference.png' }], total: 1 }
+    else if (url.includes('/model3d/generate')) {
+      submitted = JSON.parse(String(init?.body))
+      result = { job_id: 'external-test', status: 'completed', progress: 1, model_id: submitted.model_id }
+    }
+    return new Response(JSON.stringify(result), { headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    render(<Hunyuan3DPanel />)
+    for (const view of ['Front', 'Left']) {
+      fireEvent.click(await screen.findByRole('button', { name: `Choose ${view} image from HocusPocus` }))
+      fireEvent.click(await screen.findByRole('option', { name: 'reference.png' }))
+    }
+    act(() => useStore.setState(state => ({ params: { ...state.params, model_type: 'trellis2' } })))
+    await screen.findByText(/Multi-view not supported/)
+    assert.equal(screen.queryByRole('button', { name: 'Choose Left image from HocusPocus' }), null)
+    assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).disabled, true)
+    assert.equal((screen.getByRole('checkbox', { name: 'Low VRAM mode' }) as HTMLInputElement).disabled, true)
+    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }))
+    assert.ok(screen.getByRole('spinbutton', { name: 'Steps' }).closest('fieldset')?.disabled)
+    act(() => useStore.setState(state => ({ params: { ...state.params, model_type: 'pixal3d' } })))
+    await screen.findByText(/requires calibrated cameras/)
+    assert.equal((screen.getByRole('checkbox', { name: 'Low VRAM mode' }) as HTMLInputElement).disabled, false)
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Camera FOV (radians)' }), { target: { value: '0.2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate 3D asset' }))
+    await waitFor(() => assert.equal(submitted.model_id, 'pixal3d'))
+    assert.deepEqual(submitted.images, { front: 'reference.png' })
+    assert.equal(submitted.camera_fov, 0.2)
+    assert.equal(submitted.texture_mode, 'native-pbr')
+    for (const key of ['prompt', 'preset', 'octree_resolution', 'flashvdm', 'num_inference_steps']) {
+      assert.equal(key in submitted, false, `${key} must not be sent`)
+    }
+    act(() => useStore.setState(state => ({ params: { ...state.params, model_type: 'hunyuan3d-2mv' } })))
+    await waitFor(() => assert.equal(screen.getAllByText('reference.png').length, 2))
+  } finally {
+    globalThis.fetch = originalFetch
+    cleanup()
+  }
+})
+
 test('Hunyuan3D keeps disk upload and can use a HocusPocus image in the active workspace', { concurrency: false }, async () => {
   const { render, screen, fireEvent, waitFor, cleanup } = await import('@testing-library/react')
   const { Hunyuan3DPanel } = await import('../src/components/Sidebar/Hunyuan3DPanel.tsx')
@@ -91,10 +156,69 @@ test('Hunyuan3D keeps disk upload and can use a HocusPocus image in the active w
 
     const generate = screen.getByRole('button', { name: 'Generate 3D asset' }) as HTMLButtonElement
     assert.equal(generate.disabled, false)
+    assert.ok(generate.className.includes('bg-cta'))
     fireEvent.click(generate)
     await waitFor(() => assert.ok(submitted))
     assert.deepEqual(submitted?.images, { front: 'bronze_robot_reference.png' })
     assert.equal(submitted?.workspace, 'gallery-workspace')
+  } finally {
+    globalThis.fetch = originalFetch
+    cleanup()
+  }
+})
+
+test('a missing Hunyuan runtime keeps generate disabled after a reference image is loaded', { concurrency: false }, async () => {
+  const { render, screen, fireEvent, cleanup } = await import('@testing-library/react')
+  const { Hunyuan3DPanel } = await import('../src/components/Sidebar/Hunyuan3DPanel.tsx')
+  const { useStore } = await import('../src/stores/useStore.ts')
+  const originalFetch = globalThis.fetch
+  let generatePosted = false
+  useStore.setState(state => ({
+    activeWorkspace: 'gallery-workspace',
+    params: { ...state.params, model_type: 'hunyuan3d-2-turbo', prompt: '' },
+    enabledModels: new Set<string>(),
+    maybeRefreshGallery: async () => undefined,
+  }))
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/api/v1/model3d/capabilities')) {
+      return new Response(JSON.stringify({
+        ...capabilities,
+        runtime: { ...capabilities.runtime, installed: false, install_hint: 'Install the Hunyuan3D runtime' },
+      }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/outputs')) {
+      return new Response(JSON.stringify({
+        outputs: [{
+          name: 'bronze_robot_reference.png', type: 'image', mode: 'image', size: 42, created_at: 1,
+          url: '/api/v1/file/bronze_robot_reference.png?workspace=gallery-workspace',
+          thumbnail_url: '/api/v1/outputs/thumbnail/bronze_robot_reference.png?workspace=gallery-workspace',
+        }],
+        total: 1,
+      }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/model3d/generate') && init?.method === 'POST') {
+      generatePosted = true
+      return new Response(JSON.stringify({ job_id: 'should-not-run' }), { headers: { 'content-type': 'application/json' } })
+    }
+    if (url.includes('/api/v1/model-visibility')) {
+      return new Response('{}', { headers: { 'content-type': 'application/json' } })
+    }
+    throw new Error(`Unexpected request: ${url}`)
+  }) as typeof fetch
+
+  try {
+    render(<Hunyuan3DPanel />)
+    await screen.findByRole('status')
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose Front image from HocusPocus' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'bronze_robot_reference.png' }))
+    assert.ok(screen.getByText('bronze_robot_reference.png'))
+    const generate = screen.getByRole('button', { name: 'Generate 3D asset' }) as HTMLButtonElement
+    assert.equal(generate.disabled, true)
+    assert.equal(generate.className.includes('bg-cta'), false)
+    assert.ok(generate.className.includes('cursor-not-allowed'))
+    fireEvent.click(generate)
+    assert.equal(generatePosted, false)
   } finally {
     globalThis.fetch = originalFetch
     cleanup()

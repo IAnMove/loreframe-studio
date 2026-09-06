@@ -1,4 +1,18 @@
 {
+  "engines": {
+    "unavailable": "No compatible",
+    "nativePbr": "Materiales PBR nativos y salida GLB. Los controles de Hunyuan Paint y retexturizado no se aplican.",
+    "resolution": "Resolución 3D",
+    "lowVram": "Modo de VRAM reducida",
+    "lowVramUnavailable": "Este adaptador de TRELLIS.2 no expone descarga de modelos a CPU.",
+    "fov": "FOV de cámara (radianes)",
+    "fovHelp": "0 estima la cámara con MoGe; valores manuales: 0.01–3.13 radianes.",
+    "fovUnavailable": "El FOV manual sólo está disponible para Pixal3D.",
+    "cameraContract": "Multiview no disponible en esta integración: Pixal3D requiere cámaras calibradas y pesos específicos, no las cuatro vistas de Hunyuan.",
+    "singleImage": "La selección no admite multiview. Sólo se envía la imagen frontal; las demás vistas se conservan deshabilitadas.",
+    "imageOnly": "Se requiere una imagen. Este motor no utiliza prompts de texto.",
+    "hunyuanOnly": "Presets y parámetros avanzados de Hunyuan deshabilitados; utiliza los controles del motor."
+  },
   "views": {
     "front": "Frontal",
     "left": "Izquierda",
@@ -137,10 +151,10 @@
     "embeddedClips": "Clips esqueléticos incrustados: {{clips}}."
   },
   "hunyuan": {
-    "title": "Hunyuan3D Studio",
+    "title": "Estudio 3D local",
     "titleMeshy": "Meshy Studio",
     "titleHi3d": "Hi3D Studio",
-    "subtitle": "Geometría nativa, reconstrucción multi-vista y materiales PBR.",
+    "subtitle": "Geometría y materiales con entradas adaptadas a cada modelo.",
     "subtitleRemote": "Imagen/texto a 3D remoto. Cambia el valor por defecto en Ajustes → Integraciones.",
     "vramBadge": "VRAM liberada tras cada trabajo",
     "generateModel": "Generar modelo",
