@@ -1,7 +1,7 @@
 # GLB animation import contract
 
-Status: accepted for the inspector slice (G1). Playback, UI, and HTTP access
-are out of scope.
+Status: G1 inspector accepted. G2 HTTP factory exists unmounted; it is not a
+public file reader until a later adapter is owned and wired.
 
 The inspector is a CPU-only, stdlib reader. It does not import torch, trimesh,
 pygltflib, bpy, WanGP, or `_launch_runtime.py`. It does not render, download,
@@ -99,9 +99,35 @@ accessors, animations, channels, time samples, accessor work, and data URIs.
 Crossing a cap yields `unsupported` (or `corrupt` when the container itself is
 truncated or misaligned). Limits are part of the contract; they are not hints.
 
+## Unmounted HTTP factory (G2)
+
+`create_procedural_3d_assets_router(resolve_glb_asset=...)` in
+`app/routers/procedural_3d_assets.py` is **not** mounted on the application.
+A factory plus tests is not a usable feature.
+
+```http
+GET /api/v1/procedural-3d/assets/{asset_id}/inspection?workspace={workspace_id}
+```
+
+- Client identity is `asset_id` + `workspace_id` only. Paths, URLs and
+  filenames are rejected as invalid requests (400).
+- The injected callback is called as
+  `resolve_glb_asset(workspace_id=..., asset_id=...)` and returns a `Path` or
+  `None`. This module does not call `find_asset`, does not list workspaces,
+  and does not read `uploads`.
+- The JSON body is the G1 report. It must not include absolute paths,
+  filenames, or catalog records.
+- Missing/unknown assets and resolver failures are generic 404s. Exception
+  text from disk or the callback must not reach the client.
+- A `Path` from the callback is not by itself a safe open: the future adapter
+  must confirm the workspace exists before creating directories, search only
+  that root, require a regular `.glb` contained in it, and refuse symlinks.
+  There is a TOCTOU race between resolve and `inspect_glb`; closing it belongs
+  to the adapter, not this factory.
+
 ## Out of scope
 
-- HTTP routes, catalog resolvers, and workspace checks
+- Mounting this router in `_launch_runtime.py`
 - model-viewer / compositor playback
 - GPU, AI generation, and private GLB redistribution
 - Treating this report as proof that a clip will play correctly
