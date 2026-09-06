@@ -1,6 +1,6 @@
 # Taller de habla 2D — preparación manual primero
 
-Base: development `ebed43fd`, 2026-09-06. Complementa
+Base: development `a0bf91c6` (#200 mezclado), 2026-09-07. Complementa
 [el plan raster](CHARACTER_SPEECH_RASTER_PLAN.md), no declara R2–R4 terminados.
 
 ## Alcance de este PR
@@ -30,10 +30,11 @@ Base: development `ebed43fd`, 2026-09-06. Complementa
   Su hallazgo sobre recuperación de borradores se corrige antes de publicar.
 - [x] Validación local final del parche de recuperación, incluida navegación
   real con API simulada y desmontaje comprobado antes de recuperar el borrador.
-- [ ] PR a development; comprobar su estado remoto, no inferirlo de esta lista.
-- [ ] CI verde sobre HEAD exacto y revisión remota completada o dispensada.
-- [ ] Merge normal a development (no publicar main).
-- [ ] Prueba artística de un personaje hablando (pendiente, fuera de este PR).
+- [x] PR [#200](https://github.com/IAnMove/hocuspocus/pull/200) a development;
+  HEAD `7fa0c6b5`; merge `a0bf91c6`. Comprobado en remoto, no inferido de esta lista.
+- [x] CI required verde sobre ese HEAD. Independent QA/Bugbot neutrales no son
+  aprobación. Sin publicar main ni reiniciar apps compartidas.
+- [ ] Prueba artística de un personaje hablando (pendiente, fuera de #200).
 
 ## Alternativas y decisión
 

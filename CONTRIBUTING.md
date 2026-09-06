@@ -1,5 +1,11 @@
 # Contributing to Maestro
 
+## Development status
+
+Start with [CURRENT_WORK](docs/development/CURRENT_WORK.md) for integrated work,
+active areas and verified pending tasks. Read domain contracts on demand; archived
+phase packets and session handoffs are not the current queue.
+
 Thanks for your interest in improving Maestro! This is a local-first AI
 video/image/music studio built on the [Wan2GP](https://github.com/deepbeepmeep/Wan2GP)
 pipeline and distributed through [Pinokio](https://pinokio.computer).
