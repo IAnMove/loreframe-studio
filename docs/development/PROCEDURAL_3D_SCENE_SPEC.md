@@ -48,9 +48,9 @@ selector must use that pair. Human labels must not rename clips.
 
 ### Decision
 
-Ship **B** as a sibling, not a replacement. Video 3D keeps the 2.5D compositor
-as the default (`stageMode=compositor`). The 3D stage lives in
-`ui/src/features/scene3d/` and is selected with the 2.5D | 3D toggle. G2’s
+Ship **B** as a sibling, not a replacement. The 2.5D compositor stays the
+**Video 2.5D** tab. The 3D stage lives in `ui/src/features/scene3d/` as the
+**Video 3D** tab (`world3d`), not a toggle inside the compositor panel. G2’s
 resolver remains unmounted; local GLB files are read in the browser only.
 Mode A remains the path for existing templates and the Omarchy compositor work.
 
@@ -122,6 +122,15 @@ the G1 report or the resolver, for example:
 
 No magic aliases (`idle`, `run`, `dance`) unless that exact string is the
 clip name.
+
+The 2.5D compositor’s `seamlessHorizontal` / cylinder panorama has a 3D
+sibling: an image slot with `loop: { cylinder: true, speed }` maps onto the
+inside of an open Y-up cylinder (`CylinderGeometry`, BackSide,
+RepeatWrapping). UV `offset.x = (t * speed) mod 1` scrolls the world. The
+`run-loop` template is the treadmill shot: `subject_1` stays at the origin,
+camera family `pursuit`, and the background cylinder moves. Clip selection
+stays `(index, exact glTF name)`; do not infer Running. Any image background
+can enable the same infinite cylinder without switching template.
 
 ## 6. Time, persistence, languages
 

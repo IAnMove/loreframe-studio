@@ -1,6 +1,7 @@
+import { cylinderUvOffset, isCylinderBackdrop, wrapUnit } from './backdrop.ts'
 import { cameraEyeAtTime, cameraLookAtTime, projectPoint } from './camera.ts'
 import { scene3dSlotColor } from './document.ts'
-import type { Scene3DDocument } from './types.ts'
+import type { Scene3DDocument, Scene3DLoop } from './types.ts'
 
 export type SoftwareFrame = {
   width: number
@@ -31,6 +32,21 @@ function fillRect(
   }
 }
 
+function fillScrollingWorld(frame: SoftwareFrame, sceneSeconds: number, loop: Scene3DLoop) {
+  const offset = cylinderUvOffset(sceneSeconds, loop.speed)
+  for (let x = 0; x < frame.width; x += 1) {
+    const stripe = Math.floor(wrapUnit(x / frame.width + offset) * 10) % 2
+    const rgb: [number, number, number] = stripe ? [70, 88, 110] : [36, 48, 62]
+    for (let y = 0; y < frame.height; y += 1) {
+      const i = (y * frame.width + x) * 4
+      frame.pixels[i] = rgb[0]
+      frame.pixels[i + 1] = rgb[1]
+      frame.pixels[i + 2] = rgb[2]
+      frame.pixels[i + 3] = 255
+    }
+  }
+}
+
 export function renderScene3DSoftware(document: Scene3DDocument, sceneSeconds: number): SoftwareFrame {
   const width = 160
   const height = Math.max(1, Math.round(160 * document.height / Math.max(1, document.width)))
@@ -38,11 +54,14 @@ export function renderScene3DSoftware(document: Scene3DDocument, sceneSeconds: n
   pixels.fill(18)
   for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255
   const frame = { width, height, pixels }
-  fillRect(frame, 0, height * 0.62, width, height, [32, 34, 38])
+  const cylinder = document.slots.find(isCylinderBackdrop)
+  if (cylinder?.loop) fillScrollingWorld(frame, sceneSeconds, cylinder.loop)
+  else fillRect(frame, 0, height * 0.62, width, height, [32, 34, 38])
   const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration, document.slots)
   const look = cameraLookAtTime(document.camera, sceneSeconds, document.duration, document.slots)
   const aspect = width / height
   for (const slot of document.slots) {
+    if (slot.media === 'image') continue
     const projected = projectPoint(slot.position, eye, look, document.camera.fov, aspect)
     if (!projected) continue
     const size = Math.max(6, 28 * slot.scale / Math.max(0.4, projected.depth))

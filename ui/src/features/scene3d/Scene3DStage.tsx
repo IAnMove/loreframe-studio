@@ -1,20 +1,25 @@
 import { useEffect, useRef } from 'react'
+import { TextureLoader } from 'three'
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import { cameraEyeAtTime, cameraLookAtTime } from './camera.ts'
 import { scene3dClipLocalTime } from './clock.ts'
 import {
   applyLight,
+  applyLoopOffset,
   catalogFromClips,
   createWorld,
   disposeObject,
   disposeWorld,
   fitGltf,
+  imageBackdropMesh,
   type GpuWorld,
   placeSlot,
   placeholderMesh,
   poseLoadedSlot,
+  prepareBackdropTexture,
   pruneSlots,
   resizeWorld,
+  slotNeedsReload,
   syncSlotClip,
 } from './gpu.ts'
 import type { Scene3DClipCatalogEntry, Scene3DDocument, Scene3DSlot } from './types.ts'
@@ -43,13 +48,41 @@ function loadSlotGltf(
         return
       }
       const live = liveSlot()
-      if (!live || live.sourceUrl !== url) {
+      if (!live || live.sourceUrl !== url || live.media === 'image') {
         disposeObject(gltf.scene)
         return
       }
       const baseScale = fitGltf(gltf.scene, live)
       placeSlot(world, live, gltf.scene, gltf.animations, baseScale)
       onClips?.(live.id, catalogFromClips(gltf.animations))
+    },
+    undefined,
+    () => undefined,
+  )
+}
+
+function loadSlotImage(
+  world: GpuWorld,
+  slot: Scene3DSlot,
+  cancelled: () => boolean,
+  liveSlot: () => Scene3DSlot | undefined,
+) {
+  const url = slot.sourceUrl
+  if (!url) return
+  new TextureLoader().load(
+    url,
+    texture => {
+      if (cancelled()) {
+        texture.dispose()
+        return
+      }
+      const live = liveSlot()
+      if (!live || live.sourceUrl !== url || live.media !== 'image') {
+        texture.dispose()
+        return
+      }
+      prepareBackdropTexture(texture)
+      placeSlot(world, live, imageBackdropMesh(live, texture), [])
     },
     undefined,
     () => undefined,
@@ -100,20 +133,19 @@ export function Scene3DStage({ document, sceneSeconds, onSlotClips }: Props) {
     pruneSlots(world, document.slots)
     for (const slot of document.slots) {
       const current = world.slots.get(slot.id)
-      if (current && current.sourceUrl === slot.sourceUrl) {
+      if (!slotNeedsReload(current, slot) && current) {
         poseLoadedSlot(current, slot)
         syncSlotClip(world, slot)
         continue
       }
       placeSlot(world, slot, placeholderMesh(slot), [])
-      loadSlotGltf(
-        world,
-        slot,
-        loader,
-        () => cancelled || worldRef.current !== world,
-        () => documentRef.current.slots.find(item => item.id === slot.id),
-        (slotId, clips) => onSlotClipsRef.current?.(slotId, clips),
-      )
+      const live = () => documentRef.current.slots.find(item => item.id === slot.id)
+      const gone = () => cancelled || worldRef.current !== world
+      if (slot.media === 'image') {
+        loadSlotImage(world, slot, gone, live)
+        continue
+      }
+      loadSlotGltf(world, slot, loader, gone, live, (slotId, clips) => onSlotClipsRef.current?.(slotId, clips))
     }
     return () => {
       cancelled = true
@@ -129,6 +161,7 @@ export function Scene3DStage({ document, sceneSeconds, onSlotClips }: Props) {
     world.camera.position.set(eye[0], eye[1], eye[2])
     world.camera.lookAt(look[0], look[1], look[2])
     world.camera.updateProjectionMatrix()
+    applyLoopOffset(world, sceneSeconds)
     for (const gpu of world.slots.values()) {
       if (!gpu.mixer) continue
       const clip = gpu.animations.find((_, index) => clipMatches(gpu, index))

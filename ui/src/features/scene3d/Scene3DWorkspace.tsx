@@ -9,10 +9,10 @@ import { scene3dFrameCount, scene3dFrameTime } from './clock.ts'
 import { parseScene3DDocument } from './document.ts'
 import { Scene3DStage } from './Scene3DStage.tsx'
 import { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES, type Scene3DTemplateId } from './templates.ts'
-import type { Scene3DCameraFamily, Scene3DClipCatalogEntry, Scene3DDocument, Scene3DSlot } from './types.ts'
+import type { Scene3DCameraFamily, Scene3DClipCatalogEntry, Scene3DDocument, Scene3DLoop, Scene3DSlot } from './types.ts'
 import { documentFromWorld3DRequest, listenForWorld3DWorkflow } from './world3dAgent.ts'
 
-const FAMILIES: Scene3DCameraFamily[] = ['establishment', 'orbit', 'follow', 'product', 'reveal', 'encounter']
+const FAMILIES: Scene3DCameraFamily[] = ['establishment', 'orbit', 'follow', 'pursuit', 'product', 'reveal', 'encounter']
 
 type Props = {
   width: number
@@ -139,6 +139,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
     const eye = cameraEyeAtTime(sceneDoc.camera, seconds, sceneDoc.duration, sceneDoc.slots)
     let best: { id: string; dist: number } | null = null
     for (const slot of sceneDoc.slots) {
+      if (slot.slot === 'background') continue
       const projected = projectPoint(slot.position, eye, sceneDoc.camera.look, sceneDoc.camera.fov, bounds.width / Math.max(1, bounds.height))
       if (!projected) continue
       const dist = Math.hypot(projected.x - nx, projected.y - ny)
@@ -261,12 +262,24 @@ export function Scene3DWorkspace({ width, height }: Props) {
                   ))}
                 </select>
               )}
+              {slot.slot === 'background' && (
+                <InfiniteBackdropControls
+                  loop={slot.loop}
+                  infiniteLabel={t('stage.infinite')}
+                  speedLabel={t('stage.loopSpeed')}
+                  onChange={loop => setSceneDoc(current => patchScene3DSlot(current, slot.id, {
+                    media: 'image',
+                    loop,
+                    ...(loop.cylinder && slot.scale > 2 ? { scale: 1 } : {}),
+                  }))}
+                />
+              )}
             </div>
           )
         })}
       </div>
       {clipIssue && <p className="text-[8px] text-red-300">{clipIssue}</p>}
-      <p className="text-[8px] text-text-muted">{t('stage.help')}</p>
+      <p className="text-[8px] text-text-muted">{sceneDoc.templateId === 'run-loop' ? t('stage.runHelp') : t('stage.help')}</p>
       <span data-testid="scene3d-roundtrip" className="hidden">{roundtrip ? 'ok' : 'bad'}</span>
       <AssetExplorerDialog
         open={Boolean(explorerSlot)}
@@ -278,6 +291,34 @@ export function Scene3DWorkspace({ width, height }: Props) {
           setExplorerSlot(null)
         }}
       />
+    </div>
+  )
+}
+
+function InfiniteBackdropControls({
+  loop,
+  infiniteLabel,
+  speedLabel,
+  onChange,
+}: {
+  loop: Scene3DLoop | undefined
+  infiniteLabel: string
+  speedLabel: string
+  onChange: (loop: Scene3DLoop) => void
+}) {
+  const speed = loop?.speed ?? 0.18
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <label className="flex items-center gap-1 text-[8px] text-text-muted">
+        <input
+          type="checkbox"
+          data-testid="scene3d-infinite"
+          checked={loop?.cylinder === true}
+          onChange={event => onChange({ cylinder: event.target.checked, speed })}
+        />
+        {infiniteLabel}
+      </label>
+      {loop?.cylinder === true && numberField(speedLabel, speed, value => onChange({ cylinder: true, speed: value }), 0.01)}
     </div>
   )
 }

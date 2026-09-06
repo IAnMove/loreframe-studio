@@ -19,6 +19,11 @@ export type Scene3DClipRef = {
 
 export type Scene3DSlotMedia = 'model3d' | 'image'
 
+export type Scene3DLoop = {
+  cylinder: boolean
+  speed: number
+}
+
 export type Scene3DSlot = {
   id: string
   slot: Scene3DSlotId
@@ -28,6 +33,7 @@ export type Scene3DSlot = {
   sourceUrl: string
   media: Scene3DSlotMedia
   clip: Scene3DClipRef | null
+  loop?: Scene3DLoop
 }
 
 export type Scene3DCamera = {

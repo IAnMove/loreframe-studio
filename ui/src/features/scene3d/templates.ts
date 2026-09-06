@@ -9,6 +9,7 @@ export const SCENE3D_TEMPLATE_IDS = [
   'tracking',
   'crane-reveal',
   'establishing',
+  'run-loop',
 ] as const
 
 export type Scene3DTemplateId = (typeof SCENE3D_TEMPLATE_IDS)[number]
@@ -28,6 +29,7 @@ export const SCENE3D_TEMPLATES: readonly Scene3DTemplate[] = [
   { id: 'tracking', camera: 'follow', duration: 6, slots: ['subject_1', 'background'] },
   { id: 'crane-reveal', camera: 'reveal', duration: 6, slots: ['subject_1', 'background'] },
   { id: 'establishing', camera: 'orbit', duration: 8, slots: ['background', 'prop'] },
+  { id: 'run-loop', camera: 'pursuit', duration: 8, slots: ['subject_1', 'background'] },
 ]
 
 const LAYOUTS: Record<Scene3DTemplateId, Partial<Record<Scene3DSlotId, Pick<Scene3DSlot, 'position' | 'rotationY' | 'scale'>>>> = {
@@ -61,6 +63,10 @@ const LAYOUTS: Record<Scene3DTemplateId, Partial<Record<Scene3DSlotId, Pick<Scen
     background: { position: [0, 0, -6], rotationY: 0, scale: 10 },
     prop: { position: [1.6, 0, -1.2], rotationY: -0.4, scale: 0.8 },
   },
+  'run-loop': {
+    subject_1: { position: [0, 0, 0], rotationY: 1.57, scale: 1 },
+    background: { position: [0, 0, 0], rotationY: 0, scale: 1 },
+  },
 }
 
 function emptySlot(id: Scene3DSlotId): Scene3DSlot {
@@ -89,7 +95,11 @@ export function applyScene3DTemplate(id: Scene3DTemplateId): Scene3DDocument {
   document.slots = template.slots.map(slotId => {
     const slot = emptySlot(slotId)
     const pose = layout[slotId]
-    return pose ? { ...slot, ...pose } : slot
+    const next = pose ? { ...slot, ...pose } : slot
+    if (template.id === 'run-loop' && slotId === 'background') {
+      return { ...next, media: 'image', loop: { cylinder: true, speed: 0.18 } }
+    }
+    return next
   })
   return document
 }
@@ -97,7 +107,7 @@ export function applyScene3DTemplate(id: Scene3DTemplateId): Scene3DDocument {
 export function patchScene3DSlot(
   document: Scene3DDocument,
   slotId: string,
-  patch: Partial<Pick<Scene3DSlot, 'position' | 'rotationY' | 'scale' | 'sourceUrl' | 'media' | 'clip'>>,
+  patch: Partial<Pick<Scene3DSlot, 'position' | 'rotationY' | 'scale' | 'sourceUrl' | 'media' | 'clip' | 'loop'>>,
 ): Scene3DDocument {
   return {
     ...document,

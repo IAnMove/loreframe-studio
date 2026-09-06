@@ -6,10 +6,12 @@ export type {
   Scene3DClipRef,
   Scene3DDocument,
   Scene3DLight,
+  Scene3DLoop,
   Scene3DSlot,
   Scene3DSlotId,
   Vec3,
 } from './types.ts'
+export { cylinderUvOffset, isCylinderBackdrop, parseScene3DLoop } from './backdrop.ts'
 export { cameraEyeAtTime, cameraLookAtTime, orbitEye, projectPoint } from './camera.ts'
 export { clipBindingError, resolveScene3DClip } from './clips.ts'
 export { scene3dClipLocalTime, scene3dFrameCount, scene3dFrameTime } from './clock.ts'

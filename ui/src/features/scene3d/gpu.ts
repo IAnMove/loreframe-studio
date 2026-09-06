@@ -1,24 +1,37 @@
 import {
   AnimationMixer,
+  BackSide,
   Box3,
   BoxGeometry,
+  CanvasTexture,
   CircleGeometry,
+  ClampToEdgeWrapping,
   Color,
+  CylinderGeometry,
   DirectionalLight,
+  DoubleSide,
   HemisphereLight,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
+  PlaneGeometry,
+  RepeatWrapping,
   Scene,
+  SRGBColorSpace,
   Vector3,
   WebGLRenderer,
   type Material,
   type Texture,
 } from 'three'
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { cylinderUvOffset, isCylinderBackdrop, slotMountKey } from './backdrop.ts'
 import { scene3dSlotColor } from './document.ts'
 import type { Scene3DClipCatalogEntry, Scene3DLight, Scene3DSlot } from './types.ts'
+
+export const CYLINDER_RADIUS = 12
+export const CYLINDER_HEIGHT = 10
 
 export const MAX_VIEW_WIDTH = 1280
 export const MAX_VIEW_HEIGHT = 720
@@ -26,11 +39,16 @@ export const MAX_PIXEL_RATIO = 1.25
 
 export type SlotGpu = {
   sourceUrl: string
+  mountKey: string
   clipKey: string
   root: Object3D
   baseScale: number
   animations: GLTF['animations']
   mixer: AnimationMixer | null
+  kind: 'model' | 'image'
+  loopTexture: Texture | null
+  loopSpeed: number
+  looping: boolean
 }
 
 export type GpuWorld = {
@@ -92,7 +110,67 @@ export function applyLight(dir: DirectionalLight, light: Scene3DLight) {
     .multiplyScalar(6)
 }
 
+export function prepareBackdropTexture(texture: Texture) {
+  texture.wrapS = RepeatWrapping
+  texture.wrapT = ClampToEdgeWrapping
+  texture.colorSpace = SRGBColorSpace
+  texture.needsUpdate = true
+  return texture
+}
+
+export function makeStripeTexture(): Texture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 16
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    for (let i = 0; i < 8; i += 1) {
+      ctx.fillStyle = i % 2 ? '#4a6078' : '#1c2838'
+      ctx.fillRect(i * 32, 0, 32, 16)
+    }
+  }
+  return prepareBackdropTexture(new CanvasTexture(canvas))
+}
+
+export function imageBackdropMesh(slot: Scene3DSlot, texture: Texture | null): Mesh {
+  const material = new MeshBasicMaterial({
+    map: texture,
+    color: texture ? 0xffffff : 0x243044,
+    depthWrite: false,
+    side: isCylinderBackdrop(slot) ? BackSide : DoubleSide,
+  })
+  const scale = Math.max(0.2, slot.scale)
+  if (isCylinderBackdrop(slot)) {
+    const mesh = new Mesh(new CylinderGeometry(CYLINDER_RADIUS, CYLINDER_RADIUS, CYLINDER_HEIGHT, 48, 1, true), material)
+    mesh.position.set(0, CYLINDER_HEIGHT * 0.35 * scale, 0)
+    mesh.scale.setScalar(scale)
+    mesh.rotation.y = slot.rotationY
+    mesh.renderOrder = -1
+    return mesh
+  }
+  const mesh = new Mesh(new PlaneGeometry(2, 1.125), material)
+  mesh.position.set(slot.position[0], slot.position[1] + 2.2, slot.position[2])
+  mesh.rotation.y = slot.rotationY
+  mesh.scale.setScalar(scale)
+  mesh.renderOrder = -1
+  return mesh
+}
+
+function firstMap(root: Object3D): Texture | null {
+  let found: Texture | null = null
+  root.traverse(child => {
+    if (found || !(child instanceof Mesh)) return
+    const material = Array.isArray(child.material) ? child.material[0] : child.material
+    if (material && 'map' in material && isTexture(material.map)) found = material.map
+  })
+  return found
+}
+
 export function placeholderMesh(slot: Scene3DSlot) {
+  if (slot.media === 'image') {
+    const texture = isCylinderBackdrop(slot) ? makeStripeTexture() : null
+    return imageBackdropMesh(slot, texture)
+  }
   const color = scene3dSlotColor(slot.slot)
   const mesh = new Mesh(
     new BoxGeometry(0.6, 1.6, 0.6),
@@ -143,12 +221,24 @@ export function placeSlot(
   world.scene.add(root)
   world.slots.set(slot.id, {
     sourceUrl: slot.sourceUrl,
+    mountKey: slotMountKey(slot),
     clipKey: clipKeyOf(slot.clip),
     root,
     baseScale,
     animations,
-    mixer: bindMixer(root, animations, slot),
+    mixer: slot.media === 'image' ? null : bindMixer(root, animations, slot),
+    kind: slot.media === 'image' ? 'image' : 'model',
+    loopTexture: firstMap(root),
+    loopSpeed: slot.loop?.speed ?? 0,
+    looping: isCylinderBackdrop(slot),
   })
+}
+
+export function applyLoopOffset(world: GpuWorld, sceneSeconds: number) {
+  for (const gpu of world.slots.values()) {
+    if (!gpu.loopTexture) continue
+    gpu.loopTexture.offset.x = gpu.looping ? cylinderUvOffset(sceneSeconds, gpu.loopSpeed) : 0
+  }
 }
 
 export function syncSlotClip(world: GpuWorld, slot: Scene3DSlot) {
@@ -159,6 +249,10 @@ export function syncSlotClip(world: GpuWorld, slot: Scene3DSlot) {
   current.mixer?.stopAllAction()
   current.mixer = bindMixer(current.root, current.animations, slot)
   current.clipKey = nextKey
+}
+
+export function slotNeedsReload(current: SlotGpu | undefined, slot: Scene3DSlot): boolean {
+  return !current || current.mountKey !== slotMountKey(slot)
 }
 
 export function pruneSlots(world: GpuWorld, slots: readonly Scene3DSlot[]) {
@@ -178,13 +272,13 @@ export function createWorld(host: HTMLDivElement, light: Scene3DLight, fov: numb
   host.append(renderer.domElement)
   const scene = new Scene()
   scene.background = new Color(0x10141c)
-  const camera = new PerspectiveCamera(fov, 16 / 9, 0.05, 80)
+  const camera = new PerspectiveCamera(fov, 16 / 9, 0.05, 200)
   scene.add(new HemisphereLight(0xc8d8ff, 0x2a2118, 0.55))
   const dir = new DirectionalLight(light.color, light.intensity)
   applyLight(dir, light)
   scene.add(dir)
   const floor = new Mesh(
-    new CircleGeometry(8, 48),
+    new CircleGeometry(11.5, 48),
     new MeshStandardMaterial({ color: 0x1c222c, roughness: 0.92 }),
   )
   floor.rotation.x = -Math.PI / 2
@@ -208,6 +302,21 @@ export function resizeWorld(world: GpuWorld, host: HTMLDivElement) {
 }
 
 export function poseLoadedSlot(current: SlotGpu, slot: Scene3DSlot) {
+  current.loopSpeed = slot.loop?.speed ?? 0
+  current.looping = isCylinderBackdrop(slot)
+  const scale = Math.max(0.2, slot.scale)
+  if (current.kind === 'image' && isCylinderBackdrop(slot)) {
+    current.root.position.set(0, CYLINDER_HEIGHT * 0.35 * scale, 0)
+    current.root.rotation.y = slot.rotationY
+    current.root.scale.setScalar(scale)
+    return
+  }
+  if (current.kind === 'image') {
+    current.root.position.set(slot.position[0], slot.position[1] + 2.2, slot.position[2])
+    current.root.rotation.y = slot.rotationY
+    current.root.scale.setScalar(scale)
+    return
+  }
   current.root.position.set(slot.position[0], slot.position[1], slot.position[2])
   current.root.rotation.y = slot.rotationY
   current.root.scale.setScalar(current.baseScale * slot.scale)

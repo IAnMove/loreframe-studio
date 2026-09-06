@@ -98,8 +98,11 @@ export function cameraEyeAtTime(
     const musicalTurns = camera.family === 'musical' ? turns * 2 : turns
     return orbitEye(look, radius, productHeight, s * musicalTurns * Math.PI * 2)
   }
-  if (camera.family === 'follow' || camera.family === 'pursuit') {
+  if (camera.family === 'follow') {
     return [look[0], look[1] + 0.35, look[2] + radius]
+  }
+  if (camera.family === 'pursuit') {
+    return [look[0] - 2.1, look[1] + 0.15, look[2] + 2.8]
   }
   if (camera.family === 'reveal') {
     return lerp3([camera.eye[0], camera.eye[1] - 1.35, camera.eye[2] + 1.1], camera.eye, s)
@@ -110,7 +113,6 @@ export function cameraEyeAtTime(
   if (camera.family === 'establishment') {
     return lerp3(vecAdd(camera.eye, [0, 0.55, 2.2]), camera.eye, s)
   }
-  void azimuth
   return camera.eye
 }
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { cameraEyeAtTime, orbitEye } from '../src/features/scene3d/camera.ts'
+import { cylinderUvOffset } from '../src/features/scene3d/backdrop.ts'
+import { cameraEyeAtTime, cameraLookAtTime, orbitEye } from '../src/features/scene3d/camera.ts'
 import { clipBindingError, resolveScene3DClip } from '../src/features/scene3d/clips.ts'
 import { scene3dClipLocalTime, scene3dFrameCount, scene3dFrameTime } from '../src/features/scene3d/clock.ts'
 import { cloneScene3DDocument, createDefaultScene3DDocument, parseScene3DDocument } from '../src/features/scene3d/document.ts'
@@ -100,4 +101,48 @@ test('establishment camera eases in rather than sitting still', () => {
   const a = cameraEyeAtTime(document.camera, 0, document.duration, document.slots)
   const b = cameraEyeAtTime(document.camera, document.duration, document.duration, document.slots)
   assert.notEqual(a[2], b[2])
+})
+
+test('run-loop keeps the subject still and scrolls the cylinder world', () => {
+  const document = applyScene3DTemplate('run-loop')
+  assert.equal(document.templateId, 'run-loop')
+  assert.equal(document.camera.family, 'pursuit')
+  const subject = document.slots.find(slot => slot.slot === 'subject_1')
+  const background = document.slots.find(slot => slot.slot === 'background')
+  assert.ok(subject)
+  assert.ok(background)
+  assert.deepEqual(subject.position, [0, 0, 0])
+  assert.equal(background.media, 'image')
+  assert.equal(background.loop?.cylinder, true)
+  assert.ok((background.loop?.speed ?? 0) > 0)
+  assert.equal(subject.clip, null)
+  const restored = parseScene3DDocument(JSON.parse(JSON.stringify(document)))
+  assert.equal(restored?.slots.find(slot => slot.slot === 'background')?.loop?.cylinder, true)
+  const still = hashSoftwareFrame(renderScene3DSoftware(document, 0))
+  const later = hashSoftwareFrame(renderScene3DSoftware(document, 1.5))
+  assert.notEqual(still, later)
+  assert.deepEqual(document.slots[0].position, [0, 0, 0])
+  const look = cameraLookAtTime(document.camera, 1, document.duration, document.slots)
+  const eye = cameraEyeAtTime(document.camera, 1, document.duration, document.slots)
+  assert.equal(look[0], subject.position[0])
+  assert.ok(eye[2] > look[2])
+  assert.notEqual(cylinderUvOffset(0, 0.18), cylinderUvOffset(1, 0.18))
+})
+
+test('wizard can mount the run-loop cylinder template', () => {
+  const document = documentFromWorld3DRequest({
+    type: 'mount_world3d_template',
+    templateId: 'run-loop',
+    bindings: {
+      subject_1: { url: '/api/v1/file/hero.glb', media: 'model3d' },
+      background: { url: '/api/v1/file/street.png', media: 'image' },
+    },
+  })
+  assert.equal(document.templateId, 'run-loop')
+  assert.equal(document.camera.family, 'pursuit')
+  assert.equal(document.slots[0].sourceUrl, '/api/v1/file/hero.glb')
+  assert.equal(document.slots[0].clip, null)
+  const background = document.slots.find(slot => slot.slot === 'background')
+  assert.equal(background?.sourceUrl, '/api/v1/file/street.png')
+  assert.equal(background?.loop?.cylinder, true)
 })
