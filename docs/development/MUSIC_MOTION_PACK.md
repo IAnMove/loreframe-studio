@@ -3,9 +3,9 @@
 Este documento acompaña a `ui/src/features/sceneTemplates/musicMotionCatalog.ts`.
 Define 24 movimientos musicales candidatos para escenas procedurales, no 24
 transiciones de montaje. El catálogo y los compiladores puros ya existen en el
-worktree de desarrollo. El PR #184 está abierto y hay evidencia local de 887
-tests, lint, tsc, build y 24 renders reales. CI falla actualmente en E2E y sigue
-en diagnóstico; todavía no hay merge ni aprobación artística. Esta evidencia no
+worktree de desarrollo. El PR #184 está abierto y hay evidencia local de 891
+tests, 17 E2E, lint, tsc, build y 24 renders reales. El fallo E2E inicial se ha
+corregido localmente; falta confirmar el nuevo CI, merge y aprobación artística. Esta evidencia no
 declara validación de píxeles, alpha o tileabilidad.
 
 ## Contrato común

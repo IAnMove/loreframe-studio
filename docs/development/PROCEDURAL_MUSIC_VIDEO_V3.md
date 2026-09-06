@@ -62,9 +62,34 @@ Depende del contrato de duración existente, no del número de templates.
 PR B separado: planner puro + integración VideoEditor. No ampliar los tipos
 de transición más allá de lo realmente soportado por preview y export.
 
+### Revisión técnica previa a B (todavía no implementada)
+
+Para un corte de `g` frames: el clip saliente añade `floor(g/2)` al final y el
+entrante `ceil(g/2)` al principio. Así `suma(renderFrames) - suma(gaps)` conserva
+exactamente la duración narrativa. Definir el default como duración temporal:
+8 frames a 30 fps, 16 a 60 fps; `none` explícito continúa siendo corte directo.
+
+El backend actual clampa los fundidos a 0,05 s–45% de cada clip y los normaliza
+con tiempos flotantes: hay que validar sus duraciones reales con ffprobe. No
+usar tarjetas `later-*` en este planner, ya que insertan tiempo adicional.
+Una transición explícita imposible debe dar error, no recortarse en silencio.
+
+No implementar handles simplemente alargando `scene.duration`: cámara,
+animación, vídeo/GLB, strips y partículas usan relojes distintos. Evaluar como
+primer camino un padding CPU de primer/último frame de clips ya renderizados
+(silencio en handles y una única pista musical intacta); requiere contrato,
+preview y metadata de padding antes de declararlo integrado. Alternativamente,
+un reloj común del renderer necesita tests de equivalencia para cada familia.
+Nunca estirar o recortar la canción para disimular pérdidas de duración.
+
 ## C — Audio adjunto al Wizard, identidad y reutilización exacta
 
-- [ ] C1. Aceptar adjuntos de audio por el chat mediante upload público existente.
+- [ ] C0. Importación preservando bytes originales. El upload-audio actual
+  convierte MP3 a WAV y descarta su copia temporal MP3; no sirve para prometer
+  conservación de tags, portada o letras. Mantener el original canónico y, si
+  hace falta normalización, crear un derivado con lineage y hash observado.
+- [ ] C1. Aceptar adjuntos de audio por el chat mediante el contrato público
+  de importación preservadora de C0.
   Una portada MP3 `attached_pic` no convierte una canción en vídeo.
 - [ ] C2. Mostrar nombre, duración, workspace e identidad del asset recibido.
   Persistir referencias, no blobs temporales ni audio embebido en prompts.
