@@ -3,15 +3,16 @@ import { fetchOutputs, type ApiOutput } from '../../api/client'
 import { AssetExplorerDialog } from '../../components/common/AssetExplorerDialog'
 import { useUiTranslation } from '../../i18n'
 import { useStore } from '../../stores/useStore'
-import { cameraEyeAtTime } from './camera.ts'
+import { cameraEyeAtTime, projectPoint } from './camera.ts'
 import { clipBindingError, resolveScene3DClip } from './clips.ts'
 import { scene3dFrameCount, scene3dFrameTime } from './clock.ts'
-import { createDefaultScene3DDocument, parseScene3DDocument } from './document.ts'
+import { parseScene3DDocument } from './document.ts'
 import { Scene3DStage } from './Scene3DStage.tsx'
-import type { Scene3DClipCatalogEntry, Scene3DDocument } from './types.ts'
+import { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES, type Scene3DTemplateId } from './templates.ts'
+import type { Scene3DCameraFamily, Scene3DClipCatalogEntry, Scene3DDocument, Scene3DSlot } from './types.ts'
+import { documentFromWorld3DRequest, listenForWorld3DWorkflow } from './world3dAgent.ts'
 
-const FAMILIES = ['establishment', 'orbit', 'follow', 'product'] as const
-type StageFamily = (typeof FAMILIES)[number]
+const FAMILIES: Scene3DCameraFamily[] = ['establishment', 'orbit', 'follow', 'product', 'reveal', 'encounter']
 
 type Props = {
   width: number
@@ -22,13 +23,33 @@ function revokeIfBlob(url: string) {
   if (url.startsWith('blob:')) URL.revokeObjectURL(url)
 }
 
+function numberField(label: string, value: number, onChange: (value: number) => void, step = 0.05) {
+  return (
+    <label className="flex items-center gap-1 text-[8px] text-text-muted">
+      {label}
+      <input
+        type="number"
+        step={step}
+        value={Number.isFinite(value) ? value : 0}
+        onChange={event => {
+          const next = Number(event.target.value)
+          if (Number.isFinite(next)) onChange(next)
+        }}
+        className="w-16 rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] text-text-primary"
+      />
+    </label>
+  )
+}
+
 export function Scene3DWorkspace({ width, height }: Props) {
   const { t } = useUiTranslation('scene3d')
-  const [sceneDoc, setSceneDoc] = useState<Scene3DDocument>(() => createDefaultScene3DDocument())
+  const [sceneDoc, setSceneDoc] = useState<Scene3DDocument>(() => applyScene3DTemplate('two-shot'))
   const [playing, setPlaying] = useState(false)
   const [frame, setFrame] = useState(0)
+  const [selectedId, setSelectedId] = useState('subject_1')
   const frameRef = useRef(0)
   const sceneDocRef = useRef(sceneDoc)
+  const dragRef = useRef<{ id: string; startX: number; startZ: number; pointerX: number; pointerY: number } | null>(null)
   const [catalogs, setCatalogs] = useState<Record<string, Scene3DClipCatalogEntry[]>>({})
   const [explorerSlot, setExplorerSlot] = useState<string | null>(null)
   const [explorerItems, setExplorerItems] = useState<ApiOutput[]>([])
@@ -36,6 +57,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
   const fps = sceneDoc.fps
   const count = scene3dFrameCount(sceneDoc.duration, fps)
   const seconds = scene3dFrameTime(frame, sceneDoc.duration, fps)
+  const selected = sceneDoc.slots.find(slot => slot.id === selectedId) ?? sceneDoc.slots[0]
 
   useEffect(() => {
     frameRef.current = frame
@@ -48,6 +70,13 @@ export function Scene3DWorkspace({ width, height }: Props) {
   useEffect(() => () => {
     for (const slot of sceneDocRef.current.slots) revokeIfBlob(slot.sourceUrl)
   }, [])
+
+  useEffect(() => listenForWorld3DWorkflow(async request => {
+    const next = documentFromWorld3DRequest(request)
+    setSceneDoc(next)
+    setFrame(0)
+    return { message: next.templateId, templateId: request.templateId, slotIds: next.slots.map(slot => slot.id) }
+  }), [])
 
   const clipIssue = useMemo(() => {
     for (const slot of sceneDoc.slots) {
@@ -75,15 +104,8 @@ export function Scene3DWorkspace({ width, height }: Props) {
     return () => cancelAnimationFrame(raf)
   }, [playing, sceneDoc.duration, fps, count])
 
-  const assignSource = (slotId: string, url: string) => {
-    setSceneDoc(current => ({
-      ...current,
-      slots: current.slots.map(slot => {
-        if (slot.id !== slotId) return slot
-        revokeIfBlob(slot.sourceUrl)
-        return { ...slot, sourceUrl: url, clip: null }
-      }),
-    }))
+  const assignSource = (slotId: string, url: string, media: Scene3DSlot['media'] = 'model3d') => {
+    setSceneDoc(current => patchScene3DSlot(current, slotId, { sourceUrl: url, media, clip: null }))
     setCatalogs(current => {
       const next = { ...current }
       delete next[slotId]
@@ -91,51 +113,86 @@ export function Scene3DWorkspace({ width, height }: Props) {
     })
   }
 
-  const openExplorer = async (slotId: string) => {
-    setExplorerSlot(slotId)
+  const openExplorer = async (slot: Scene3DSlot) => {
+    setExplorerSlot(slot.id)
     try {
-      const data = await fetchOutputs(0, 0, { mediaType: 'model3d', workspace })
-      setExplorerItems(data.outputs.filter(item => /\.glb$/i.test(item.name)))
+      const kind = slot.slot === 'background' ? 'image' : 'model3d'
+      const data = await fetchOutputs(0, 0, { mediaType: kind, workspace })
+      setExplorerItems(kind === 'model3d' ? data.outputs.filter(item => /\.glb$/i.test(item.name)) : data.outputs)
     } catch {
       setExplorerItems([])
     }
   }
 
-  const assignFile = (slotId: string, file: File | undefined) => {
-    if (!file) return
-    assignSource(slotId, URL.createObjectURL(file))
+  const mountTemplate = (id: Scene3DTemplateId) => {
+    for (const slot of sceneDoc.slots) revokeIfBlob(slot.sourceUrl)
+    setSceneDoc(applyScene3DTemplate(id))
+    setCatalogs({})
+    setFrame(0)
+    setSelectedId(applyScene3DTemplate(id).slots[0]?.id ?? 'subject_1')
   }
 
-  const setFamily = (family: StageFamily) => {
-    setSceneDoc(current => ({
-      ...current,
-      camera: { ...current.camera, family },
-    }))
-  }
-
-  const bindClip = (slotId: string, index: number, name: string) => {
-    setSceneDoc(current => ({
-      ...current,
-      slots: current.slots.map(slot => (
-        slot.id === slotId
-          ? { ...slot, clip: name ? { index, name } : null }
-          : slot
-      )),
-    }))
+  const hitSlot = (clientX: number, clientY: number, host: HTMLDivElement) => {
+    const bounds = host.getBoundingClientRect()
+    const nx = (clientX - bounds.left) / Math.max(1, bounds.width)
+    const ny = (clientY - bounds.top) / Math.max(1, bounds.height)
+    const eye = cameraEyeAtTime(sceneDoc.camera, seconds, sceneDoc.duration, sceneDoc.slots)
+    let best: { id: string; dist: number } | null = null
+    for (const slot of sceneDoc.slots) {
+      const projected = projectPoint(slot.position, eye, sceneDoc.camera.look, sceneDoc.camera.fov, bounds.width / Math.max(1, bounds.height))
+      if (!projected) continue
+      const dist = Math.hypot(projected.x - nx, projected.y - ny)
+      if (dist < 0.08 && (!best || dist < best.dist)) best = { id: slot.id, dist }
+    }
+    return best?.id ?? null
   }
 
   const roundtrip = Boolean(parseScene3DDocument(JSON.parse(JSON.stringify(sceneDoc))))
 
   return (
     <div className="flex w-full flex-col gap-2" data-testid="scene3d-workspace">
-      <div className="relative w-full overflow-hidden rounded-lg border border-border bg-[#10141c]" style={{ aspectRatio: `${width} / ${height}` }}>
+      <div className="flex flex-wrap gap-1">
+        {SCENE3D_TEMPLATES.map(template => (
+          <button
+            key={template.id}
+            type="button"
+            onClick={() => mountTemplate(template.id)}
+            className={`rounded border px-1.5 py-1 text-[9px] ${sceneDoc.templateId === template.id ? 'border-cyan-300 bg-cyan-400/10 text-cyan-100' : 'border-border text-text-muted'}`}
+          >
+            {t(`stage.template.${template.id}`)}
+          </button>
+        ))}
+      </div>
+      <div
+        className="relative w-full overflow-hidden rounded-lg border border-border bg-[#10141c]"
+        style={{ aspectRatio: `${width} / ${height}` }}
+        onPointerDown={event => {
+          const id = hitSlot(event.clientX, event.clientY, event.currentTarget)
+          if (!id) return
+          const slot = sceneDoc.slots.find(item => item.id === id)
+          if (!slot) return
+          setSelectedId(id)
+          dragRef.current = { id, startX: slot.position[0], startZ: slot.position[2], pointerX: event.clientX, pointerY: event.clientY }
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }}
+        onPointerMove={event => {
+          const drag = dragRef.current
+          if (!drag) return
+          const dx = (event.clientX - drag.pointerX) * 0.008
+          const dz = (event.clientY - drag.pointerY) * 0.008
+          setSceneDoc(current => patchScene3DSlot(current, drag.id, {
+            position: [drag.startX + dx, current.slots.find(slot => slot.id === drag.id)?.position[1] ?? 0, drag.startZ + dz],
+          }))
+        }}
+        onPointerUp={() => { dragRef.current = null }}
+      >
         <Scene3DStage
           document={sceneDoc}
           sceneSeconds={seconds}
           onSlotClips={(slotId, clips) => setCatalogs(current => ({ ...current, [slotId]: clips }))}
         />
         <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-1.5 py-1 text-[8px] text-cyan-200">
-          {t('stage.badge')} · {sceneDoc.camera.family} · {seconds.toFixed(2)}s
+          {t('stage.badge')} · {t(`stage.template.${sceneDoc.templateId}`)} · {sceneDoc.camera.family} · {seconds.toFixed(2)}s
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-[9px]">
@@ -143,7 +200,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
           <button
             key={family}
             type="button"
-            onClick={() => setFamily(family)}
+            onClick={() => setSceneDoc(current => ({ ...current, camera: { ...current.camera, family } }))}
             className={`rounded border px-1.5 py-1 ${sceneDoc.camera.family === family ? 'border-cyan-300 bg-cyan-400/10 text-cyan-100' : 'border-border text-text-muted'}`}
           >
             {t(`stage.family.${family}`)}
@@ -152,22 +209,37 @@ export function Scene3DWorkspace({ width, height }: Props) {
         <button type="button" onClick={() => setPlaying(current => !current)} className="rounded border border-border bg-bg-primary px-2 py-1">
           {playing ? t('stage.pause') : t('stage.play')}
         </button>
-        <span className="text-text-muted">{t('stage.eye', { x: cameraEyeAtTime(sceneDoc.camera, seconds, sceneDoc.duration)[0].toFixed(2) })}</span>
+        <span className="text-text-muted">{t('stage.eye', { x: cameraEyeAtTime(sceneDoc.camera, seconds, sceneDoc.duration, sceneDoc.slots)[0].toFixed(2) })}</span>
       </div>
+      {selected && (
+        <div className="flex flex-wrap gap-2 rounded border border-border bg-bg-primary p-1.5" data-testid="scene3d-transforms">
+          <span className="text-[9px] font-medium text-text-primary">{t(`stage.slot.${selected.slot}`)}</span>
+          {numberField('X', selected.position[0], value => setSceneDoc(current => patchScene3DSlot(current, selected.id, { position: [value, selected.position[1], selected.position[2]] })))}
+          {numberField('Y', selected.position[1], value => setSceneDoc(current => patchScene3DSlot(current, selected.id, { position: [selected.position[0], value, selected.position[2]] })))}
+          {numberField('Z', selected.position[2], value => setSceneDoc(current => patchScene3DSlot(current, selected.id, { position: [selected.position[0], selected.position[1], value] })))}
+          {numberField(t('stage.scale'), selected.scale, value => setSceneDoc(current => patchScene3DSlot(current, selected.id, { scale: Math.max(0.05, value) })))}
+          {numberField(t('stage.rotate'), selected.rotationY, value => setSceneDoc(current => patchScene3DSlot(current, selected.id, { rotationY: value })), 0.05)}
+        </div>
+      )}
       <div className="grid gap-1.5 md:grid-cols-2">
         {sceneDoc.slots.map(slot => {
           const clips = catalogs[slot.id] ?? []
           return (
-            <div key={slot.id} className="rounded border border-border bg-bg-primary p-1.5 text-[9px] text-text-secondary">
-              <span className="block font-medium text-text-primary">{t(`stage.slot.${slot.slot}`)}</span>
-              <button type="button" onClick={() => void openExplorer(slot.id)} className="mt-1 w-full rounded border border-cyan-400/40 bg-cyan-400/10 px-1.5 py-1 text-[9px] text-cyan-100">
+            <div key={slot.id} className={`rounded border p-1.5 text-[9px] text-text-secondary ${selectedId === slot.id ? 'border-cyan-300 bg-cyan-400/5' : 'border-border bg-bg-primary'}`}>
+              <button type="button" className="block font-medium text-text-primary" onClick={() => setSelectedId(slot.id)}>{t(`stage.slot.${slot.slot}`)}</button>
+              <button type="button" onClick={() => void openExplorer(slot)} className="mt-1 w-full rounded border border-cyan-400/40 bg-cyan-400/10 px-1.5 py-1 text-[9px] text-cyan-100">
                 {t('stage.fromApp')}
               </button>
               <input
                 type="file"
-                accept=".glb,model/gltf-binary"
+                accept={slot.slot === 'background' ? 'image/*' : '.glb,model/gltf-binary'}
                 className="mt-1 w-full text-[8px]"
-                onChange={event => assignFile(slot.id, event.target.files?.[0])}
+                onChange={event => {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  revokeIfBlob(slot.sourceUrl)
+                  assignSource(slot.id, URL.createObjectURL(file), slot.slot === 'background' ? 'image' : 'model3d')
+                }}
               />
               {clips.length > 0 && (
                 <select
@@ -175,12 +247,10 @@ export function Scene3DWorkspace({ width, height }: Props) {
                   value={slot.clip ? `${slot.clip.index}\u001f${slot.clip.name}` : ''}
                   onChange={event => {
                     const value = event.target.value
-                    if (!value) {
-                      bindClip(slot.id, 0, '')
-                      return
-                    }
                     const split = value.indexOf('\u001f')
-                    bindClip(slot.id, Number(value.slice(0, split)) || 0, value.slice(split + 1))
+                    setSceneDoc(current => patchScene3DSlot(current, slot.id, {
+                      clip: value ? { index: Number(value.slice(0, split)) || 0, name: value.slice(split + 1) } : null,
+                    }))
                   }}
                 >
                   <option value="">{t('stage.noClip')}</option>
@@ -191,23 +261,6 @@ export function Scene3DWorkspace({ width, height }: Props) {
                   ))}
                 </select>
               )}
-              <span className="mt-1 flex items-center gap-1">
-                {t('stage.clipIndex')}
-                <input
-                  type="number"
-                  min={0}
-                  value={slot.clip?.index ?? 0}
-                  onChange={event => bindClip(slot.id, Number(event.target.value) || 0, slot.clip?.name ?? '')}
-                  className="w-12 rounded border border-border bg-bg-tertiary px-1 py-0.5"
-                />
-                {t('stage.clipName')}
-                <input
-                  value={slot.clip?.name ?? ''}
-                  onChange={event => bindClip(slot.id, slot.clip?.index ?? 0, event.target.value)}
-                  placeholder={t('stage.exactName')}
-                  className="min-w-0 flex-1 rounded border border-border bg-bg-tertiary px-1 py-0.5"
-                />
-              </span>
             </div>
           )
         })}
@@ -221,7 +274,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
         items={explorerItems}
         onClose={() => setExplorerSlot(null)}
         onChoose={item => {
-          if (item && explorerSlot) assignSource(explorerSlot, item.url)
+          if (item && explorerSlot) assignSource(explorerSlot, item.url, item.type === 'image' ? 'image' : 'model3d')
           setExplorerSlot(null)
         }}
       />

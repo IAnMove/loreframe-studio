@@ -1,4 +1,4 @@
-import { cameraEyeAtTime, projectPoint } from './camera.ts'
+import { cameraEyeAtTime, cameraLookAtTime, projectPoint } from './camera.ts'
 import { scene3dSlotColor } from './document.ts'
 import type { Scene3DDocument } from './types.ts'
 
@@ -39,10 +39,11 @@ export function renderScene3DSoftware(document: Scene3DDocument, sceneSeconds: n
   for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255
   const frame = { width, height, pixels }
   fillRect(frame, 0, height * 0.62, width, height, [32, 34, 38])
-  const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration)
+  const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration, document.slots)
+  const look = cameraLookAtTime(document.camera, sceneSeconds, document.duration, document.slots)
   const aspect = width / height
   for (const slot of document.slots) {
-    const projected = projectPoint(slot.position, eye, document.camera.look, document.camera.fov, aspect)
+    const projected = projectPoint(slot.position, eye, look, document.camera.fov, aspect)
     if (!projected) continue
     const size = Math.max(6, 28 * slot.scale / Math.max(0.4, projected.depth))
     const cx = projected.x * width

@@ -1,9 +1,11 @@
 # Procedural 3D scene spec (G3)
 
-Status: vertical in Video 3D. The 2.5D compositor stays default. A **3D stage**
-mode lives in `ui/src/features/scene3d/` and is selected with a toggle in
-Video 3D. Private Meshy GLBs stay off git. `_launch_runtime.py` is still not
-mounted for G2.
+Status: the 2.5D compositor stays the **Video 2.5D** studio tab (`scene3d`).
+Real 3D is a **separate Video 3D** tab (`world3d`) in `ui/src/features/scene3d/`.
+They share asset pickers and GLB clip identity, not one overloaded panel.
+Wizard hook: `hocuspocus:world3d-workflow-request` mounts the same template ids
+later; 2.5D `video_3d` actions stay on the compositor. Private Meshy GLBs stay
+off git. `_launch_runtime.py` is still not mounted for G2.
 
 Related: [GLB animation import contract](GLB_ANIMATION_IMPORT_CONTRACT.md)
 (`inspect_glb`, schema `glb-inspection-v1`).

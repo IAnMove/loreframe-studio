@@ -20,6 +20,7 @@ export function createDefaultScene3DDocument(): Scene3DDocument {
     height: 720,
     fps: 30,
     duration: 4,
+    templateId: 'two-shot',
     camera: {
       family: 'establishment',
       eye: [0, 1.6, 4.2],
@@ -43,6 +44,7 @@ export function createDefaultScene3DDocument(): Scene3DDocument {
         rotationY: 0.35,
         scale: 1,
         sourceUrl: '',
+        media: 'model3d',
         clip: null,
       },
       {
@@ -52,6 +54,7 @@ export function createDefaultScene3DDocument(): Scene3DDocument {
         rotationY: -0.35,
         scale: 1,
         sourceUrl: '',
+        media: 'model3d',
         clip: null,
       },
     ],
@@ -67,5 +70,9 @@ export function parseScene3DDocument(raw: unknown): Scene3DDocument | null {
   const value = raw as Partial<Scene3DDocument>
   if (value.version !== 1 || value.units !== 'meters' || value.up !== 'y') return null
   if (!Array.isArray(value.slots) || !value.camera || !value.light) return null
-  return value as Scene3DDocument
+  const slots = value.slots.map(slot => ({
+    ...slot,
+    media: slot.media === 'image' ? 'image' as const : 'model3d' as const,
+  }))
+  return { ...value, slots, templateId: typeof value.templateId === 'string' ? value.templateId : 'two-shot' } as Scene3DDocument
 }

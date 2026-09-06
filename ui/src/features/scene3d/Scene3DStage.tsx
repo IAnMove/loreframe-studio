@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
-import { cameraEyeAtTime } from './camera.ts'
+import { cameraEyeAtTime, cameraLookAtTime } from './camera.ts'
 import { scene3dClipLocalTime } from './clock.ts'
 import {
   applyLight,
@@ -47,8 +47,8 @@ function loadSlotGltf(
         disposeObject(gltf.scene)
         return
       }
-      fitGltf(gltf.scene, live)
-      placeSlot(world, live, gltf.scene, gltf.animations)
+      const baseScale = fitGltf(gltf.scene, live)
+      placeSlot(world, live, gltf.scene, gltf.animations, baseScale)
       onClips?.(live.id, catalogFromClips(gltf.animations))
     },
     undefined,
@@ -123,10 +123,11 @@ export function Scene3DStage({ document, sceneSeconds, onSlotClips }: Props) {
   useEffect(() => {
     const world = worldRef.current
     if (!world) return
-    const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration)
+    const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration, document.slots)
+    const look = cameraLookAtTime(document.camera, sceneSeconds, document.duration, document.slots)
     world.camera.fov = document.camera.fov
     world.camera.position.set(eye[0], eye[1], eye[2])
-    world.camera.lookAt(document.camera.look[0], document.camera.look[1], document.camera.look[2])
+    world.camera.lookAt(look[0], look[1], look[2])
     world.camera.updateProjectionMatrix()
     for (const gpu of world.slots.values()) {
       if (!gpu.mixer) continue
@@ -135,7 +136,7 @@ export function Scene3DStage({ document, sceneSeconds, onSlotClips }: Props) {
       if (local != null) gpu.mixer.setTime(local)
     }
     world.renderer.render(world.scene, world.camera)
-  }, [document.camera, document.duration, sceneSeconds])
+  }, [document.camera, document.duration, document.slots, sceneSeconds])
 
   return <div ref={hostRef} className="absolute inset-0" data-testid="scene3d-stage" />
 }

@@ -889,8 +889,12 @@
   "stage": {
     "badge": "3D stage",
     "modeTitle": "Stage mode",
-    "modeHelp": "2.5D keeps plates and layers on the frame. 3D stage is a real world in metres (Y-up).",
+    "modeHelp": "2.5D keeps plates and layers on the frame. Video 3D is a separate world editor in metres (Y-up).",
     "fromApp": "From HocusPocus…",
+    "editorTitle": "Video 3D",
+    "editorHelp": "Separate from the 2.5D compositor. Pick a cinematic template, assign objects and a background, then move, scale and rotate. Camera families are predirected film moves; the Wizard can mount the same template ids later.",
+    "scale": "Scale",
+    "rotate": "Yaw",
     "compositor": "2.5D compositor",
     "world": "3D stage",
     "play": "Play",
@@ -908,10 +912,21 @@
       "prop": "Prop"
     },
     "family": {
-      "establishment": "Establishment",
+      "establishment": "Establishment / push-in",
       "orbit": "Orbit",
-      "follow": "Follow",
-      "product": "Product"
+      "follow": "Tracking follow",
+      "product": "Product turntable",
+      "reveal": "Crane reveal",
+      "encounter": "Two-shot / OTS"
+    },
+    "template": {
+      "two-shot": "Two-shot",
+      "product-orbit": "Product orbit",
+      "hero-push": "Hero push-in",
+      "over-shoulder": "Over-shoulder",
+      "tracking": "Tracking shot",
+      "crane-reveal": "Crane reveal",
+      "establishing": "Establishing"
     }
   }
 }

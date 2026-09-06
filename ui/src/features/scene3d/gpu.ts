@@ -28,6 +28,7 @@ export type SlotGpu = {
   sourceUrl: string
   clipKey: string
   root: Object3D
+  baseScale: number
   animations: GLTF['animations']
   mixer: AnimationMixer | null
 }
@@ -106,9 +107,11 @@ export function fitGltf(root: Object3D, slot: Scene3DSlot) {
   const box = new Box3().setFromObject(root)
   const size = new Vector3()
   box.getSize(size)
-  root.scale.setScalar((1.7 * slot.scale) / Math.max(size.y, 0.001))
-  root.position.set(slot.position[0], 0, slot.position[2])
+  const baseScale = 1.7 / Math.max(size.y, 0.001)
+  root.scale.setScalar(baseScale * slot.scale)
+  root.position.set(slot.position[0], slot.position[1], slot.position[2])
   root.rotation.y = slot.rotationY
+  return baseScale
 }
 
 export function bindMixer(root: Object3D, animations: GLTF['animations'], slot: Scene3DSlot) {
@@ -134,6 +137,7 @@ export function placeSlot(
   slot: Scene3DSlot,
   root: Object3D,
   animations: GLTF['animations'],
+  baseScale = 1,
 ) {
   dropSlot(world, slot.id)
   world.scene.add(root)
@@ -141,6 +145,7 @@ export function placeSlot(
     sourceUrl: slot.sourceUrl,
     clipKey: clipKeyOf(slot.clip),
     root,
+    baseScale,
     animations,
     mixer: bindMixer(root, animations, slot),
   })
@@ -203,7 +208,7 @@ export function resizeWorld(world: GpuWorld, host: HTMLDivElement) {
 }
 
 export function poseLoadedSlot(current: SlotGpu, slot: Scene3DSlot) {
-  if (!slot.sourceUrl) return
-  current.root.position.set(slot.position[0], 0, slot.position[2])
+  current.root.position.set(slot.position[0], slot.position[1], slot.position[2])
   current.root.rotation.y = slot.rotationY
+  current.root.scale.setScalar(current.baseScale * slot.scale)
 }

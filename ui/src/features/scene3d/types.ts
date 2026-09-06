@@ -17,6 +17,8 @@ export type Scene3DClipRef = {
   name: string
 }
 
+export type Scene3DSlotMedia = 'model3d' | 'image'
+
 export type Scene3DSlot = {
   id: string
   slot: Scene3DSlotId
@@ -24,6 +26,7 @@ export type Scene3DSlot = {
   rotationY: number
   scale: number
   sourceUrl: string
+  media: Scene3DSlotMedia
   clip: Scene3DClipRef | null
 }
 
@@ -52,6 +55,7 @@ export type Scene3DDocument = {
   height: number
   fps: 24 | 30 | 60
   duration: number
+  templateId: string
   camera: Scene3DCamera
   light: Scene3DLight
   slots: Scene3DSlot[]

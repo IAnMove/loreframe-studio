@@ -10,8 +10,11 @@ export type {
   Scene3DSlotId,
   Vec3,
 } from './types.ts'
-export { cameraEyeAtTime, orbitEye, projectPoint } from './camera.ts'
+export { cameraEyeAtTime, cameraLookAtTime, orbitEye, projectPoint } from './camera.ts'
 export { clipBindingError, resolveScene3DClip } from './clips.ts'
 export { scene3dClipLocalTime, scene3dFrameCount, scene3dFrameTime } from './clock.ts'
 export { cloneScene3DDocument, createDefaultScene3DDocument, parseScene3DDocument } from './document.ts'
+export { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES } from './templates.ts'
+export { documentFromWorld3DRequest, listenForWorld3DWorkflow, requestWorld3DWorkflow } from './world3dAgent.ts'
 export { hashSoftwareFrame, renderScene3DSoftware } from './softwareRender.ts'
+export { Scene3DEditorPanel } from './Scene3DEditorPanel.tsx'

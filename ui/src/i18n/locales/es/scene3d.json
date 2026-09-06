@@ -889,8 +889,12 @@
   "stage": {
     "badge": "Escenario 3D",
     "modeTitle": "Modo de escenario",
-    "modeHelp": "El 2,5D mantiene placas y capas en el encuadre. El escenario 3D es un mundo en metros (Y-up).",
+    "modeHelp": "El 2,5D mantiene placas y capas en el encuadre. Vídeo 3D es un editor de mundo aparte, en metros (Y-up).",
     "fromApp": "Desde HocusPocus…",
+    "editorTitle": "Vídeo 3D",
+    "editorHelp": "Separado del compositor 2,5D. Elige una plantilla de cine, asigna objetos y fondo, luego mueve, escala y rota. Las familias de cámara son movimientos prediseñados; el Wizard podrá montar los mismos ids más adelante.",
+    "scale": "Escala",
+    "rotate": "Yaw",
     "compositor": "Compositor 2,5D",
     "world": "Escenario 3D",
     "play": "Reproducir",
@@ -908,10 +912,21 @@
       "prop": "Atrezo"
     },
     "family": {
-      "establishment": "Establecimiento",
+      "establishment": "Establecimiento / push-in",
       "orbit": "Órbita",
-      "follow": "Seguimiento",
-      "product": "Producto"
+      "follow": "Travelling",
+      "product": "Plato de producto",
+      "reveal": "Grúa de revelado",
+      "encounter": "Plano de dos / OTS"
+    },
+    "template": {
+      "two-shot": "Plano de dos",
+      "product-orbit": "Órbita de producto",
+      "hero-push": "Push-in de héroe",
+      "over-shoulder": "Sobre el hombro",
+      "tracking": "Travelling",
+      "crane-reveal": "Grúa de revelado",
+      "establishing": "Plano de situación"
     }
   }
 }

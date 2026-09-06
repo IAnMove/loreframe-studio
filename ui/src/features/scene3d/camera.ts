@@ -1,4 +1,4 @@
-import type { Scene3DCamera, Vec3 } from './types.ts'
+import type { Scene3DCamera, Scene3DSlot, Vec3 } from './types.ts'
 
 export function vecAdd(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
@@ -30,6 +30,20 @@ export function vecNormalize(a: Vec3): Vec3 {
   return vecScale(a, 1 / len)
 }
 
+export function lerp3(a: Vec3, b: Vec3, t: number): Vec3 {
+  return [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ]
+}
+
+export function unitProgress(sceneSeconds: number, duration: number): number {
+  const span = duration > 1e-6 ? duration : 1
+  const u = Math.min(1, Math.max(0, sceneSeconds / span))
+  return u * u * (3 - 2 * u)
+}
+
 export function orbitEye(look: Vec3, radius: number, height: number, azimuthRad: number): Vec3 {
   const r = Number.isFinite(radius) && radius > 0 ? radius : 4
   const h = Number.isFinite(height) ? height : 1.6
@@ -40,12 +54,64 @@ export function orbitEye(look: Vec3, radius: number, height: number, azimuthRad:
   ]
 }
 
-export function cameraEyeAtTime(camera: Scene3DCamera, sceneSeconds: number, duration: number): Vec3 {
-  if (camera.family !== 'orbit') return camera.eye
+function slotLook(slots: readonly Scene3DSlot[], id: Scene3DSlot['slot'], fallback: Vec3): Vec3 {
+  const found = slots.find(slot => slot.slot === id)
+  if (!found) return fallback
+  return [found.position[0], found.position[1] + 1.1, found.position[2]]
+}
+
+export function cameraLookAtTime(
+  camera: Scene3DCamera,
+  sceneSeconds: number,
+  duration: number,
+  slots: readonly Scene3DSlot[] = [],
+): Vec3 {
+  if (camera.family === 'follow' || camera.family === 'pursuit') {
+    return slotLook(slots, 'subject_1', camera.look)
+  }
+  if (camera.family === 'encounter') {
+    const a = slotLook(slots, 'subject_1', camera.look)
+    const b = slotLook(slots, 'subject_2', camera.look)
+    return lerp3(a, b, 0.5)
+  }
+  if (camera.family === 'orbit' || camera.family === 'product' || camera.family === 'musical') {
+    return slotLook(slots, 'subject_1', camera.look)
+  }
+  void sceneSeconds
+  void duration
+  return camera.look
+}
+
+export function cameraEyeAtTime(
+  camera: Scene3DCamera,
+  sceneSeconds: number,
+  duration: number,
+  slots: readonly Scene3DSlot[] = [],
+): Vec3 {
+  const s = unitProgress(sceneSeconds, duration)
+  const look = cameraLookAtTime(camera, sceneSeconds, duration, slots)
+  const radius = camera.orbitRadius ?? 4.2
+  const height = camera.orbitHeight ?? 1.6
   const turns = Number.isFinite(camera.orbitTurns) ? camera.orbitTurns! : 1
-  const span = duration > 1e-6 ? duration : 1
-  const azimuth = (sceneSeconds / span) * turns * Math.PI * 2
-  return orbitEye(camera.look, camera.orbitRadius ?? 4, camera.orbitHeight ?? 1.6, azimuth)
+  if (camera.family === 'orbit' || camera.family === 'product' || camera.family === 'musical') {
+    const productHeight = camera.family === 'product' ? Math.min(height, 1.15) : height
+    const musicalTurns = camera.family === 'musical' ? turns * 2 : turns
+    return orbitEye(look, radius, productHeight, s * musicalTurns * Math.PI * 2)
+  }
+  if (camera.family === 'follow' || camera.family === 'pursuit') {
+    return [look[0], look[1] + 0.35, look[2] + radius]
+  }
+  if (camera.family === 'reveal') {
+    return lerp3([camera.eye[0], camera.eye[1] - 1.35, camera.eye[2] + 1.1], camera.eye, s)
+  }
+  if (camera.family === 'encounter') {
+    return lerp3(vecAdd(camera.eye, [-1.6, 0.1, 0.4]), camera.eye, s)
+  }
+  if (camera.family === 'establishment') {
+    return lerp3(vecAdd(camera.eye, [0, 0.55, 2.2]), camera.eye, s)
+  }
+  void azimuth
+  return camera.eye
 }
 
 export function projectPoint(

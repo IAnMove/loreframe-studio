@@ -33,7 +33,6 @@ import { CylinderPanoramaComparison } from './CylinderPanoramaComparison'
 import { CharacterKitLibraryPanel } from '../../features/characters/CharacterKitLibraryPanel'
 import type { CharacterKitEditorTab } from '../../features/characters/characterKitGuide'
 import { listenForAgentSceneControl, listenForAgentSceneRhythm, listenForAgentSceneWorkflow } from '../../features/agent/agentUiBus'
-import { Scene3DWorkspace } from '../../features/scene3d/Scene3DWorkspace'
 
 type Point = { x: number; y: number; scale: number; opacity?: number; rotation?: number }
 type AnimatorLayerType = SceneLayerType
@@ -587,7 +586,7 @@ export function SceneAnimatorPanel() {
   const [previewWidth, setPreviewWidth] = useState(1280)
   const [clipsByLayer, setClipsByLayer] = useState<Record<string, string[]>>({})
   const [clipDurationsByLayer, setClipDurationsByLayer] = useState<Record<string, number>>({})
-  const [stageMode, setStageMode] = useState<'compositor' | 'world3d'>('compositor')
+
   const canvasRef = useRef<HTMLDivElement>(null)
   const animationRef = useRef<number | null>(null)
   const recordingAnimationRef = useRef<number | null>(null)
@@ -2947,19 +2946,6 @@ export function SceneAnimatorPanel() {
     <section className="flex min-w-0 flex-1 flex-col p-3 md:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-1.5 text-xs font-medium"><Film size={15} className="text-accent-blue" /><input value={scene.name} onChange={event => updateScene(current => ({ ...current, name: event.target.value }))} aria-label={t('animator.sceneNameAria')} className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs font-medium hover:border-border focus:border-accent-blue focus:outline-none" /><span className="text-[10px] font-normal text-text-muted">{scene.width}×{scene.height}</span></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setLibraryOpen(true)} disabled={playing || recording || publishing} className="rounded border border-border bg-bg-primary px-2.5 py-1.5 text-[10px] flex items-center gap-1 disabled:opacity-50"><FolderOpen size={12} /> {t('animator.openScene')}</button><button type="button" onClick={() => void persistScene()} disabled={saving || !scene.layers.length || playing || recording || publishing} className="rounded border border-accent-blue/40 bg-accent-blue/10 px-2.5 py-1.5 text-[10px] text-accent-blue flex items-center gap-1 disabled:opacity-50">{saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}{saving ? t('animator.saving') : t('animator.saveScene')}</button><button onClick={play} disabled={!scene.layers.length || playing || recording || publishing} className="rounded border border-border bg-bg-primary px-2.5 py-1.5 text-[10px] flex items-center gap-1 disabled:opacity-50"><Play size={12} /> {t('animator.preview')}</button><button onClick={record} disabled={recording || playing || publishing} className="rounded bg-cta px-2.5 py-1.5 text-[10px] text-white flex items-center gap-1 disabled:opacity-50">{recording || publishing ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}{recording ? t('animator.recording') : publishing ? t('animator.savingMp4') : t('animator.exportMp4')}</button></div></div>
       <div className="mb-2 flex items-center justify-end gap-1.5"><button type="button" onClick={undoScene} disabled={!canUndo} title={t('animator.undoTitle')} className="rounded border border-border bg-bg-primary p-1.5 disabled:opacity-30"><Undo2 size={12} /></button><button type="button" onClick={redoScene} disabled={!canRedo} title={t('animator.redoTitle')} className="rounded border border-border bg-bg-primary p-1.5 disabled:opacity-30"><Redo2 size={12} /></button><span className="ml-1 text-[8px] text-text-muted">{lastAutosaveAt ? t('animator.autosaved', { time: new Date(lastAutosaveAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }) : t('animator.autosaveWaiting')}</span></div>
-      <div className="mb-3 rounded-lg border border-cyan-400/35 bg-cyan-400/10 p-2" data-testid="video3d-stage-mode">
-        <div className="mb-1 text-[11px] font-medium text-cyan-100">{t(scene3dKey('stage.modeTitle'))}</div>
-        <p className="mb-2 text-[9px] leading-relaxed text-text-muted">{t(scene3dKey('stage.modeHelp'))}</p>
-        <div className="grid grid-cols-2 gap-1">
-          <button type="button" onClick={() => setStageMode('compositor')} className={`rounded border px-2 py-2 text-[11px] ${stageMode === 'compositor' ? 'border-accent-blue bg-accent-blue/15 text-accent-blue' : 'border-border text-text-muted'}`}>{t(scene3dKey('stage.compositor'))}</button>
-          <button type="button" onClick={() => {
-            if (animationRef.current) cancelAnimationFrame(animationRef.current)
-            animationRef.current = null
-            setPlaying(false)
-            setStageMode('world3d')
-          }} className={`rounded border px-2 py-2 text-[11px] ${stageMode === 'world3d' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-100' : 'border-border text-text-muted'}`}>{t(scene3dKey('stage.world'))}</button>
-        </div>
-      </div>
       <div className="mb-3 flex flex-wrap items-center gap-1">{RESOLUTIONS.map(([label, width, height]) => <button key={label} disabled={playing || recording} onClick={() => updateScene(current => ({ ...current, width, height }))} className={`rounded border px-1.5 py-1 text-[9px] disabled:opacity-40 ${scene.width === width && scene.height === height ? 'border-accent-blue bg-accent-blue/15 text-accent-blue' : 'border-border bg-bg-primary text-text-muted'}`}>{t(`resolutions.${label === 'HD landscape' ? 'hdLandscape' : label === 'Full HD landscape' ? 'fullHdLandscape' : label === '4K landscape' ? 'fourKLandscape' : label === 'Square' ? 'square' : label === 'HD portrait' ? 'hdPortrait' : label === 'Full HD portrait' ? 'fullHdPortrait' : 'fourKPortrait'}`)}</button>)}<span className="ml-auto flex items-center gap-1 pl-2 text-[8px] text-text-muted">{t('animator.frameRate')}{([30, 60] as SceneFrameRate[]).map(rate => <button key={rate} type="button" disabled={playing || recording} onClick={() => updateScene(current => ({ ...current, fps: rate }))} className={`rounded border px-1.5 py-1 text-[9px] disabled:opacity-40 ${fps === rate ? 'border-purple-300 bg-purple-400/10 text-purple-200' : 'border-border bg-bg-primary text-text-muted'}`}>{t('animator.fps', { rate })}</button>)}</span></div>
       <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded border border-border bg-bg-secondary p-1.5">
         <button type="button" onClick={() => updateScene(current => ({ ...current, composition: { ...composition, showGrid: !composition.showGrid } }))} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[9px] ${composition.showGrid ? 'border-accent-blue bg-accent-blue/10 text-accent-blue' : 'border-border text-text-muted'}`}><Grid3X3 size={10} /> {t('animator.grid')}</button>
@@ -2970,7 +2956,7 @@ export function SceneAnimatorPanel() {
       </div>
       {selected && isVisualLayer(selected) && selected.type !== 'model3d' && selected.type !== 'effect' && <button onClick={() => updateLayer(selected.id, layer => ({ ...layer, fill: !layer.fill, transform: { ...layer.transform, x: 50, y: 50, scale: 1 }, animation: mapSceneAnimationPoints(layer, point => ({ ...point, x: 50, y: 50, scale: 1 })) }))} className={`mb-3 rounded border px-2 py-1 text-[10px] ${selected.fill ? 'border-accent-blue bg-accent-blue/15 text-accent-blue' : 'border-border bg-bg-primary text-text-secondary'}`}>{selected.fill ? t('animator.fillEnabled') : t('animator.fillScreen')}</button>}
       {selected && isVisualLayer(selected) && selected.type !== 'model3d' && selected.type !== 'effect' && <button onClick={() => { sendToBack(selected.id); applyParallaxPreset(selected.id, 'background') }} className="mb-3 ml-1 rounded border border-border bg-bg-primary px-2 py-1 text-[10px] text-text-secondary">{t('animator.useAsBackground')}</button>}
-      {stageMode === 'world3d' ? <div className="flex w-full justify-center"><div style={{ width: '100%', maxWidth: `${68 * scene.width / scene.height}vh` }}><Scene3DWorkspace width={scene.width} height={scene.height} /></div></div> : <div className="flex w-full justify-center">
+      <div className="flex w-full justify-center">
       <div ref={canvasRef} className="relative isolate w-full overflow-hidden rounded-lg border border-border bg-[#0b1020]" style={{ aspectRatio: `${scene.width} / ${scene.height}`, maxWidth: `${68 * scene.width / scene.height}vh` }}>
         {[...scene.layers].sort((a, b) => a.z - b.z).map(renderLayer)}
         {composition.showGrid && <div className="pointer-events-none absolute inset-0 z-[990] opacity-35" style={{ backgroundImage: 'linear-gradient(to right, rgba(125,211,252,.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(125,211,252,.55) 1px, transparent 1px)', backgroundSize: `${composition.gridSize}% ${composition.gridSize}%` }} />}
@@ -2982,7 +2968,7 @@ export function SceneAnimatorPanel() {
         {flash && <div className="pointer-events-none absolute z-[999]" style={{ left: `${flash.x}%`, top: `${flash.y}%` }}><span className="absolute -left-6 -top-6 h-12 w-12 rounded-full border-2 border-white/90 animate-ping" /><span className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full bg-white shadow-[0_0_20px_8px_rgba(96,165,250,.9)]" /></div>}
         <div className="absolute inset-x-0 bottom-0 z-[1000] h-1 bg-black/40"><div className="h-full bg-accent-blue" style={{ width: `${progress * 100}%` }} /></div>
       </div>
-      </div>}
+      </div>
       <p className="mt-2 text-[9px] text-text-muted">{t('animator.canvasHelp')}</p>
       <SceneTimeline
         layers={scene.layers}
