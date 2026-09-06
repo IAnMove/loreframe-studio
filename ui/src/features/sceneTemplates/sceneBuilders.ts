@@ -1,7 +1,7 @@
-import type { SceneLayer, SceneKeyframe, SceneAtmosphereKind } from '../../types'
+import type { SceneLayer, SceneKeyframe, SceneAtmosphereKind, SceneCatalogAssetReference } from '../../types'
 import type { TemplateSlotName } from './catalog'
 
-export interface TemplateAsset { source: string; type: 'image' | 'model3d'; name?: string }
+export interface TemplateAsset { source: string; type: 'image' | 'model3d'; name?: string; catalogAtAssignment?: SceneCatalogAssetReference }
 export type TemplateBindings = Partial<Record<TemplateSlotName, TemplateAsset>>
 export interface TemplateControls { duration: number; bpm: number; intensity: number }
 export type Pose = Partial<Pick<SceneKeyframe, 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'curve'>>

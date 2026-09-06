@@ -244,6 +244,58 @@ test('opens cinema-establishing in the real editor, saves exact scene JSON, and 
   }
 })
 
+test('Library template bindings survive the real editor save and reopen without generation', async ({ page }) => {
+  const session = await prepareReviewPage(page)
+  const state = reviewRouteState()
+  await installReviewRoutes(page, state)
+  const catalogRequests: string[] = []
+  const assets = ['hero', 'plate'].map(name => ({
+    id: `canonical-${name}`, filename: `${name}.svg`, kind: 'image', metadata_status: 'canonical',
+    size_bytes: 100, created_at: 1, completed_at: 2, workspace_ids: ['default'],
+    locations: [{ workspace_id: 'default', filename: `${name}.svg`, url: `/api/v1/file/${name}.svg?workspace=default` }],
+    url: `/api/v1/file/${name}.svg?workspace=default`, origin: { tool: 'fixture' },
+    execution: { run_id: `run-${name}` }, model: { provider: 'fixture', id: 'no-model' }, prompt_preview: '',
+  }))
+  await page.route('**/api/v1/assets**', async route => {
+    const url = new URL(route.request().url())
+    catalogRequests.push(url.pathname)
+    const id = url.pathname.split('/assets/')[1]
+    await route.fulfill({ json: id ? assets.find(item => item.id === id) : { assets, total: assets.length } })
+  })
+  await page.route(/\/api\/v1\/file\/(hero|plate)\.svg/, route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#5577aa"/></svg>' }))
+  try {
+    await page.goto('/scene-template-review?editor=1')
+    await page.getByRole('button', { name: 'Plantillas · crear con mis assets de Library' }).click()
+    const composer = page.getByRole('dialog', { name: 'Crear escena desde Library' })
+    await expect(composer.getByLabel('BPM visual')).toBeDisabled()
+    await composer.getByRole('button', { name: 'Seleccionar hero.svg', exact: true }).click()
+    await composer.getByRole('button', { name: 'Fondo (obligatorio)', exact: true }).click()
+    await composer.getByRole('button', { name: 'Seleccionar plate.svg', exact: true }).click()
+    await composer.getByRole('checkbox').check()
+    await composer.getByRole('button', { name: 'Crear y abrir en editor', exact: true }).click()
+    await expect(composer).toHaveCount(0)
+    expect(catalogRequests).toContain('/api/v1/assets/canonical-hero')
+    expect(catalogRequests).toContain('/api/v1/assets/canonical-plate')
+    const name = page.getByLabel('Scene name', { exact: true })
+    await name.fill('Library binding roundtrip')
+    await page.getByRole('button', { name: 'Save scene', exact: true }).first().click()
+    await expect.poll(() => state.postedPayloads.length).toBe(1)
+    const saved = state.postedPayloads[0].scene as SceneLike
+    expect(saved.generationPolicy).toBe('provided_only')
+    expect(saved.narrative).toMatchObject({ assets: [
+      { slot: 'hero', catalogAtAssignment: { assetId: 'canonical-hero', workspaceId: 'default', runId: 'run-hero' } },
+      { slot: 'plate', catalogAtAssignment: { assetId: 'canonical-plate', workspaceId: 'default', runId: 'run-plate' } },
+    ] })
+    await name.fill('Not saved')
+    await page.getByRole('button', { name: 'Open scene', exact: true }).first().click()
+    const library = page.getByRole('dialog', { name: 'Open 3D Video scene' })
+    await library.getByRole('button', { name: 'Open in 3D Video', exact: true }).click()
+    await expect(name).toHaveValue('Library binding roundtrip')
+    await expect.poll(() => readAutosave(page)).toEqual(saved)
+    expect(state.recordingRequests).toHaveLength(0)
+  } finally { await closeApp(page, session) }
+})
+
 test('shows a visible error and keeps the gallery when the saved reference is missing', async ({ page }) => {
   const session = await prepareReviewPage(page)
   const state = reviewRouteState()

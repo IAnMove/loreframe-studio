@@ -639,10 +639,24 @@ export interface Scene {
     referenceMotion?: string
     evaluationCues?: string[]
     /** The exact existing assets assigned when the template was mounted. */
-    assets?: Array<{ slot: string; source: string; name?: string; type?: SceneLayerType }>
+    assets?: Array<{ slot: string; source: string; name?: string; type?: SceneLayerType; catalogAtAssignment?: SceneCatalogAssetReference }>
     /** Deterministic human-readable direction used to compile this template. */
     prompt?: string
   }
+}
+
+/** Catalog identity at template assignment, not a claim that a later edited layer
+ * still uses the same bytes. The canonical manifest stays in the asset catalog. */
+export interface SceneCatalogAssetReference {
+  assetId: string
+  workspaceId: string
+  filename: string
+  metadataStatus: 'canonical'
+  originTool: string
+  provider?: string | null
+  modelId?: string | null
+  runId?: string | null
+  taskId?: string | null
 }
 
 export type VideoResultKind = 'music_video' | 'trailer' | 'series_episode' | 'chapter'
