@@ -1,6 +1,9 @@
 # Labs ↔ Wizard action matrix (L0)
 
-Status: freeze of current contracts. This document does not implement the later phases.
+Status: detailed L0 fixture/reference with L5–L12 updates; not the startup checklist.
+For current delivery state and remaining QA, read [CURRENT_WORK](CURRENT_WORK.md).
+The machine fixture preserves historical classifications: a frozen defect ID is
+not proof that its defect is still present after the linked fixes.
 
 ## Base
 
@@ -20,14 +23,14 @@ Status: freeze of current contracts. This document does not implement the later 
 - `actor=user` stays on UI handlers; `actor=wizard` stays on the runner. Both must share the domain operation listed here.
 - Classifications: `operativa`, `condicional`, `solo_navegacion`, `solo_informacion`, `no_expuesta`, `sin_implementar`.
 
-## Known gaps frozen for later phases
+## Historical gap IDs and implementation follow-up
 
 | Id | Phase | Summary |
 |---|---|---|
-| `fused_dropped_by_model_for_manifest` | L1 | model_for_manifest keeps legacy and _full but maps fused IDs to minimax_h3 / minimax_h3_ref2va. |
-| `partial_global_profile_guard` | L2 | SeriesLabPanel global-profile equality omits writingBaseUrl, flowShift, audioShift, modelProfile. |
-| `approve_all_replaces_chosen_takes` | L3 | Approve all / review_series_attempts all_latest can replace an already chosen take with a newer attempt. |
-| `script_shots_dialogue_desync` | L4 | update_series_episode can change script dialogue while shots.dialogueBeats stay old; shot_generation_prompt uses the old line. |
+| `fused_dropped_by_model_for_manifest` | L1 | Addressed in #183: variant/workflow table preserves Fused. Real GPU verification was not repeated by L12. |
+| `partial_global_profile_guard` | L2 | Addressed in #183: effective profile/catalog resolver; preserve frozen episode snapshots. |
+| `approve_all_replaces_chosen_takes` | L3 | Addressed in #183: all_latest preserves finals; replacement is explicit. L12 does not prove selection of a specific attemptId. |
+| `script_shots_dialogue_desync` | L4 | Addressed in #183: dialogue sync/preflight. Full UI-to-real-render validation is separate. |
 | `blocked_always_empty` | L5 | Addressed: availability is derived as executable / needs_data / blocked / requires_navigation. |
 | `stage_series_comic_unregistered` | L6 | Addressed: stageSeriesComic is exposed as `stage_series_comic` on the existing Series comic handoff. |
 | `wizard_auto_approves_canon` | L7 | Addressed: episode creation may approve only a brand-new canon base from the same request, never pending canon on an existing series. |
@@ -1295,7 +1298,7 @@ Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L1
 | «He descubierto ChatGPT» | `syncShotsFromScript` keeps the literal and marks the speaking shot stale. |
 | Generate pending shots in quick mode | Wizard parses `render_series_shots` `missing`. Fused 4-step payload is covered by `tests/test_series_render.py`. This PR did **not** run a GPU generation. |
 | Choose latest pending takes | `bulkApproveSelections({ replaceFinals: false })` keeps existing finals. |
-| Use take 2 for this shot | `review_series_attempts` `selected_latest` with `shot_numbers: [2]`. |
+| Use take 2 for this shot | Partial coverage only: this selects the latest attempt of shot 2, not a specific take 2. Add explicit attemptId coverage. |
 | Make a comic of this episode | `stage_series_comic` remains the existing operation. |
 | Assemble without enough takes | `missingAssemblyShotOrders` lists missing shot numbers; assemble throws `Faltan`. |
 | Workspace change in flight | Covered by `ui/tests/storyAsyncOwnership.test.mjs`. |
@@ -1303,4 +1306,4 @@ Executable coverage lives in `ui/tests/labsWizardL12.test.mjs`, plus the L7–L1
 | Reload with live generation | `reusableInFlightSongCandidate` reuses the pending job candidate. |
 | Invalid provider action/fields | Unknown types and invalid `render_mode` parse to no actions. |
 
-Remaining documented gaps, not claimed tested by this suite: `fused_dropped_by_model_for_manifest`, `approve_all_replaces_chosen_takes` (UI “use pending takes” now keeps finals; `all_latest` vs `replace_latest` still exist), `script_shots_dialogue_desync`. No real audiovisual generation was repeated here.
+Historical gap IDs above have fixes in #183; they are not all open defects. Remaining validation: a specific attemptId, real mobile browser navigation and bounded audiovisual/UI-to-Wizard checks. No real audiovisual generation was repeated here.
