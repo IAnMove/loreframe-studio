@@ -1,4 +1,18 @@
 {
+  "engines": {
+    "unavailable": "Not supported",
+    "nativePbr": "Native PBR materials and GLB output. Hunyuan Paint and retexturing controls do not apply.",
+    "resolution": "3D resolution",
+    "lowVram": "Low VRAM mode",
+    "lowVramUnavailable": "This TRELLIS.2 adapter does not expose low-VRAM offloading.",
+    "fov": "Camera FOV (radians)",
+    "fovHelp": "0 estimates the camera automatically with MoGe; manual values: 0.01–3.13 radians.",
+    "fovUnavailable": "Manual camera FOV is available only for Pixal3D.",
+    "cameraContract": "Multi-view is unavailable in this integration: Pixal3D requires calibrated cameras and dedicated weights, not Hunyuan's four-view inputs.",
+    "singleImage": "Multi-view not supported by this selection. Only the front image is sent; other views are retained but disabled.",
+    "imageOnly": "Image required. Text prompts are not consumed by this engine.",
+    "hunyuanOnly": "Hunyuan presets and advanced parameters are disabled; use the engine controls above."
+  },
   "views": {
     "front": "Front",
     "left": "Left",
@@ -83,6 +97,8 @@
     "auto": "Auto · generate missing",
     "manualHelp": "Add plates and GLBs with previews, then ask the LLM to compose. Edit the scene, then Record.",
     "autoHelp": "Describe the scene normally. HocusPocus plans reusable 3D subjects, plates, camera and effects; review the plan before generation.",
+    "noVideoGeneration": "Do not generate video clips",
+    "noVideoGenerationHelp": "Images, audio and 3D assets may still be generated when needed. Existing video clips are allowed and will be reused.",
     "howTitle": "How to describe a scene",
     "howBody": "Mention subjects that must keep their identity, actions in order, the setting, and optionally camera, duration or format. Moving characters, vehicles and objects become separate reusable 3D assets; a fixed environment becomes one plate; fog, snow and rain become effects.",
     "images": "Images",
@@ -134,13 +150,18 @@
     "resolving": "Resolving assets and audio (generate only what is missing)…",
     "mounted": "Mounted shot “{{name}}”. Tweak it in the inspector, then Record.",
     "mountedEdit": "Mounted shot “{{name}}”. Edit freely, then Record.",
+    "policyError": {
+      "generationForbidden": "{{kind}} “{{assetId}}” cannot be generated under {{policy}}. Supply an existing source.",
+      "unknown": "This scene uses an unknown generation policy and was blocked."
+    },
+    "typeAudio": "Audio",
     "embeddedClips": "Embedded skeletal clips: {{clips}}."
   },
   "hunyuan": {
-    "title": "Hunyuan3D Studio",
+    "title": "Local 3D Studio",
     "titleMeshy": "Meshy Studio",
     "titleHi3d": "Hi3D Studio",
-    "subtitle": "Native geometry, multi-view reconstruction and PBR materials.",
+    "subtitle": "Geometry and materials with model-specific input capabilities.",
     "subtitleRemote": "Remote image/text to 3D. Change the default in Settings → Integrations.",
     "vramBadge": "VRAM released after each job",
     "generateModel": "Generate model",

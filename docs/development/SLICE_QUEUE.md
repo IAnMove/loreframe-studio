@@ -1,5 +1,13 @@
 # Slice queue
 
+## Current integration base
+
+New ordinary work branches from `origin/development` and targets `development`.
+`main` is reserved for the published Pinokio version. Follow
+[BRANCHING.md](BRANCHING.md) for releases, hotfixes and transition of existing PRs.
+Historical main/merge records below retain their original meaning; do not rewrite
+accepted history or infer that a PR is merged from its existence.
+
 Humans own merges as an operational act; that click is not a technical code
 review. Agents own technical review and QA. See
 `docs/development/AGENT_QA_POLICY.md`. Agents do not merge until checks are
@@ -13,6 +21,8 @@ Canonical sources in git:
 - Domain identities: `docs/development/DOMAIN_MODEL_AND_ASSET_PROVENANCE.md`
 - i18n boy scout: `docs/development/INTERNATIONALIZATION.md`
 - Architecture contracts: `docs/development/ARCHITECTURE_FOUNDATION.md`
+- Independent review/QA: `docs/development/AGENT_QA_POLICY.md` and
+  `docs/development/QA_ACCEPTANCE.md`
 - Execution baseline and 12-phase wave: `docs/development/EXECUTION_BASELINE.md`
   and `fase1.md`–`fase12.md` (repo root). Working notes under `comunicaciones/`
   are session handoff only.

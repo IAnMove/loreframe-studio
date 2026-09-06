@@ -54,7 +54,9 @@ def render(records: Path, destination: Path):
             memory_text += f' · RAM servidor sin auxiliares: {peaks["server_pss_bytes"] / 2**30:.2f} GiB'
             if memory.get('server_metrics_partial'):
                 memory_text += ' (registro parcial)'
-        scene = 'Futurama · segunda ejecución' if row.get('scene') == 'futurama' else 'Seinfeld · primera ejecución'
+        scene = 'Futurama · segunda ejecución' if row.get('scene') == 'futurama' else 'Seinfeld'
+        if row.get('ending'):
+            scene += f" · ambiente {row['soundscape']} · cierre {row['ending']}"
         if assessment:
             details['assessment'] = assessment
         cards.append(f'''<article data-state="{html.escape(state)}" data-style="{row['style']}">
@@ -72,6 +74,10 @@ body{margin:auto;padding:24px;max-width:1250px;background:#10141c;color:#ecf0f7;
 <p><a href="/">Abrir Hocuspocus</a> · <span>COMPLETED vídeos disponibles de TOTAL pruebas</span></p>
 <blockquote>PROMPT</blockquote><blockquote>FRYPROMPT</blockquote><label>Modo <select id="style"><option value="all">Todos</option><option value="faithful">Fiel</option><option value="creative">Creativo</option></select></label><button onclick="location.reload()">Actualizar resultados</button></header><main>CARDS</main>
 <script>document.querySelector('#style').addEventListener('change', e => {document.querySelectorAll('article').forEach(card => {card.hidden = e.target.value !== 'all' && card.dataset.style !== e.target.value;card.style.display = card.hidden ? 'none' : '';});});</script></html>'''
+    if rows and all(row.get('ending') for row in rows):
+        document = document.replace('H3 · Seinfeld y Futurama', 'H3 · Ocho pruebas de diálogo a 4 pasos')
+        document = document.replace('Los modos fiel y creativo parten del mismo texto; las pruebas con referencias reutilizan una misma imagen.', 'Comparamos dos réplicas con tres réplicas (la extra está escrita manualmente), ambiente y dirección de cierre. Ningún vídeo usa Semantic Bridge.')
+        document = document.replace('<blockquote>FRYPROMPT</blockquote>', '<p><a href="/api/v1/file/h3-benchmark.html?workspace=h3_benchmark">Comparación anterior y control de 14 min 18 s</a></p>')
     document = document.replace('COMPLETED', str(completed)).replace('TOTAL', str(len(rows)))
     diagnostics = []
     for path in sorted(records.glob('*-diagnostics/*/result.json')):

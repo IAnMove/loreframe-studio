@@ -4,6 +4,8 @@ import { resolveSceneGrade } from './sceneGrade'
 import type { SceneGradeIntensity, SceneGradeMood, SceneGradePalette } from './sceneGrade'
 import { createNarrativeScene, getNarrativeTemplate, NARRATIVE_SCENE_TEMPLATES } from './sceneNarrative'
 import type { NarrativeSceneControls, NarrativeSceneId, NarrativeTemplateInput } from './sceneNarrative'
+import { parseSceneGenerationPolicy, sceneGenerationPolicyFields, SCENE_GENERATION_POLICIES } from './sceneGenerationPolicy'
+import type { SceneGenerationPolicy } from './sceneGenerationPolicy'
 
 const GRADE_MOODS: readonly SceneGradeMood[] = ['calm', 'tense', 'dreamy', 'heroic']
 const GRADE_PALETTES: readonly SceneGradePalette[] = ['natural', 'cool', 'warm', 'neon']
@@ -197,6 +199,7 @@ export interface SceneRecipeDialogueBeat {
 export interface SceneRecipe {
   version: 1
   name: string
+  generationPolicy?: SceneGenerationPolicy
   record?: boolean
   save?: boolean
   assets: SceneRecipeAsset[]
@@ -509,6 +512,7 @@ export const SCENE_RECIPE_JSON_SCHEMA: Record<string, unknown> = {
   properties: {
     version: { const: 1 },
     name: { type: 'string', minLength: 1, maxLength: 100 },
+    generationPolicy: { enum: SCENE_GENERATION_POLICIES },
     record: { type: 'boolean' },
     save: { type: 'boolean' },
     assets: {
@@ -1133,6 +1137,7 @@ export function parseSceneRecipe(value: unknown): SceneRecipe {
   const raw = value as Record<string, unknown>
   if (raw.version !== 1 && raw.version !== '1') throw new Error('Recipe version must be 1.')
   const name = asString(raw.name) || 'untitled-scene'
+  const generationPolicy = parseSceneGenerationPolicy(raw.generationPolicy)
   if (!Array.isArray(raw.assets)) throw new Error('Recipe assets must be an array.')
   const assets: SceneRecipeAsset[] = raw.assets.map((item, index) => {
     if (!item || typeof item !== 'object') throw new Error(`Asset ${index} is invalid.`)
@@ -1257,6 +1262,7 @@ export function parseSceneRecipe(value: unknown): SceneRecipe {
     version: 1,
     name,
     record: raw.record === true,
+    ...(generationPolicy ? { generationPolicy } : {}),
     save: raw.save === true,
     assets,
     audio,
@@ -1361,6 +1367,7 @@ export function compileRecipeShot(
     const dialogue = compileRecipeDialogue(scene.layers, scopedRecipe.dialogueBeats, scene.fps ?? 30, scene.duration)
     return {
       ...scene,
+      ...sceneGenerationPolicyFields(recipe.generationPolicy),
       layers: dialogue.layers,
       ...(audioTracks.length ? { audioTracks } : {}),
       ...(dialogue.beats.length ? { dialogueBeats: dialogue.beats } : {}),
@@ -1602,6 +1609,7 @@ export function compileSceneRecipe(
   return {
     version: 1,
     name: recipe.name,
+    ...sceneGenerationPolicyFields(recipe.generationPolicy),
     width: recipe.scene.width || 1280,
     height: recipe.scene.height || 720,
     fps: recipe.scene.fps === 60 ? 60 : 30,

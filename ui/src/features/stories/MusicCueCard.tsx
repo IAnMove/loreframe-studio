@@ -4,7 +4,7 @@ import { useUiTranslation } from '../../i18n'
 import { button, completeGenerationButton, input, panel, Field } from './storyLabChrome'
 import { clampStoryMusicDuration, storyMusicDurationMax, storyMusicGenerationReady } from './musicModel'
 import { MINIMAX_LYRIC_SECTION, miniMaxCuePayload, musicCandidateDisplayName } from './storyLabMusic'
-import type { StoryMusicCue } from './types'
+import type { StoryMusicCandidate, StoryMusicCue } from './types'
 import type { StoryMusicTabProps } from './StoryMusicTab'
 
 export function MusicCueCard({
@@ -164,26 +164,76 @@ export function MusicCueCard({
       </div>
       {cue.candidates.length > 0 && (
         <div className="space-y-2 border-t border-border pt-2">
-          {cue.candidates.map(candidate => {
-            const selected = cue.selectedCandidateId === candidate.id
-            const label = musicCandidateDisplayName(candidate, cue.title, cue.lyricsLanguage || project.language, cue.candidates.indexOf(candidate) + 1)
-            return (
-              <div key={candidate.id} className={`rounded border p-2 space-y-1.5 ${selected ? 'border-pink-400 bg-pink-500/5' : 'border-border'}`}>
-                <button type="button" className="w-full flex items-center justify-between gap-2 text-left text-[10px]"
-                  onClick={() => patchMusicCue(cue.id, { selectedCandidateId: candidate.id })}>
-                  <span className="text-text-primary">{label} · {candidate.model}</span>
-                  <span className="text-text-muted">{candidate.durationSeconds ? `${candidate.durationSeconds.toFixed(1)}s` : t('music.durationOnPlayback')}</span>
-                </button>
-                <audio src={api.getPlayableFileUrl(candidate.source, candidate.name, workspace)} controls preload="metadata" className="w-full h-8" />
-                <button className={`${button} w-full`} disabled={cueBusy || !storyVideoConfigurationReady}
-                  onClick={() => void openMusicalTrailer(candidate.id)}>
-                  <Film size={12} /> {t('music.useInTrailer')}
-                </button>
-              </div>
-            )
-          })}
+          {cue.candidates.map(candidate => (
+            <CueCandidateRow
+              key={candidate.id}
+              candidate={candidate}
+              selected={cue.selectedCandidateId === candidate.id}
+              label={musicCandidateDisplayName(
+                candidate,
+                cue.title,
+                cue.lyricsLanguage || project.language,
+                cue.candidates.indexOf(candidate) + 1,
+              )}
+              workspace={workspace}
+              cueBusy={cueBusy}
+              storyVideoConfigurationReady={storyVideoConfigurationReady}
+              onSelect={() => patchMusicCue(cue.id, { selectedCandidateId: candidate.id })}
+              onTrailer={() => void openMusicalTrailer(candidate.id)}
+            />
+          ))}
         </div>
       )}
     </article>
+  )
+}
+
+function CueCandidateRow({
+  candidate,
+  selected,
+  label,
+  workspace,
+  cueBusy,
+  storyVideoConfigurationReady,
+  onSelect,
+  onTrailer,
+}: {
+  candidate: StoryMusicCandidate
+  selected: boolean
+  label: string
+  workspace: string
+  cueBusy: boolean
+  storyVideoConfigurationReady: boolean
+  onSelect: () => void
+  onTrailer: () => void
+}) {
+  const { t } = useUiTranslation('storyLab')
+  const playable = Boolean(candidate.source.trim())
+  const phase = candidate.executionPhase
+  const phaseLabel = candidate.status === 'failed'
+    ? t('music.candidateFailed')
+    : t(`music.executionPhase.${phase || 'prepared'}`)
+  const meta = playable && candidate.durationSeconds
+    ? `${candidate.durationSeconds.toFixed(1)}s`
+    : (playable ? t('music.durationOnPlayback') : phaseLabel)
+  return (
+    <div className={`rounded border p-2 space-y-1.5 ${selected ? 'border-pink-400 bg-pink-500/5' : 'border-border'}`}>
+      <button type="button" className="w-full flex items-center justify-between gap-2 text-left text-[10px]"
+        onClick={onSelect}>
+        <span className="text-text-primary">{label} · {candidate.model}</span>
+        <span className="text-text-muted">{meta}</span>
+      </button>
+      {playable ? (
+        <audio src={api.getPlayableFileUrl(candidate.source, candidate.name, workspace)} controls preload="metadata" className="w-full h-8" />
+      ) : (
+        <p className="text-[9px] text-text-muted">{phaseLabel}</p>
+      )}
+      {playable ? (
+        <button className={`${button} w-full`} disabled={cueBusy || !storyVideoConfigurationReady}
+          onClick={onTrailer}>
+          <Film size={12} /> {t('music.useInTrailer')}
+        </button>
+      ) : null}
+    </div>
   )
 }

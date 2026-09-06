@@ -56,6 +56,8 @@ FIELD CONTENT
 - non_diegetic_music: audience-only music when requested; otherwise N/A.
 
 DIALOGUE
+- In CREATIVE mode, supporting dialogue may surround the requested lines when
+  duration permits; explicit silence and "only these lines" always take priority.
 - Copy every supplied quoted line verbatim before planning the visuals. Every copied line must
   appear exactly once inside a <d> block, in source order, adjacent to its true speaker.
 - Use this direct form for a referenced on-screen speaker:

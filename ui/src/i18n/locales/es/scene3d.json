@@ -1,4 +1,18 @@
 {
+  "engines": {
+    "unavailable": "No compatible",
+    "nativePbr": "Materiales PBR nativos y salida GLB. Los controles de Hunyuan Paint y retexturizado no se aplican.",
+    "resolution": "Resolución 3D",
+    "lowVram": "Modo de VRAM reducida",
+    "lowVramUnavailable": "Este adaptador de TRELLIS.2 no expone descarga de modelos a CPU.",
+    "fov": "FOV de cámara (radianes)",
+    "fovHelp": "0 estima la cámara con MoGe; valores manuales: 0.01–3.13 radianes.",
+    "fovUnavailable": "El FOV manual sólo está disponible para Pixal3D.",
+    "cameraContract": "Multiview no disponible en esta integración: Pixal3D requiere cámaras calibradas y pesos específicos, no las cuatro vistas de Hunyuan.",
+    "singleImage": "La selección no admite multiview. Sólo se envía la imagen frontal; las demás vistas se conservan deshabilitadas.",
+    "imageOnly": "Se requiere una imagen. Este motor no utiliza prompts de texto.",
+    "hunyuanOnly": "Presets y parámetros avanzados de Hunyuan deshabilitados; utiliza los controles del motor."
+  },
   "views": {
     "front": "Frontal",
     "left": "Izquierda",
@@ -83,6 +97,8 @@
     "auto": "Auto · generar lo que falte",
     "manualHelp": "Añade placas y GLB con vistas previas y pide al LLM que componga. Edita la escena y luego Graba.",
     "autoHelp": "Describe la escena con naturalidad. HocusPocus planifica sujetos 3D reutilizables, placas, cámara y efectos; revisa el plan antes de generar.",
+    "noVideoGeneration": "No generar clips de vídeo",
+    "noVideoGenerationHelp": "Aún se pueden generar imágenes, audio y recursos 3D cuando hagan falta. Los clips de vídeo existentes se permiten y se reutilizan.",
     "howTitle": "Cómo describir una escena",
     "howBody": "Menciona los sujetos que deben conservar su identidad, las acciones en orden, el entorno y, si quieres, cámara, duración o formato. Personajes, vehículos y objetos en movimiento se convierten en recursos 3D reutilizables; un entorno fijo, en una placa; niebla, nieve y lluvia, en efectos.",
     "images": "Imágenes",
@@ -134,13 +150,18 @@
     "resolving": "Resolviendo recursos y audio (genera solo lo que falte)…",
     "mounted": "Plano «{{name}}» montado. Ajústalo en el inspector y luego Graba.",
     "mountedEdit": "Plano «{{name}}» montado. Edítalo libremente y luego Graba.",
+    "policyError": {
+      "generationForbidden": "No se puede generar {{kind}} «{{assetId}}» con la política {{policy}}. Proporciona un recurso existente.",
+      "unknown": "Esta escena usa una política de generación desconocida y se ha bloqueado."
+    },
+    "typeAudio": "Audio",
     "embeddedClips": "Clips esqueléticos incrustados: {{clips}}."
   },
   "hunyuan": {
-    "title": "Hunyuan3D Studio",
+    "title": "Estudio 3D local",
     "titleMeshy": "Meshy Studio",
     "titleHi3d": "Hi3D Studio",
-    "subtitle": "Geometría nativa, reconstrucción multi-vista y materiales PBR.",
+    "subtitle": "Geometría y materiales con entradas adaptadas a cada modelo.",
     "subtitleRemote": "Imagen/texto a 3D remoto. Cambia el valor por defecto en Ajustes → Integraciones.",
     "vramBadge": "VRAM liberada tras cada trabajo",
     "generateModel": "Generar modelo",

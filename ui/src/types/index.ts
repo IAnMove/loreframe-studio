@@ -577,6 +577,9 @@ export interface SceneLayer {
 export interface Scene {
   version: 1
   name: string
+  /** Recipe asset-job restriction, retained through save/reload. Not a global
+   * permission system for unrelated Wizard/Studio commands. */
+  generationPolicy?: import('../lib/sceneGenerationPolicy').SceneGenerationPolicy
   width: number
   height: number
   /** Preview, timeline and browser capture sampling rate. Defaults to 30 for legacy scenes. */

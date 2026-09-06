@@ -155,6 +155,18 @@ function normalizeMusicCandidateStatus(value: unknown, source: string): StoryMus
   return source ? 'ready' : undefined
 }
 
+function normalizeMusicExecutionPhase(value: unknown): StoryMusicCandidate['executionPhase'] | undefined {
+  if (
+    value === 'prepared'
+    || value === 'accepted'
+    || value === 'waiting_resource'
+    || value === 'executing'
+    || value === 'cancelling'
+    || value === 'terminal'
+  ) return value
+  return undefined
+}
+
 function keepMusicCandidate(id: string, source: string, status: StoryMusicCandidate['status']): boolean {
   if (!id && !source) return false
   return Boolean(source) || status === 'pending' || status === 'failed'
@@ -196,6 +208,7 @@ function normalizeMusicCandidate(value: unknown, now: string): StoryMusicCandida
     durationSeconds: Math.max(0, Number(candidate.durationSeconds) || 0),
     createdAt: text(candidate.createdAt, now),
     status,
+    executionPhase: normalizeMusicExecutionPhase(candidate.executionPhase),
     taskId: optionalText(candidate.taskId),
     rootTaskId: optionalText(candidate.rootTaskId),
     provenance: normalizeStoryProvenance(candidate.provenance),

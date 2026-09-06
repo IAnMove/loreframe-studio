@@ -83,7 +83,10 @@ SPEAKERS AND DIALOGUE
 - Put only the language tag and literal spoken words inside the dialogue tag:
   <d>[English] Exact words spoken.</d>
 - If the user supplies dialogue, preserve every word and punctuation mark
-  verbatim. Do not paraphrase, translate, or add another spoken line.
+  verbatim. Do not paraphrase or translate them. In FAITHFUL mode, do not add
+  another spoken line. In CREATIVE mode, supporting character-specific lines
+  may surround these immutable anchors if duration permits, unless the user
+  explicitly asks for only those lines or silence.
 - Put those words only inside their <d> blocks. Never duplicate them as
   ordinary quotation-mark text elsewhere in the prompt.
 - Never replace requested words with "speaks," "talks," "they discuss," or
@@ -108,8 +111,9 @@ SPEAKERS AND DIALOGUE
   short turns with reactions between them.
 - Do not use speech merely to occupy unused time. After the final line, assign
   the remaining seconds to concrete reactions or movement and explicitly state
-  that the people remain silent with their mouths closed. This prevents H3
-  from inventing extra speech-like gibberish.
+  that the people remain silent with their mouths closed. Keep that direction
+  concise; it requests a silent ending but does not guarantee one. Do not add
+  a long prose schedule or repeated prohibitions about unwanted speech.
 - If nobody is asked to speak, do not invent dialogue or speaker IDs.
 - When multiple already-numbered speakers talk or sing together, use a
   compound ID such as (S1,S2). Characters who never vocalize receive no ID.

@@ -255,7 +255,7 @@ class TestH3DirectorDialogueCompiler(unittest.TestCase):
         self.assertEqual(validate_h3_prompt_contract(fl2va, mode="fl2va"), [])
         self.assertEqual(validate_h3_prompt_contract(l2va, mode="l2va"), [])
 
-    def test_short_dialogue_is_timed_and_silent_before_and_after(self):
+    def test_short_dialogue_preserves_literal_line_without_silence_prose(self):
         prompt, _ = compile_h3_official_prompt(
             "Ana looks toward the door and says: "
             "<d>[Spanish] Ya están aquí.</d>. "
@@ -275,9 +275,10 @@ class TestH3DirectorDialogueCompiler(unittest.TestCase):
             duration_seconds=5.167,
         )
 
-        self.assertIn("VOCAL TIMELINE LOCK", prompt)
-        self.assertIn("spoken exactly once", prompt)
-        self.assertIn("remain silent", prompt.casefold())
+        self.assertNotIn("VOCAL TIMELINE LOCK", prompt)
+        self.assertNotIn("spoken exactly once", prompt)
+        self.assertNotIn("remain silent", prompt.casefold())
+        self.assertEqual(prompt.count("<d>"), 1)
         self.assertIn("<d>[Spanish] Ya están aquí.</d>", prompt)
         self.assertEqual(
             validate_h3_prompt_contract(

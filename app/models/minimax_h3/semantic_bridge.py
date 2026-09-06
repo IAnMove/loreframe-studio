@@ -49,7 +49,9 @@ def normalize_request(body: dict, model_def: dict) -> None:
     magnitude_key = 'minimax_h3_semantic_bridge_magnitude'
     if alpha_key not in body and magnitude_key not in body:
         return
-    mode = str(body.get(magnitude_key) or 'per_token')
+    mode = body.get(magnitude_key, 'per_token')
+    if mode is None:
+        mode = 'per_token'
     body[alpha_key] = validate_options(body.get(alpha_key, 0), mode, model_def,
                                        str(body.get('model_type') or ''))
     body[magnitude_key] = mode

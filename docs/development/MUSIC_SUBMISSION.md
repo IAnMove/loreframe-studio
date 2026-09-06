@@ -40,3 +40,9 @@ a key.
 `GET /api/v1/stories/music-candidates/jobs/{job_id}` remains the poll URL.
 TaskRegistry owns the task row. This module does not download models or talk
 to a GPU.
+
+Publishing reserved IDs to disk and Story is
+[MUSIC_FINALIZATION.md](MUSIC_FINALIZATION.md). Model availability and
+backend compilation are [MUSIC_MODEL_CONTRACT.md](MUSIC_MODEL_CONTRACT.md).
+The frozen spec keeps the full caption; MiniMax's 300-character cap applies
+only when compiling the remote request.
