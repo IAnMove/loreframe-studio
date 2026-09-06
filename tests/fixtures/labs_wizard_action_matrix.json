@@ -96,26 +96,26 @@
     {
       "id": "fused_dropped_by_model_for_manifest",
       "phase": "L1",
-      "summary": "model_for_manifest keeps legacy and _full but maps fused IDs to minimax_h3 / minimax_h3_ref2va.",
-      "evidence": "app/services/series_render.py model_for_manifest; consumed by build_h3_generation_params and the generation runtime adapter."
+      "summary": "Addressed: model_for_manifest keeps fused IDs; references resolve to minimax_h3_ref2va_fused_turbo and frames stay minimax_h3_fused_turbo. Runtime send uses the same helper.",
+      "evidence": "tests/test_series_render.py test_model_for_manifest_resolves_family_variant_and_strategy; _launch_runtime model_for_manifest"
     },
     {
       "id": "partial_global_profile_guard",
       "phase": "L2",
-      "summary": "SeriesLabPanel global-profile equality omits writingBaseUrl, flowShift, audioShift, modelProfile.",
-      "evidence": "ui/src/features/series/SeriesLabPanel.tsx"
+      "summary": "Addressed: seriesProviderMatchesGlobal compares writingBaseUrl, flowShift, audioShift and modelProfile; Setup and the Lab effect share seriesProviderFieldsFromProfile.",
+      "evidence": "ui/tests/productionProfile.test.mjs; ui/src/lib/productionProfile.ts"
     },
     {
       "id": "approve_all_replaces_chosen_takes",
       "phase": "L3",
-      "summary": "Approve all / review_series_attempts all_latest can replace an already chosen take with a newer attempt.",
-      "evidence": "SeriesReviewPanel approvable memo; reviewSeriesAttempts scope all_latest"
+      "summary": "Addressed: bulkApproveSelections with replaceFinals false keeps valid finals. UI pending takes and Wizard all_latest use that policy; replace_latest and explicit selected_latest remain the replace paths.",
+      "evidence": "ui/tests/shotReviewPolicy.test.ts; ui/src/features/series/actions.ts reviewSeriesAttempts"
     },
     {
       "id": "script_shots_dialogue_desync",
       "phase": "L4",
-      "summary": "update_series_episode can change script dialogue while shots.dialogueBeats stay old; shot_generation_prompt uses the old line.",
-      "evidence": "app/services/series_library.py update_series_episode; series_render.shot_generation_prompt"
+      "summary": "Addressed: update_series_episode annotates stale/conflict shots; render refuses them; an explicit syncShotDialogueFromScript operation updates beats without dropping historical attempts.",
+      "evidence": "tests/test_series_shot_dialogue.py; ui/src/features/series/shotDialogueSync.ts"
     },
     {
       "id": "blocked_always_empty",
@@ -144,8 +144,8 @@
     {
       "id": "t2v_double_mode_and_image_requirements",
       "phase": "L9",
-      "summary": "Film card highlights start-frames whenever !directReferenceVideo (also true for T2V). collectProductionIssues(true) can demand images in T2V.",
-      "evidence": "StoryFilmProductionCard; StoryLabPanel productionIssues"
+      "summary": "Addressed: exclusive aria-pressed modes; storyRecipeRequiresVisualIdentities is true only for image_guided. Technical blockers stay visible in automatic workflow.",
+      "evidence": "ui/src/features/stories/storyVisualGuidance.ts; ui/tests/labsWizardL9.test.mjs"
     },
     {
       "id": "voice_bible_not_h3",
