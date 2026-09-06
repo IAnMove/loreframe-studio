@@ -6,7 +6,7 @@
 ## Estado exacto
 
 No todos los pasos están terminados. #168 y el catálogo #169 están mezclados en
-development; #173 galería también está mezclado. C2 tiene PR #175 abierto. No se ha publicado
+development; #173 galería y C2/#175 también están mezclados. No se ha publicado
 main. P01 y posteriores están diseñadas, **no implementadas**.
 
 - PR #168: `feat/wizard-programmatic-video`, base development, HEAD
@@ -36,7 +36,7 @@ Es un checkpoint, no una rama para mezclar de golpe contra development.
 |---|---|---|---|
 | Piloto B #169 | `5f6dc88e` + correcciones posteriores | 24 candidatos/compiladores, SVG/GLB originales, tests | mezclado `39c7fd4f` |
 | Piloto C1 #173 | `72e5cdd8` + `ab55bd9b` | Galería, snapshot exacto, decisiones, 5 E2E | mezclado `e318a1f5` |
-| Piloto C2 #175 | `d10eac6e` (incluye origen `246cb5f8` + hardening) | Build estático, renderer, API cerrada, CSP/cuotas/LAN lectura y 21 tests | PR abierto; revisión independiente pasa, CI/merge pendientes |
+| Piloto C2 #175 | `d10eac6e` (incluye origen `246cb5f8` + hardening) | Build estático, renderer, API cerrada, CSP/cuotas/LAN lectura y 21 tests | CI y revisión independiente pasan; merge `38a90aa6` |
 | Plan | branch `docs/procedural-video-phases` | Roadmap + cámaras + 3 inventarios de 50 + bloque AN de 30 técnicas | documentos/commits; no prestaciones implementadas |
 
 La primera vez que se sube el checkpoint, comprobar con `git ls-remote` que su
@@ -54,9 +54,8 @@ no se abre una cadena de PRs que incluya repetidamente los commits anteriores.
    Mezclar normalmente usando comprobación del SHA esperado, nunca admin bypass.
 4. No volver a aplicar B/C1: #169 y #173 ya están mezclados. Consultar PRs
    actuales para preservar merges externos de otras sesiones.
-5. Continuar C2 en su rama aislada, con pruebas/revisión/CI de HEAD actual;
-   merge normal sólo después. Si hay que reconstruirla, aplicar sólo C2 y su
-   hardening sobre development nuevo, no todo el checkpoint.
+5. C2/#175 ya mezclado en `38a90aa6`: no repetirlo. Su revisión independiente
+   corrigió URLs absolutas incompatibles con CSP y cómputo de cuota de sidecars.
 6. Preparar el PR independiente de documentación desde development actualizado.
 7. Incorporar documentación, P00D selector/referencias y bindings durables; después
    P01 del roadmap, reutilizando el contrato mínimo de assets.
@@ -106,10 +105,9 @@ galería viven en localStorage del navegador y se exportan con «Exportar revisi
 Servidor local de sesión no es persistencia de producción; el puerto puede dejar
 de existir al apagar el proceso/equipo. No prometemos continuidad de esa URL.
 
-La herramienta de C2/#175 (todavía no entregada en development) será
-reproducible después de instalar las dependencias normales:
-`npm --prefix ui run scene:review -- --render`. Lee SCENE_TEMPLATE_REVIEW.md
-(artefacto de #175, pendiente de merge) para
+La herramienta de C2/#175 ya está en development y puede ejecutarse después
+de instalar las dependencias normales:
+`npm --prefix ui run scene:review -- --render`. Lee SCENE_TEMPLATE_REVIEW.md para
 prerrequisitos y LAN. Usa puerto efímero por defecto, no reserves 42003/42004.
 
 Demo previamente aprobada «La noche es nuestra»: servidor `192.168.1.87:43872`,

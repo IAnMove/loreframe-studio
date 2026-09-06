@@ -135,8 +135,8 @@ el transporte/metadata, no un MP4 válido. Los renders reales se verifican con f
 Los 24 originales coral fueron aprobados visualmente y publicados como
 [referencias de estilo/acción](https://github.com/IAnMove/hocuspocus/releases/tag/procedural-style-reference-v1),
 no release de aplicación. No reescribir sus sidecars ni atribuirles cambios futuros.
-B (#169) y C1 (#173) ya están mezclados. Continuar C2 (#175) desde development
-actualizado, sin volver a aplicar los commits de B/C1.
+B (#169), C1 (#173) y C2 (#175, `38a90aa6`) ya están mezclados. Continuar desde
+development actualizado, sin volver a aplicar sus commits.
 Ver P00D del roadmap para selector con vídeos de referencia y assets de Library
 reemplazables. La prueba pintada adicional no sustituye estos originales.
 

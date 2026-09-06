@@ -164,7 +164,7 @@ Riesgo medio. Owner principal en integración; Luna en arte/tests/galería acota
   cinemaScenes,musicScenes,spaceScenes,demoScenes,demoArtwork,demoShips}` y tests.
 - [x] PR piloto C1 (#173): galería/ruta/editor-handoff, decisiones versionadas y E2E
   en `ui/e2e/specs`, no una carpeta que CI no descubre.
-- [ ] PR piloto C2: tooling local reproducible, API cerrada y tests HTTP. Depende
+- [x] PR piloto C2 (#175, `38a90aa6`): tooling local reproducible, API cerrada y tests HTTP. Depende
   de C1; separado para no unir servidor de QA y UI en un PR demasiado grande.
 - [ ] Comprobar 24 snapshots, reproducción/seek, cambio de assets, guardado/reapertura.
 - [x] Publicar originales fuera de git: referencias v1, 74 assets remotos con
@@ -563,5 +563,4 @@ la falta de revisión de código no autoriza merge.
   no sustituto de nuestros límites y pruebas de importación.
 - Documentos locales: VIDEO3D_PRODUCTION_PLAN.md, VIDEO3D_TEMPLATE_REVIEW_PLAN.md,
   WIZARD_PROGRAMMATIC_VIDEO.md, WIZARD_WORKFLOW_RUNTIME.md, LOCAL_VALIDATION.md,
-  CODE_HEALTH.md y SCENE_TEMPLATE_REVIEW.md (este último llega con C2/#175;
-  pendiente de merge, no asumir que existe antes).
+  CODE_HEALTH.md y SCENE_TEMPLATE_REVIEW.md (incluido con C2/#175).
