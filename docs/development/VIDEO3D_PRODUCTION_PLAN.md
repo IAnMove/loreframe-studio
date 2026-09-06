@@ -110,12 +110,12 @@ compilación/animación, no inteligibilidad, interpretación ni precisión foné
 Archivos: este plan, guía de baseline, fixtures declarativos y tests de Video 3D.
 No tocar producción, workflows, launchers, store ni runtime.
 
-- [ ] Guardar alcance, restricciones, dependencias y protocolo de reanudación.
-- [ ] Añadir receta de tres planos y dos Character Kits mínimos sin medios externos.
-- [ ] Probar orden, duración, movimientos y round-trip de escenas.
-- [ ] Probar aislamiento de bocas/texto español e inglés y rechazo de fuentes ausentes.
-- [ ] Reproducir baseline con suite focalizada y checks locales sin modelos.
-- [ ] Registrar mediciones disponibles; render/memoria no medidos siguen pendientes.
+- [x] Guardar alcance, restricciones, dependencias y protocolo de reanudación.
+- [x] Añadir receta de tres planos y dos Character Kits mínimos sin medios externos.
+- [x] Probar orden, duración, movimientos y round-trip de escenas.
+- [x] Probar aislamiento de bocas/texto español e inglés y rechazo de fuentes ausentes.
+- [x] Reproducir baseline con suite focalizada y checks locales sin modelos.
+- [x] Registrar mediciones disponibles; render/memoria no medidos siguen pendientes.
 - [ ] Commit, PR, CI/revisión actual y merge comprobados por separado.
 
 Aceptación: otra máquina con dependencias de desarrollo reproduce los contratos
