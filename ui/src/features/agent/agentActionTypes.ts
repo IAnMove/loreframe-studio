@@ -41,6 +41,7 @@ export const AGENT_ACTION_TYPES = [
   'review_series_attempts',
   'assemble_series_episode',
   'commit_series_canon',
+  'stage_series_comic',
   'open_3d_scene',
   'save_3d_scene',
   'export_3d_scene',

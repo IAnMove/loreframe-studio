@@ -280,6 +280,18 @@ export interface AgentStageStoryComicAction extends AgentLanguageAwareAction {
   confirm: true
 }
 
+export interface AgentStageSeriesComicAction extends AgentLanguageAwareAction {
+  type: 'stage_series_comic'
+  seriesTitle: string
+  targetEpisodeTitle: string
+  seriesId: string
+  episodeId: string
+  title: string
+  pageCount: number
+  panelsPerPage: number
+  confirm: true
+}
+
 export interface AgentStageStoryVideoAction extends AgentLanguageAwareAction {
   type: 'stage_story_video'
   targetStoryTitle: string
@@ -620,6 +632,7 @@ export type AgentAction = AgentOpenTabAction
   | AgentReviewSeriesAttemptsAction
   | AgentAssembleSeriesEpisodeAction
   | AgentCommitSeriesCanonAction
+  | AgentStageSeriesComicAction
   | AgentOpen3dSceneAction
   | AgentSave3dSceneAction
   | AgentExport3dSceneAction
@@ -1968,6 +1981,15 @@ function comicPanelTarget(
   }
 }
 
+const HOW_TO_GENERATE = /\b(?:c[oó]mo(?:\s+(?:lo|la|las|los|puedo|se))?\s+(?:genero|generar|lanzo|lanzar|creo|crear|hago|hacer)|how\s+do\s+i\s+(?:generate|create|launch|start|make))\b/i
+
+export function isHowToGenerateQuestion(request: string): boolean {
+  const text = request.trim()
+  if (!text || text.length > 240) return false
+  if (!HOW_TO_GENERATE.test(text)) return false
+  return /[?]/.test(text) || /^(?:c[oó]mo|how)\b/i.test(text)
+}
+
 export function isComicLaunchHowQuestion(request: string, history: ExampleConversation[] = []): boolean {
   const text = request.trim()
   if (!text || !COMIC_LAUNCH_HOW.test(text)) return false
@@ -2116,6 +2138,16 @@ export async function reconcileAgentTurnWithRequest(
         'Las viñetas entran en la **misma GPU**, una detrás de otra, no en paralelo. No es un segundo motor.',
       ].join('\n\n'),
       actions: [{ type: 'open_tab', tab: 'comics' }],
+    }
+  }
+  if (isHowToGenerateQuestion(request)) {
+    return {
+      ...turn,
+      actions: turn.actions.filter(action => (
+        action.type === 'open_tab'
+        || action.type === 'open_story_section'
+        || action.type === 'open_series_section'
+      )),
     }
   }
   const targetedComicPanel = comicPanelTarget(request, history)
@@ -2459,7 +2491,28 @@ export async function reconcileAgentTurnWithRequest(
 
 export const HOCUSPOCUS_REGISTERED_ACTION_SCHEMAS = registeredCapabilitySchemas()
 
-export const HOCUSPOCUS_AGENT_RESPONSE_SCHEMA: Record<string, unknown> = {
+function mergeRegisteredActionProperties(schema: Record<string, unknown>): Record<string, unknown> {
+  const items = (schema as {
+    properties?: { actions?: { items?: { properties?: Record<string, unknown> } } }
+  }).properties?.actions?.items
+  if (!items?.properties) return schema
+  const properties = { ...items.properties }
+  for (const capabilitySchema of HOCUSPOCUS_REGISTERED_ACTION_SCHEMAS) {
+    const declared = capabilitySchema && typeof capabilitySchema === 'object'
+      ? (capabilitySchema as { properties?: Record<string, unknown> }).properties
+      : undefined
+    if (!declared) continue
+    for (const [key, spec] of Object.entries(declared)) {
+      if (key === 'type' || key in properties) continue
+      properties[key] = spec
+    }
+  }
+  items.properties = properties
+  items.properties.type = { type: 'string', enum: listCapabilities().map(item => item.name) }
+  return schema
+}
+
+export const HOCUSPOCUS_AGENT_RESPONSE_SCHEMA: Record<string, unknown> = mergeRegisteredActionProperties({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -2523,6 +2576,8 @@ export const HOCUSPOCUS_AGENT_RESPONSE_SCHEMA: Record<string, unknown> = {
           world_summary: { type: 'string', maxLength: 3_000 },
           language: { type: 'string', maxLength: 120 },
           series_title: { type: 'string', maxLength: 300 },
+          series_id: { type: 'string', maxLength: 160 },
+          episode_id: { type: 'string', maxLength: 160 },
           series_premise: { type: 'string', maxLength: 3_000 },
           series_logline: { type: 'string', maxLength: 2_000 },
           episode_title: { type: 'string', maxLength: 300 },
@@ -2693,6 +2748,10 @@ export const HOCUSPOCUS_AGENT_RESPONSE_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ['reply', 'actions'],
+})
+
+export function wizardLlmRequestSchema(): Record<string, unknown> {
+  return HOCUSPOCUS_AGENT_RESPONSE_SCHEMA
 }
 
 export function buildAgentAppSnapshot(contextOptions: BuildWizardContextOptions = {}): AgentAppSnapshot {

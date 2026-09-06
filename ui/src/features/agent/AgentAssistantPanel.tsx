@@ -7,8 +7,8 @@ import { buildAgentTurnPrompt, HOCUSPOCUS_AGENT_SYSTEM_PROMPT, type AgentConvers
 import {
   buildAgentAppSnapshot,
   executeAgentActions,
-  HOCUSPOCUS_AGENT_RESPONSE_SCHEMA,
   humanReply,
+  wizardLlmRequestSchema,
   parseAgentTurn,
   protectUserVerbatimSegments,
   reconcileAgentTurnWithRequest,
@@ -452,7 +452,7 @@ export function AgentAssistantPanel({ workspace, tasks, onClose, embedded = fals
         })),
         max_new_tokens: 3_200,
         temperature: .1,
-        json_schema: HOCUSPOCUS_AGENT_RESPONSE_SCHEMA,
+        json_schema: wizardLlmRequestSchema(),
       })
       if (!mountedRef.current) return
       const proposedTurn = parseAgentTurn(answer)
