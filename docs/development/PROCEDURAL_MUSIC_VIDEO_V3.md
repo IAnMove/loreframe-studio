@@ -136,7 +136,7 @@ Serializar cambios en los grandes paneles; no usar varios agentes sobre ellos.
 
 | Bloque | Implementado local | Commit | PR | CI | Revisión | Merge | Real / artístico |
 |---|---|---|---|---|---|---|---|
-| A | Catálogo, compiladores, UI y tests | — | — | — | En curso | — | 3 pilotos MP4; pack completo/artístico pendiente |
+| A | Catálogo, compiladores, UI y tests | `80513765` | #184 abierto | En curso | Hallazgos de catálogo corregidos; D0 identificado | — | 24 ensayos MP4 reales; revisión artística pendiente |
 | B | Pendiente | — | — | — | — | — | Pendiente |
 | C | Pendiente | — | — | — | — | — | Pendiente |
 | D | Pendiente | — | — | — | — | — | Pendiente |
