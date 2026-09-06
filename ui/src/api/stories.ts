@@ -53,6 +53,7 @@ export interface StoryMusicCandidateRequest {
   reference_audio_filename?: string
   instrumental?: boolean
   workspace?: string
+  idempotency_key?: string
   provenance?: {
     actor?: 'user' | 'wizard' | 'system' | 'unknown'
     capability?: string

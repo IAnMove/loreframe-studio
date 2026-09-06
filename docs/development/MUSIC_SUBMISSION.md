@@ -32,6 +32,10 @@ Same idempotency key + same spec hash → same `job_id` / `task_id` /
 **409**. IDs are reserved **before** `after_persist` (worker start). A worker
 start failure does not delete the reservation.
 
+Story cue generate binds the key to the reserved candidate
+(`story-song:{workspace}:{project}:{cue}:{candidate}`) so a reload or second
+tab retranmits the same attempt instead of minting a second job for that row.
+
 Story rows are looked up by ID in `.story-library-v1.json`. A title is never
 a key.
 

@@ -145,6 +145,18 @@ function mockStoryFetch(t, workspace, savedLibrary, options = {}) {
   return { putBodies, events, get generationRequest() { return generationRequest } }
 }
 
+test('story song idempotency keys stay bound to the reserved candidate', async () => {
+  const { storySongIdempotencyKey } = await import('../src/features/stories/storySongGeneration.ts')
+  assert.equal(
+    storySongIdempotencyKey('ws', 'story-1', 'cue-1', 'song-9'),
+    'story-song:ws:story-1:cue-1:song-9',
+  )
+  assert.notEqual(
+    storySongIdempotencyKey('ws', 'story-1', 'cue-1', 'song-9'),
+    storySongIdempotencyKey('ws', 'story-1', 'cue-1', 'song-10'),
+  )
+})
+
 test('musicJobExecutionPhase maps durable MiniMax statuses', async () => {
   const { musicJobExecutionPhase } = await import('../src/features/stories/storySongJobPhases.ts')
   assert.equal(musicJobExecutionPhase({ status: 'queued', phase: 'queued' }), 'accepted')
@@ -449,6 +461,10 @@ test('a failed job persist still watches the accepted MiniMax job', { concurrenc
   })
   assert.ok(mock.events.includes('put-fail'))
   assert.ok(mock.events.includes('get-job'))
+  assert.equal(
+    mock.generationRequest.idempotency_key,
+    `story-song:${workspace}:${project.id}:${cue.id}:${generated.candidateId}`,
+  )
   assert.equal(generated.candidate.status, 'ready')
   assert.equal(savedLibrary.value.projects[project.id].music.cues[0].candidates[0].status, 'ready')
 })
