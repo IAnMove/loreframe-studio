@@ -13,6 +13,7 @@ export const AGENT_ACTION_TYPES = [
   'open_story_section',
   'open_series_section',
   'prepare_video',
+  'prepare_programmatic_video',
   'prepare_image',
   'prepare_audio',
   'download_model',

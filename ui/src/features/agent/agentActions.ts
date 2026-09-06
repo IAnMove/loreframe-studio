@@ -61,6 +61,8 @@ import {
   normalizeConversationLanguageTag,
   parseRegisteredCapability,
   registeredCapabilitySchemas,
+  reconcileProgrammaticVideoRequest,
+  type AgentPrepareProgrammaticVideoAction,
   type AgentTab,
   type LanguageIntent,
 } from './capabilityRegistry'
@@ -587,6 +589,7 @@ export interface AgentUpdateWorkspaceCollectionAction {
 }
 
 export type AgentAction = AgentOpenTabAction
+  | AgentPrepareProgrammaticVideoAction
   | AgentOpenStorySectionAction
   | AgentOpenSeriesSectionAction
   | AgentPrepareVideoAction
@@ -2050,6 +2053,8 @@ export async function reconcileAgentTurnWithRequest(
   turn: AgentTurn,
   history: ExampleConversation[] = [],
 ): Promise<AgentTurn> {
+  const programmaticTurn = reconcileProgrammaticVideoRequest(request, turn)
+  if (programmaticTurn) return programmaticTurn
   const { maybeExampleTurn } = await import('./agentExamples')
   const exactEpisodeTitle = request.match(/\bepisodio\s+titulad[oa]\s+(?:exactamente\s+)?["“]([^"”]+)["”]/i)?.[1]?.trim()
   const preserveExactEpisodeTitle = (candidate: AgentTurn): AgentTurn => exactEpisodeTitle

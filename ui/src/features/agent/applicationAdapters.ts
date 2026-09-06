@@ -159,6 +159,7 @@ export interface VideoclipAdapter {
 
 export interface Video3DAdapter {
   open(animate?: boolean): Promise<AdapterOutcome>
+  prepareProgrammaticVideo(action: import('./programmaticVideo').AgentPrepareProgrammaticVideoAction): Promise<AdapterOutcome>
   applyRhythm(action: AgentApply3dRhythmAction): Promise<AdapterOutcome>
   run(request: AgentSceneWorkflowRequest): Promise<AdapterOutcome>
   control(request: AgentSceneControlRequest): Promise<AdapterOutcome>
@@ -875,6 +876,14 @@ export function createDefaultApplicationAdapters(): WizardApplicationAdapters {
   }
   adapters.video3d = {
     open: animate => navigate(animate ? 'animate_3d' : 'video_3d'),
+    async prepareProgrammaticVideo(action) {
+      const workspace = useStore.getState().activeWorkspace || 'default'
+      const { requestProgrammaticVideoPreparation } = await import('./programmaticVideoHandoff')
+      const navigation = await navigate('video_3d')
+      const prepared = await requestProgrammaticVideoPreparation({ ...action, workspace })
+      if ((useStore.getState().activeWorkspace || 'default') !== workspace) throw new Error('El workspace cambió durante la preparación de Video3D.')
+      return { ...navigation, message: prepared.message, metadata: { generationPolicy: prepared.policy, stage: 'prepared', generated: false } }
+    },
     async applyRhythm(action) {
       const navigation = await navigate('video_3d')
       const message = await requestAgentSceneRhythm(action)
