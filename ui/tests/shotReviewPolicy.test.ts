@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { bulkApproveSelections } from '../src/features/series/shotReviewPolicy.ts'
+import { bulkApproveSelections, missingAssemblyShotOrders } from '../src/features/series/shotReviewPolicy.ts'
 
 const assets = new Set(['ok-a', 'ok-b', 'ok-new'])
 const hasAsset = (id: string) => assets.has(id)
@@ -41,6 +41,26 @@ test('bulk approve fills pending shots and keeps an existing final', () => {
     { shotId: 'shot-2', attemptId: 'latest' },
   ])
   assert.equal(replace.replaced, 1)
+})
+
+test('assembly lists missing shot orders and does not treat incomplete takes as ready', () => {
+  const shots = [
+    {
+      order: 1,
+      approvedAttemptId: 'ok',
+      attempts: [{ id: 'ok', status: 'completed', outputAssetIds: ['ok-a'] }],
+    },
+    {
+      order: 2,
+      approvedAttemptId: 'broken',
+      attempts: [{ id: 'broken', status: 'completed', outputAssetIds: ['missing'] }],
+    },
+    {
+      order: 3,
+      attempts: [{ id: 'latest', status: 'completed', outputAssetIds: ['ok-b'] }],
+    },
+  ]
+  assert.deepEqual(missingAssemblyShotOrders(shots, hasAsset), [2, 3])
 })
 
 test('explicit later attempt can still replace a final when replaceFinals is set', () => {
