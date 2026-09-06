@@ -7,11 +7,14 @@
  * the editor while it remains explicitly unapproved.
  */
 
+import { MUSIC_MOTION_TEMPLATES } from './musicMotionCatalog'
+
 export const CATALOG_VERSION = '2026-09-review-1' as const
+export const EXPANDED_CATALOG_VERSION = '2026-09-music-motion-1' as const
 
 export type TemplateFamily = 'cinema' | 'music' | 'space'
 
-export type TemplateSlotName = 'hero' | 'plate' | 'prop' | 'foreground'
+export type TemplateSlotName = 'hero' | 'plate' | 'prop' | 'foreground' | 'subject_1' | 'subject_2' | 'background' | 'prop_1'
 
 export type SceneTemplateSlot = {
   readonly id: TemplateSlotName
@@ -31,6 +34,8 @@ export type SceneTemplateDefinition = {
   readonly limits: readonly string[]
   readonly promptExample: string
   readonly defaultDuration: number
+  readonly motionIntensity?: 'moderate' | 'high'
+  readonly rhythmic?: boolean
 }
 
 const IMAGE = ['image'] as const
@@ -488,8 +493,16 @@ export const CANDIDATE_SCENE_TEMPLATES = [
   ),
 ] as const satisfies readonly SceneTemplateDefinition[]
 
+/** Original references stay versioned separately: never rewrite their hashes or
+ * infer that a new choreography has an approved reference because it compiles. */
+export const ALL_SCENE_TEMPLATES: readonly SceneTemplateDefinition[] = [...CANDIDATE_SCENE_TEMPLATES, ...MUSIC_MOTION_TEMPLATES]
+
+export function templateCatalogVersion(template: SceneTemplateDefinition): string {
+  return template.slots.some(slot => slot.id === 'subject_1') ? EXPANDED_CATALOG_VERSION : CATALOG_VERSION
+}
+
 export function getCandidateSceneTemplate(id: string): SceneTemplateDefinition {
-  const template = CANDIDATE_SCENE_TEMPLATES.find(candidate => candidate.id === id)
+  const template = ALL_SCENE_TEMPLATES.find(candidate => candidate.id === id)
   if (!template) {
     throw new Error(`Unknown candidate scene template: ${id}`)
   }

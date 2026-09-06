@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Scene } from '../../types'
-import { CATALOG_VERSION, CANDIDATE_SCENE_TEMPLATES, getCandidateSceneTemplate } from './catalog'
+import { EXPANDED_CATALOG_VERSION as CATALOG_VERSION, ALL_SCENE_TEMPLATES as CANDIDATE_SCENE_TEMPLATES, getCandidateSceneTemplate } from './catalog'
 import { candidateDemoScene } from './demoScenes'
 import { loadRenderedReferenceScene } from './previewSnapshot'
+import { loadCatalogReview } from './catalogReview'
 import {
   createReviewChoices,
   createReviewExport,
-  loadReviewChoicesResult,
   saveReviewChoices,
   updateReviewChoice,
   type ReviewChoice,
@@ -32,7 +32,7 @@ const initialReview = () => {
   const blank = createReviewChoices(CATALOG_VERSION, refs)
   if (typeof window === 'undefined') return { state: blank }
   try {
-    return loadReviewChoicesResult(window.localStorage, CATALOG_VERSION, refs)
+    return loadCatalogReview(window.localStorage)
   } catch {
     return { state: blank, warning: 'No se pudo abrir el almacenamiento; las decisiones quedan pendientes en esta sesión.' }
   }
@@ -156,7 +156,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300">Video3D · catálogo candidato</p>
             <h2 className="mt-1 text-lg font-semibold text-text-primary">Escenas programáticas reutilizables</h2>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-text-secondary">
-              Explora 24 gramáticas editables con el compositor real. Son candidatas: una preview o un PR no las aprueba automáticamente.
+              Explora {CANDIDATE_SCENE_TEMPLATES.length} gramáticas editables con el compositor real. Son candidatas: una preview o un PR no las aprueba automáticamente.
             </p>
           </div>
           <button type="button" onClick={exportReviews} className="rounded-lg border border-violet-300/40 bg-violet-400/10 px-3 py-2 text-[11px] font-medium text-violet-100 hover:bg-violet-400/20">
@@ -211,7 +211,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                       {activePreview === template.id
                         ? <video className="h-full w-full" controls autoPlay muted playsInline loop preload="none" src={previewUrl} aria-label={`Preview coral de ${template.title}`} onError={() => setPreviewErrors(current => ({ ...current, [template.id]: true }))} />
                         : <img loading="lazy" src={`${previewBaseUrl}/${template.id}.png`} alt={`Fotograma de revisión: ${template.title}`} className="h-full w-full object-contain" onError={event => { event.currentTarget.style.visibility = 'hidden' }} />}
-                      {activePreview !== template.id && <button type="button" onClick={() => setActivePreview(template.id)} className="absolute inset-0 flex items-center justify-center bg-black/10 text-lg font-semibold text-white hover:bg-black/25"><span className="rounded-full border border-white/40 bg-black/70 px-5 py-3">▶ Ver escena · 4 s</span></button>}
+                      {activePreview !== template.id && <button type="button" onClick={() => setActivePreview(template.id)} className="absolute inset-0 flex items-center justify-center bg-black/10 text-lg font-semibold text-white hover:bg-black/25"><span className="rounded-full border border-white/40 bg-black/70 px-5 py-3">▶ Ver escena · {template.defaultDuration} s</span></button>}
                       {previewErrors[template.id] && <p role="alert" className="absolute inset-x-0 bottom-0 bg-black/85 p-3 text-xs text-amber-200">Preview no renderizada en esta instalación</p>}
                     </div>
                     <div className="space-y-3 p-3">
@@ -220,7 +220,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                         <div>
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Slots</p>
                           <ul className="mt-1 space-y-1 text-[10px] text-text-secondary">
-                            {template.slots.map(slot => <li key={slot.id}><span className="font-medium text-text-primary">{slot.id}</span> · {slot.required ? 'obligatorio' : 'opcional'} · {slot.kinds.join(', ')}</li>)}
+                            {template.slots.map(slot => <li key={slot.id}><span className="font-medium text-text-primary">{slot.id}</span> · {slot.required ? 'obligatorio' : 'opcional'} · {slot.kinds.join(', ')}<p className="mt-0.5 text-text-muted">{slot.description}</p></li>)}
                           </ul>
                         </div>
                         <div>
@@ -244,7 +244,7 @@ export function SceneTemplateGallery({ onOpenScene, previewBaseUrl = '/scene-tem
                       <div className="flex flex-wrap items-center gap-2">
                         <button type="button" data-testid={`open-scene-${template.id}`} disabled={loadingReference === template.id} onClick={() => void openReference(template.id)} className="rounded-lg bg-violet-500 px-3 py-2 text-[10px] font-semibold text-white hover:bg-violet-400 disabled:opacity-50">{loadingReference === template.id ? 'Cargando referencia…' : 'Abrir referencia en editor'}</button>
                         <select aria-label={`Variante para probar ${template.title}`} value={selectedVariant} onChange={event => setVariantById(current => ({ ...current, [template.id]: event.target.value as DemoVariant }))} className="rounded-lg border border-border bg-bg-primary px-2 py-2 text-[10px] text-text-primary">
-                          <option value="coral">Coral · preview disponible</option>
+                          <option value="coral">Coral · variante de referencia</option>
                           <option value="teal">Teal · objeto alternativo</option>
                         </select>
                         <button type="button" data-testid={`open-scene-variant-${template.id}`} onClick={() => openScene(template.id, selectedVariant)} className="rounded-lg border border-violet-300/40 px-3 py-2 text-[10px] text-violet-100 hover:bg-violet-400/10">Crear con plantilla actual</button>

@@ -1,6 +1,6 @@
 import type { Scene } from '../../types'
 import { parseSceneFile } from '../../lib/sceneFile'
-import { CATALOG_VERSION, type SceneTemplateDefinition } from './catalog'
+import { templateCatalogVersion, type SceneTemplateDefinition } from './catalog'
 
 type ReferenceIdentity = { id: string; version: number; catalogVersion: string; variant: 'coral' }
 const record = (value: unknown): Record<string, unknown> => {
@@ -26,5 +26,5 @@ export async function loadRenderedReferenceScene(template: SceneTemplateDefiniti
   if (!response.ok) throw new Error('No está disponible el snapshot de este vídeo. No se ha reconstruido ni abierto otra escena.')
   const text = await response.text()
   if (text.length > 4_000_000) throw new Error('El snapshot de referencia supera el límite de 4 MB.')
-  return parseRenderedReferenceScene(JSON.parse(text), { id: template.id, version: template.version, catalogVersion: CATALOG_VERSION, variant: 'coral' })
+  return parseRenderedReferenceScene(JSON.parse(text), { id: template.id, version: template.version, catalogVersion: templateCatalogVersion(template), variant: 'coral' })
 }

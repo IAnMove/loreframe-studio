@@ -1,12 +1,15 @@
 import type { Scene } from '../../types'
-import { CATALOG_VERSION, getCandidateSceneTemplate, type SceneTemplateDefinition } from './catalog'
+import { templateCatalogVersion, getCandidateSceneTemplate, type SceneTemplateDefinition } from './catalog'
 import { backdrop, foreground, type TemplateBindings, type TemplateControls, type TemplateAsset } from './sceneBuilders'
 import { cinemaScenes } from './cinemaScenes'
 import { musicScenes } from './musicScenes'
 import { spaceScenes } from './spaceScenes'
+import { musicMotionSolo } from './musicMotionSolo'
+import { musicMotionEnsemble } from './musicMotionEnsemble'
+import { musicMotionBackground } from './musicMotionBuilders'
 export type { TemplateBindings, TemplateControls, TemplateAsset } from './sceneBuilders'
 
-const builders = { ...cinemaScenes, ...musicScenes, ...spaceScenes }
+const builders = { ...cinemaScenes, ...musicScenes, ...spaceScenes, ...musicMotionSolo, ...musicMotionEnsemble }
 function finiteRange(value: number, min: number, max: number, label: string) {
   if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${label}: debe estar entre ${min} y ${max}.`)
   return value
@@ -44,13 +47,15 @@ export function compileCandidateScene(id: string, bindings: TemplateBindings, op
     intensity: finiteRange(options.intensity ?? .6, 0, 1, 'Intensidad'),
   }
   const ctx = { ...controls, bindings }
-  const layers = [backdrop(ctx), ...build(ctx), ...foreground(ctx)]
+  const expanded = template.slots.some(slot => slot.id === 'subject_1')
+  const background = expanded ? musicMotionBackground(id, ctx) : [backdrop(ctx)]
+  const layers = [...background, ...build(ctx), ...foreground(ctx)]
   if (layers.length > 24 || layers.filter(item => item.type === 'model3d').length > 2) throw new Error('La escena excede el presupuesto de 24 capas / 2 GLB.')
   return {
     version: 1, name: `${template.title} · candidata`, generationPolicy: 'provided_only',
     width: 1280, height: 720, fps: 30, duration: controls.duration, layers,
     narrative: { templateId: id, category: template.family, visualIntent: template.description,
-      controls: { ...controls, catalogVersion: CATALOG_VERSION, templateVersion: template.version, reviewStatus: template.status, renderer: 'layer-compositor-v1' },
+      controls: { ...controls, catalogVersion: templateCatalogVersion(template), templateVersion: template.version, reviewStatus: template.status, renderer: 'layer-compositor-v1' },
       assets: Object.entries(bindings).filter(([, value]) => value).map(([slot, value]) => ({ slot, source: value!.source, name: value!.name, type: value!.type,
         ...(value!.catalogAtAssignment ? { catalogAtAssignment: { ...value!.catalogAtAssignment } } : {}),
       })),
