@@ -19,4 +19,6 @@ export { cloneScene3DDocument, createDefaultScene3DDocument, parseScene3DDocumen
 export { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES } from './templates.ts'
 export { documentFromWorld3DRequest, listenForWorld3DWorkflow, requestWorld3DWorkflow } from './world3dAgent.ts'
 export { hashSoftwareFrame, renderScene3DSoftware } from './softwareRender.ts'
+export { evenDim, world3dExportPlan, world3dExportSize } from './exportMp4.ts'
+export { world3dRecordingStub } from './publish.ts'
 export { Scene3DEditorPanel } from './Scene3DEditorPanel.tsx'

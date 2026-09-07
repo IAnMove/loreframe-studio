@@ -26,9 +26,11 @@ import {
   type Texture,
 } from 'three'
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { cameraEyeAtTime, cameraLookAtTime } from './camera.ts'
+import { scene3dClipLocalTime } from './clock.ts'
 import { cylinderUvOffset, isCylinderBackdrop, slotMountKey } from './backdrop.ts'
 import { scene3dSlotColor } from './document.ts'
-import type { Scene3DClipCatalogEntry, Scene3DLight, Scene3DSlot } from './types.ts'
+import type { Scene3DClipCatalogEntry, Scene3DDocument, Scene3DLight, Scene3DSlot } from './types.ts'
 
 export const CYLINDER_RADIUS = 12
 export const CYLINDER_HEIGHT = 10
@@ -49,6 +51,7 @@ export type SlotGpu = {
   loopTexture: Texture | null
   loopSpeed: number
   looping: boolean
+  loaded: boolean
 }
 
 export type GpuWorld = {
@@ -216,6 +219,7 @@ export function placeSlot(
   root: Object3D,
   animations: GLTF['animations'],
   baseScale = 1,
+  loaded = true,
 ) {
   dropSlot(world, slot.id)
   world.scene.add(root)
@@ -231,7 +235,45 @@ export function placeSlot(
     loopTexture: firstMap(root),
     loopSpeed: slot.loop?.speed ?? 0,
     looping: isCylinderBackdrop(slot),
+    loaded,
   })
+}
+
+export function worldAssetsReady(world: GpuWorld, slots: readonly Scene3DSlot[]): boolean {
+  return slots.every(slot => {
+    if (!slot.sourceUrl) return true
+    const gpu = world.slots.get(slot.id)
+    return Boolean(gpu && gpu.sourceUrl === slot.sourceUrl && gpu.loaded)
+  })
+}
+
+export function clipMatches(gpu: Pick<SlotGpu, 'clipKey' | 'animations'>, index: number) {
+  const clip = gpu.animations[index]
+  return Boolean(clip && gpu.clipKey === `${index}\0${clip.name}`)
+}
+
+export function paintWorld(world: GpuWorld, document: Scene3DDocument, sceneSeconds: number) {
+  const eye = cameraEyeAtTime(document.camera, sceneSeconds, document.duration, document.slots)
+  const look = cameraLookAtTime(document.camera, sceneSeconds, document.duration, document.slots)
+  world.camera.fov = document.camera.fov
+  world.camera.position.set(eye[0], eye[1], eye[2])
+  world.camera.lookAt(look[0], look[1], look[2])
+  world.camera.updateProjectionMatrix()
+  applyLoopOffset(world, sceneSeconds)
+  for (const gpu of world.slots.values()) {
+    if (!gpu.mixer) continue
+    const clip = gpu.animations.find((_clip: { duration?: number }, index: number) => clipMatches(gpu, index))
+    const local = scene3dClipLocalTime(sceneSeconds, clip?.duration ?? null, { loop: true })
+    if (local != null) gpu.mixer.setTime(local)
+  }
+  world.renderer.render(world.scene, world.camera)
+}
+
+export function setWorldSize(world: GpuWorld, width: number, height: number) {
+  world.renderer.setPixelRatio(1)
+  world.renderer.setSize(Math.max(2, width), Math.max(2, height), false)
+  world.camera.aspect = Math.max(2, width) / Math.max(2, height)
+  world.camera.updateProjectionMatrix()
 }
 
 export function applyLoopOffset(world: GpuWorld, sceneSeconds: number) {
@@ -263,7 +305,12 @@ export function pruneSlots(world: GpuWorld, slots: readonly Scene3DSlot[]) {
 }
 
 export function createWorld(host: HTMLDivElement, light: Scene3DLight, fov: number): GpuWorld {
-  const renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'low-power' })
+  const renderer = new WebGLRenderer({
+    antialias: true,
+    alpha: false,
+    powerPreference: 'low-power',
+    preserveDrawingBuffer: true,
+  })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO))
   renderer.shadowMap.enabled = false
   renderer.domElement.style.display = 'block'

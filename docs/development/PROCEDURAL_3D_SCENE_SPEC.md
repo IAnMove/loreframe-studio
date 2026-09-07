@@ -132,6 +132,10 @@ camera family `pursuit`, and the background cylinder moves. Clip selection
 stays `(index, exact glTF name)`; do not infer Running. Any image background
 can enable the same infinite cylinder without switching template.
 
+Video 3D export is independent of the 2.5D compositor. The world editor paints
+three.js frames (`paintWorld`) and encodes H.264 in the browser. It does not
+call `SceneAnimatorPanel` recording. Published files are named `world3d-*`.
+
 ## 6. Time, persistence, languages
 
 - Scene time is deterministic. Reuse offset/speed/trim/loop/reverse from

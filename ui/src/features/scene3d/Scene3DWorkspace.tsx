@@ -7,7 +7,8 @@ import { cameraEyeAtTime, projectPoint } from './camera.ts'
 import { clipBindingError, resolveScene3DClip } from './clips.ts'
 import { scene3dFrameCount, scene3dFrameTime } from './clock.ts'
 import { parseScene3DDocument } from './document.ts'
-import { Scene3DStage } from './Scene3DStage.tsx'
+import { exportWorld3DDocument } from './exportFlow.ts'
+import { Scene3DStage, type Scene3DStageHandle } from './Scene3DStage.tsx'
 import { applyScene3DTemplate, patchScene3DSlot, SCENE3D_TEMPLATES, type Scene3DTemplateId } from './templates.ts'
 import type { Scene3DCameraFamily, Scene3DClipCatalogEntry, Scene3DDocument, Scene3DLoop, Scene3DSlot } from './types.ts'
 import { documentFromWorld3DRequest, listenForWorld3DWorkflow } from './world3dAgent.ts'
@@ -53,6 +54,9 @@ export function Scene3DWorkspace({ width, height }: Props) {
   const [catalogs, setCatalogs] = useState<Record<string, Scene3DClipCatalogEntry[]>>({})
   const [explorerSlot, setExplorerSlot] = useState<string | null>(null)
   const [explorerItems, setExplorerItems] = useState<ApiOutput[]>([])
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<string | null>(null)
+  const stageRef = useRef<Scene3DStageHandle>(null)
   const workspace = useStore(s => s.activeWorkspace)
   const fps = sceneDoc.fps
   const count = scene3dFrameCount(sceneDoc.duration, fps)
@@ -66,6 +70,12 @@ export function Scene3DWorkspace({ width, height }: Props) {
   useEffect(() => {
     sceneDocRef.current = sceneDoc
   }, [sceneDoc])
+
+  useEffect(() => {
+    const host = window as Window & { __world3dStage?: Scene3DStageHandle | null }
+    host.__world3dStage = stageRef.current
+    return () => { host.__world3dStage = null }
+  })
 
   useEffect(() => () => {
     for (const slot of sceneDocRef.current.slots) revokeIfBlob(slot.sourceUrl)
@@ -150,6 +160,25 @@ export function Scene3DWorkspace({ width, height }: Props) {
 
   const roundtrip = Boolean(parseScene3DDocument(JSON.parse(JSON.stringify(sceneDoc))))
 
+  const exportScene = async () => {
+    const stage = stageRef.current
+    if (!stage || exporting || playing) return
+    setExporting(true)
+    setExportNote(t('stage.exporting'))
+    try {
+      const result = await exportWorld3DDocument(stage, sceneDoc, workspace, (index, total) => {
+        setExportNote(t('stage.exportProgress', { index, total }))
+      })
+      ;(window as Window & { __world3dLastMp4?: Blob }).__world3dLastMp4 = result.blob
+      if (result.saved) setExportNote(t('stage.exported', { name: result.saved.name }))
+      else setExportNote(result.error?.message ?? t('stage.exportFailed'))
+    } catch (error) {
+      setExportNote(error instanceof Error ? error.message : t('stage.exportFailed'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="flex w-full flex-col gap-2" data-testid="scene3d-workspace">
       <div className="flex flex-wrap gap-1">
@@ -188,6 +217,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
         onPointerUp={() => { dragRef.current = null }}
       >
         <Scene3DStage
+          ref={stageRef}
           document={sceneDoc}
           sceneSeconds={seconds}
           onSlotClips={(slotId, clips) => setCatalogs(current => ({ ...current, [slotId]: clips }))}
@@ -209,6 +239,15 @@ export function Scene3DWorkspace({ width, height }: Props) {
         ))}
         <button type="button" onClick={() => setPlaying(current => !current)} className="rounded border border-border bg-bg-primary px-2 py-1">
           {playing ? t('stage.pause') : t('stage.play')}
+        </button>
+        <button
+          type="button"
+          data-testid="world3d-export"
+          disabled={exporting || playing}
+          onClick={() => void exportScene()}
+          className="rounded border border-cyan-400/50 bg-cyan-400/10 px-2 py-1 text-cyan-100 disabled:opacity-40"
+        >
+          {exporting ? t('stage.exporting') : t('stage.export')}
         </button>
         <span className="text-text-muted">{t('stage.eye', { x: cameraEyeAtTime(sceneDoc.camera, seconds, sceneDoc.duration, sceneDoc.slots)[0].toFixed(2) })}</span>
       </div>
@@ -279,6 +318,7 @@ export function Scene3DWorkspace({ width, height }: Props) {
         })}
       </div>
       {clipIssue && <p className="text-[8px] text-red-300">{clipIssue}</p>}
+      {exportNote && <p className="text-[8px] text-cyan-100" data-testid="world3d-export-note">{exportNote}</p>}
       <p className="text-[8px] text-text-muted">{sceneDoc.templateId === 'run-loop' ? t('stage.runHelp') : t('stage.help')}</p>
       <span data-testid="scene3d-roundtrip" className="hidden">{roundtrip ? 'ok' : 'bad'}</span>
       <AssetExplorerDialog

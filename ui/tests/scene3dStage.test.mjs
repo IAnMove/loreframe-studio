@@ -7,6 +7,8 @@ import { scene3dClipLocalTime, scene3dFrameCount, scene3dFrameTime } from '../sr
 import { cloneScene3DDocument, createDefaultScene3DDocument, parseScene3DDocument } from '../src/features/scene3d/document.ts'
 import { applyScene3DTemplate, patchScene3DSlot } from '../src/features/scene3d/templates.ts'
 import { documentFromWorld3DRequest } from '../src/features/scene3d/world3dAgent.ts'
+import { evenDim, world3dExportPlan, world3dExportSize } from '../src/features/scene3d/exportMp4.ts'
+import { world3dRecordingStub } from '../src/features/scene3d/publish.ts'
 import { hashSoftwareFrame, renderScene3DSoftware } from '../src/features/scene3d/softwareRender.ts'
 
 test('frame clock matches compositor export indexing', () => {
@@ -127,6 +129,21 @@ test('run-loop keeps the subject still and scrolls the cylinder world', () => {
   assert.equal(look[0], subject.position[0])
   assert.ok(eye[2] > look[2])
   assert.notEqual(cylinderUvOffset(0, 0.18), cylinderUvOffset(1, 0.18))
+})
+
+test('world3d export plan is independent of compositor layers', () => {
+  assert.equal(evenDim(1281), 1280)
+  assert.deepEqual(world3dExportSize(1920, 1080), { width: 1280, height: 720 })
+  const plan = world3dExportPlan(2, 30)
+  assert.equal(plan.count, 60)
+  assert.equal(plan.times[0], 0)
+  assert.ok(plan.times[59] < 2)
+  const document = applyScene3DTemplate('run-loop')
+  const stub = world3dRecordingStub(document)
+  assert.equal(stub.version, 1)
+  assert.equal(stub.name, 'world3d-run-loop')
+  assert.deepEqual(stub.layers, [])
+  assert.equal(stub.fps, 30)
 })
 
 test('wizard can mount the run-loop cylinder template', () => {
