@@ -4,8 +4,10 @@ import { AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Box, Camera, 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import { useUiTranslation } from '../../i18n'
 import { useStore } from '../../stores/useStore'
-import { analyzeAudio, deleteCharacterKit, fetchCharacterKitLibrary, fetchOutputs, generateLlmText, saveCharacterKit, saveScene as saveSceneOutput, saveSceneRecording, uploadImage, type ApiOutput } from '../../api/client'
-import { AssetExplorerDialog, AssetPickTrigger } from '../common/AssetExplorerDialog'
+import { analyzeAudio, deleteCharacterKit, fetchCharacterKitLibrary, fetchOutputs, generateLlmText, saveCharacterKit, saveScene as saveSceneOutput, saveSceneRecording, uploadImage } from '../../api/client'
+import { AssetPickTrigger } from '../common/AssetExplorerDialog'
+import type { AssetExplorerPurpose } from '../common/assetExplorer.ts'
+import { SceneAnimatorExplorer, SceneAnimatorNarrativeSetup } from './SceneAnimatorExplorer'
 import { generateSceneSpeechClip } from '../../lib/sceneSpeech'
 import { SceneRecipePanel } from './SceneRecipePanel'
 import { TemplateComposerDialog } from '../../features/sceneTemplates/TemplateComposerDialog'
@@ -23,7 +25,7 @@ import { applyCutoutDialogue, bindCutoutFaceToPose, ensureCutoutFacePlayback, fi
 import { captureCharacterFaceAnchor, characterKitAssetFromLayer, createCharacterKit, emptyCharacterKitLibrary, mountCharacterKitLayers, syncMountedCharacterKitLayers, syncSceneCharacterKits, type CharacterKit, type CharacterKitAlphaStatus, type CharacterMouthState } from '../../lib/characterKit'
 import { consumeFaceRigHandoff, FACE_RIG_HANDOFF_EVENT, kitFromFaceRigHandoff } from '../../lib/characterKitHandoff'
 import { rememberCharacterKitLibrary, rememberVideo3dScene } from '../../features/agent/wizardLabSession'
-import { carrySceneSidecars, createNarrativeScene, getNarrativeTemplate, NARRATIVE_SCENE_TEMPLATES, type NarrativeSceneId, type NarrativeTemplateInput } from '../../lib/sceneNarrative'
+import { carrySceneSidecars, createNarrativeScene, getNarrativeTemplate, type NarrativeSceneId, type NarrativeTemplateInput } from '../../lib/sceneNarrative'
 import { applySceneCopilotProposal, buildSceneCopilotSystemPrompt, buildSceneScopeCopilotSystemPrompt, describeSceneCopilotProposal, parseSceneCopilotProposal, SCENE_COPILOT_JSON_SCHEMA, type SceneCopilotProposal } from '../../lib/sceneCopilot'
 import { evaluateSceneLayer, getSceneEvents, getSceneKeyframes, getSceneLayerTiming, mapSceneAnimationPoints, normalizeSceneEvents, normalizeSceneKeyframes, sceneLayerMotionProgress, sceneProgressFromSeconds, sceneTimeToLayerTime, withNormalizedSceneTiming, withSceneKeyframes } from '../../lib/sceneTimeline'
 import { normalizeSeamOccluder, paintSeamOccluder, seamOccluderDataUri, type SeamOccluderKind } from '../../lib/seamOccluder'
@@ -38,71 +40,6 @@ type Point = { x: number; y: number; scale: number; opacity?: number; rotation?:
 type AnimatorLayerType = SceneLayerType
 type VisualLayerType = Exclude<SceneLayerType, 'camera'>
 type ParallaxPreset = 'background' | 'midground' | 'foreground'
-type AssetExplorerPurpose = 'layer-model' | 'layer-media' | 'narrative-hero' | 'narrative-plate' | 'narrative-prop' | 'narrative-foreground' | 'scene-audio'
-
-function assetsForExplorer(
-  purpose: AssetExplorerPurpose,
-  models: ApiOutput[],
-  media: ApiOutput[],
-  visuals: ApiOutput[],
-  audio: ApiOutput[],
-): ApiOutput[] {
-  if (purpose === 'layer-model') return models
-  if (purpose === 'layer-media' || purpose === 'narrative-plate' || purpose === 'narrative-foreground') return media
-  if (purpose === 'scene-audio') return audio
-  return visuals
-}
-
-function explorerTitleKey(purpose: AssetExplorerPurpose): 'animator.generatedModels' | 'animator.generatedMedia' | 'animator.chooseAudio' | 'animator.chooseAsset' {
-  if (purpose === 'layer-model') return 'animator.generatedModels'
-  if (purpose === 'layer-media') return 'animator.generatedMedia'
-  if (purpose === 'scene-audio') return 'animator.chooseAudio'
-  return 'animator.chooseAsset'
-}
-
-function explorerSelectedName(
-  purpose: AssetExplorerPurpose,
-  names: { hero: string; plate: string; prop: string; foreground: string },
-): string | undefined {
-  if (purpose === 'narrative-hero') return names.hero
-  if (purpose === 'narrative-plate') return names.plate
-  if (purpose === 'narrative-prop') return names.prop
-  if (purpose === 'narrative-foreground') return names.foreground
-  return undefined
-}
-
-function explorerAllowsNone(purpose: AssetExplorerPurpose): boolean {
-  return purpose.startsWith('narrative-')
-}
-
-function applyExplorerChoice(
-  purpose: AssetExplorerPurpose,
-  item: ApiOutput | null,
-  handlers: {
-    addLayer: (type: 'model3d' | 'video' | 'image', url: string, name: string, thumbnail?: string) => void
-    setHero: (name: string) => void
-    setPlate: (name: string) => void
-    setProp: (name: string) => void
-    setForeground: (name: string) => void
-    attachAudio: (filename: string, title: string, kind: 'audio') => void
-  },
-): void {
-  if (purpose === 'layer-model' && item) {
-    handlers.addLayer('model3d', item.url, item.name, item.thumbnail_url ?? undefined)
-    return
-  }
-  if (purpose === 'layer-media' && item) {
-    handlers.addLayer(item.type === 'video' ? 'video' : 'image', item.url, item.name, item.thumbnail_url ?? undefined)
-    return
-  }
-  if (purpose === 'narrative-hero') { handlers.setHero(item?.name ?? ''); return }
-  if (purpose === 'narrative-plate') { handlers.setPlate(item?.name ?? ''); return }
-  if (purpose === 'narrative-prop') { handlers.setProp(item?.name ?? ''); return }
-  if (purpose === 'narrative-foreground') { handlers.setForeground(item?.name ?? ''); return }
-  if (purpose === 'scene-audio' && item) {
-    handlers.attachAudio(item.name, item.name.replace(/\.[^.]+$/, ''), 'audio')
-  }
-}
 type AnimatorLayer = Omit<SceneLayer, 'type' | 'animation'> & {
   type: AnimatorLayerType
   /** Camera-pan response. Distant layers move less; foreground layers move more. */
@@ -3045,30 +2982,35 @@ export function SceneAnimatorPanel() {
       />
     </section>
     <aside className="w-full shrink-0 border-t border-border bg-bg-secondary p-3 overflow-y-auto space-y-3 xl:w-[300px] xl:border-l xl:border-t-0">
-      <div className="space-y-2 rounded border border-fuchsia-400/30 bg-fuchsia-400/[.045] p-2">
-        <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-medium uppercase tracking-wider text-fuchsia-100">{t('animator.narrativeTitle')}</span><span className="text-[8px] text-fuchsia-200/70">{t('animator.narrativeMeta')}</span></div>
-        <select value={narrativeTemplateId} disabled={playing || recording || publishing} onChange={event => setNarrativeTemplateId(event.target.value as NarrativeSceneId)} className="w-full rounded border border-border bg-bg-primary px-2 py-1 text-[10px]">
-          {NARRATIVE_SCENE_TEMPLATES.map(template => <option key={template.id} value={template.id}>{template.experimental ? t('animator.experimental') : ''}{template.title}</option>)}
-        </select>
-        <div className="grid grid-cols-2 gap-1">{NARRATIVE_SCENE_TEMPLATES.map(template => <button key={template.id} type="button" disabled={playing || recording || publishing} onClick={() => setNarrativeTemplateId(template.id)} title={template.description} className={`rounded border p-1 text-left disabled:opacity-40 ${narrativeTemplateId === template.id ? 'border-fuchsia-300/70 bg-fuchsia-400/15 text-fuchsia-100' : 'border-border bg-bg-primary text-text-secondary hover:border-fuchsia-300/40'}`}><span className="block truncate text-[8px] font-medium">{template.experimental ? t('animator.experimental') : ''}{template.title}</span><span className="block text-[7px] text-text-muted">{t('animator.templateMeta', { duration: template.defaultDuration, count: template.assetSlots.filter(slot => slot.required).length })}</span></button>)}</div>
-        <p className="text-[8px] leading-relaxed text-text-muted">{narrativeTemplate.description}</p>
-        <AssetPickTrigger label={t('animator.character')} selected={narrativeVisuals.find(asset => asset.name === narrativeHero)} placeholder={t('animator.chooseAsset')} disabled={playing || recording || publishing} onOpen={() => setAssetExplorer('narrative-hero')} />
-        {narrativeHero && <p className={`rounded border px-1.5 py-1 text-[8px] leading-relaxed ${narrativeSuitability('hero', narrativeHero).level === 'warning' ? 'border-amber-300/25 bg-amber-400/[.06] text-amber-100' : 'border-emerald-300/20 bg-emerald-400/[.04] text-emerald-100'}`}>{narrativeSuitability('hero', narrativeHero).message}</p>}
-        <AssetPickTrigger label={t('animator.background')} selected={generatedMedia.find(asset => asset.name === narrativePlate)} placeholder={t('animator.chooseAsset')} disabled={playing || recording || publishing} onOpen={() => setAssetExplorer('narrative-plate')} />
-        {narrativePlate && narrativeSuitability('plate', narrativePlate).level !== 'ok' && <p className="rounded border border-cyan-300/20 bg-cyan-400/[.04] px-1.5 py-1 text-[8px] leading-relaxed text-cyan-100">{narrativeSuitability('plate', narrativePlate).message}</p>}
-        {narrativePlate && <label className="flex items-start gap-1.5 rounded border border-amber-300/20 bg-amber-400/[.035] p-1.5 text-[8px] leading-relaxed text-amber-100"><input type="checkbox" checked={narrativePlateLoopReady} onChange={event => setNarrativePlateLoopReady(event.target.checked)} className="mt-0.5" /> <span><strong>{t('animator.loopReady')}</strong><br />{t('animator.loopReadyHelp')}</span></label>}
-        {narrativeTemplate.assetSlots.some(slot => slot.id === 'prop') && <AssetPickTrigger label={`${t('animator.objectPortal')}${narrativeTemplate.assetSlots.find(slot => slot.id === 'prop')?.required ? '' : t('animator.optional')}`} selected={narrativeVisuals.find(asset => asset.name === narrativeProp)} placeholder={t('animator.none')} disabled={playing || recording || publishing} onOpen={() => setAssetExplorer('narrative-prop')} />}
-        {narrativeTemplate.assetSlots.some(slot => slot.id === 'foreground') && <AssetPickTrigger label={t('animator.foreground')} selected={generatedMedia.find(asset => asset.name === narrativeForeground)} placeholder={t('animator.none')} disabled={playing || recording || publishing} onOpen={() => setAssetExplorer('narrative-foreground')} />}
-        <div className="grid grid-cols-2 gap-1 text-[9px] text-text-muted">
-          {narrativeTemplate.controls.includes('mood') && <label>{t('animator.mood')}<select value={narrativeMood} onChange={event => setNarrativeMood(event.target.value as typeof narrativeMood)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value="calm">{t('animator.moodCalm')}</option><option value="tense">{t('animator.moodTense')}</option><option value="dreamy">{t('animator.moodDreamy')}</option><option value="heroic">{t('animator.moodHeroic')}</option></select></label>}
-          {narrativeTemplate.controls.includes('intensity') && <label>{t('animator.intensity')}<select value={narrativeIntensity} onChange={event => setNarrativeIntensity(Number(event.target.value) as 1 | 2 | 3)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value={1}>{t('animator.intensityLow')}</option><option value={2}>{t('animator.intensityMedium')}</option><option value={3}>{t('animator.intensityHigh')}</option></select></label>}
-          {narrativeTemplate.controls.includes('direction') && <label>{t('animator.direction')}<select value={narrativeDirection} onChange={event => setNarrativeDirection(event.target.value as typeof narrativeDirection)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value="right">{t('animator.right')}</option><option value="left">{t('animator.left')}</option></select></label>}
-          {narrativeTemplate.controls.includes('camera') && <label>{t('animator.camera')}<select value={narrativeCamera} onChange={event => setNarrativeCamera(event.target.value as typeof narrativeCamera)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value="restrained">{t('animator.cameraRestrained')}</option><option value="push">{t('animator.cameraPush')}</option><option value="drift">{t('animator.cameraDrift')}</option></select></label>}
-          {narrativeTemplate.controls.includes('palette') && <label>{t('animator.palette')}<select value={narrativePalette} onChange={event => setNarrativePalette(event.target.value as typeof narrativePalette)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value="natural">{t('animator.paletteNatural')}</option><option value="cool">{t('animator.paletteCool')}</option><option value="warm">{t('animator.paletteWarm')}</option><option value="neon">{t('animator.paletteNeon')}</option></select></label>}
-          {narrativeTemplate.controls.includes('voiceSpace') && <label>{t('animator.voiceSpace')}<select value={narrativeVoiceSpace} onChange={event => setNarrativeVoiceSpace(event.target.value as typeof narrativeVoiceSpace)} className="mt-0.5 w-full rounded border border-border bg-bg-primary px-1 py-1 text-[9px]"><option value="center">{t('animator.center')}</option><option value="left">{t('animator.left')}</option><option value="right">{t('animator.right')}</option></select></label>}
-        </div>
-        <button type="button" disabled={playing || recording || publishing} onClick={mountNarrativeTemplate} className="w-full rounded border border-fuchsia-300/50 bg-fuchsia-400/10 px-2 py-1.5 text-[10px] text-fuchsia-100 hover:bg-fuchsia-400/20 disabled:opacity-40">{t('animator.mountScene')}</button>
-      </div>
+      <SceneAnimatorNarrativeSetup
+        busy={playing || recording || publishing}
+        templateId={narrativeTemplateId}
+        template={narrativeTemplate}
+        visuals={narrativeVisuals}
+        media={generatedMedia}
+        hero={narrativeHero}
+        plate={narrativePlate}
+        plateLoopReady={narrativePlateLoopReady}
+        prop={narrativeProp}
+        foreground={narrativeForeground}
+        mood={narrativeMood}
+        intensity={narrativeIntensity}
+        direction={narrativeDirection}
+        camera={narrativeCamera}
+        palette={narrativePalette}
+        voiceSpace={narrativeVoiceSpace}
+        suitability={narrativeSuitability}
+        onTemplateId={setNarrativeTemplateId}
+        onOpenExplorer={setAssetExplorer}
+        onPlateLoopReady={setNarrativePlateLoopReady}
+        onMood={setNarrativeMood}
+        onIntensity={setNarrativeIntensity}
+        onDirection={setNarrativeDirection}
+        onCamera={setNarrativeCamera}
+        onPalette={setNarrativePalette}
+        onVoiceSpace={setNarrativeVoiceSpace}
+        onMount={mountNarrativeTemplate}
+      />
       <div className="space-y-1.5 rounded border border-cyan-400/30 bg-cyan-400/[.04] p-2">
         <div className="flex items-center justify-between"><span className="text-[10px] font-medium text-cyan-100">{t('animator.instructScene')}</span><span className="text-[8px] text-cyan-200/80">{t('animator.instructSceneMeta')}</span></div>
         <p className="text-[8px] leading-relaxed text-text-muted">{t('animator.instructSceneHelp')}</p>
@@ -3260,29 +3202,22 @@ export function SceneAnimatorPanel() {
       {message && <p className="text-[10px] text-text-secondary">{message}</p>}
     </aside>
     {templateComposerOpen && <TemplateComposerDialog key={workspace} workspace={workspace} onClose={() => setTemplateComposerOpen(false)} onApply={next => importScene(JSON.stringify(next), 'Plantilla creada con assets de Library; revisa el encuadre antes de exportar.')} />}
-    <AssetExplorerDialog
-      open={Boolean(assetExplorer)}
-      title={assetExplorer ? t(explorerTitleKey(assetExplorer)) : t('animator.chooseAsset')}
-      items={assetExplorer ? assetsForExplorer(assetExplorer, generatedModels, generatedMedia, narrativeVisuals, generatedAudio) : []}
-      selectedName={assetExplorer ? explorerSelectedName(assetExplorer, {
-        hero: narrativeHero, plate: narrativePlate, prop: narrativeProp, foreground: narrativeForeground,
-      }) : undefined}
-      allowNone={Boolean(assetExplorer && explorerAllowsNone(assetExplorer))}
-      noneLabel={t('animator.none')}
-      onClose={() => setAssetExplorer(null)}
-      onChoose={item => {
-        if (assetExplorer) {
-          applyExplorerChoice(assetExplorer, item, {
-            addLayer,
-            setHero: setNarrativeHero,
-            setPlate: name => { setNarrativePlate(name); setNarrativePlateLoopReady(false) },
-            setProp: setNarrativeProp,
-            setForeground: setNarrativeForeground,
-            attachAudio: attachSceneAudio,
-          })
-        }
-        setAssetExplorer(null)
+    <SceneAnimatorExplorer
+      purpose={assetExplorer}
+      models={generatedModels}
+      media={generatedMedia}
+      visuals={narrativeVisuals}
+      audio={generatedAudio}
+      names={{ hero: narrativeHero, plate: narrativePlate, prop: narrativeProp, foreground: narrativeForeground }}
+      handlers={{
+        addLayer: (type, url, name, thumbnail) => addLayer(type, url, name, thumbnail),
+        setHero: setNarrativeHero,
+        setPlate: name => { setNarrativePlate(name); setNarrativePlateLoopReady(false) },
+        setProp: setNarrativeProp,
+        setForeground: setNarrativeForeground,
+        attachAudio: (filename, title, kind) => attachSceneAudio(filename, title, kind),
       }}
+      onClose={() => setAssetExplorer(null)}
     />
     <SceneLibraryDialog
       open={libraryOpen}
